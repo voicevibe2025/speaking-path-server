@@ -1,0 +1,160 @@
+# ========================================
+# Django
+# ========================================
+*.log
+*.pot
+*.pyc
+__pycache__/
+db.sqlite3
+db.sqlite3-journal
+media/
+staticfiles/
+local_settings.py
+
+# If you use Django Debug Toolbar panels
+debug_toolbar/
+
+# ========================================
+# Python
+# ========================================
+*.py[cod]
+*$py.class
+*.so
+*.pyo
+.Python
+*.pyd
+
+# Distribution / packaging
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+.build/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+pip-wheel-metadata/
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+pytestdebug.log
+
+# Translations
+*.mo
+
+# ========================================
+# Environment / IDEs
+# ========================================
+# VS Code
+.vscode/
+.history/
+*.code-workspace
+
+# PyCharm
+.idea/
+*.iml
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+*~
+*.swp
+*.swo
+*.swn
+*.swa
+
+# Emacs
+*~
+\#*\#
+.\#*
+
+# ========================================
+# Databases / Cache / Celery
+# ========================================
+*.db
+*.sqlite3
+*.sqlite3-journal
+celerybeat-schedule
+celerybeat.pid
+
+# Redis dump
+dump.rdb
+
+# ========================================
+# OS generated files
+# ========================================
+.DS_Store
+ehthumbs.db
+Icon?
+Thumbs.db
+desktop.ini
+
+# ========================================
+# Deployment
+# ========================================
+# Heroku
+*.env
+.env.*
+Procfile
+
+# Docker
+docker-compose*.yml
+.dockerignore
+Dockerfile
+build/
+tmp/
+*.pid
+
+# ========================================
+# Supabase
+# ========================================
+# Supabase project config (safe to ignore if you don't want to share)
+supabase/config.toml
+
+# Supabase generated migrations (optional, ignore if not using version control for db)
+supabase/migrations/
+
+# Supabase local dev secrets
+supabase/.temp/
+supabase/.branches/
+supabase/.supabase/
+
+# Supabase metadata (CLI cache, etc.)
+.supabase/
+
+# ========================================
+# Custom
+# ========================================
+# Ignore environment variables file
+.env
+
+# Ignore local dev secrets
+secrets.json

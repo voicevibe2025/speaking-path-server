@@ -1,0 +1,269 @@
+"""
+User profile and related models for VoiceVibe
+"""
+from django.db import models
+from django.contrib.auth import get_user_model
+from django.utils.translation import gettext_lazy as _
+from django.core.validators import MinValueValidator, MaxValueValidator
+
+User = get_user_model()
+
+
+class UserProfile(models.Model):
+    """
+    Extended user profile with learning preferences and cultural settings
+    """
+    PROFICIENCY_LEVELS = [
+        ('beginner', _('Beginner')),
+        ('elementary', _('Elementary')),
+        ('intermediate', _('Intermediate')),
+        ('upper_intermediate', _('Upper Intermediate')),
+        ('advanced', _('Advanced')),
+        ('proficient', _('Proficient')),
+    ]
+
+    LEARNING_GOALS = [
+        ('business', _('Business Communication')),
+        ('academic', _('Academic English')),
+        ('conversational', _('Conversational English')),
+        ('travel', _('Travel English')),
+        ('professional', _('Professional Development')),
+        ('exam_prep', _('Exam Preparation')),
+    ]
+
+    user = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name='profile'
+    )
+
+    # Personal Information
+    date_of_birth = models.DateField(null=True, blank=True)
+    phone_number = models.CharField(max_length=20, blank=True)
+    avatar_url = models.URLField(blank=True)
+    bio = models.TextField(max_length=500, blank=True)
+
+    # Language Settings
+    native_language = models.CharField(
+        max_length=10,
+        default='id',  # Indonesian
+        help_text=_('ISO 639-1 language code')
+    )
+    target_language = models.CharField(
+        max_length=10,
+        default='en',  # English
+        help_text=_('ISO 639-1 language code')
+    )
+    current_proficiency = models.CharField(
+        max_length=20,
+        choices=PROFICIENCY_LEVELS,
+        default='beginner'
+    )
+
+    # Learning Preferences
+    learning_goal = models.CharField(
+        max_length=20,
+        choices=LEARNING_GOALS,
+        default='conversational'
+    )
+    daily_practice_goal = models.IntegerField(
+        default=15,  # minutes
+        validators=[MinValueValidator(5), MaxValueValidator(120)],
+        help_text=_('Daily practice goal in minutes')
+    )
+    preferred_session_duration = models.IntegerField(
+        default=10,  # minutes
+        validators=[MinValueValidator(5), MaxValueValidator(60)],
+        help_text=_('Preferred session duration in minutes')
+    )
+
+    # Cultural Preferences (Hofstede dimensions for Indonesia)
+    power_distance_preference = models.FloatField(
+        default=78.0,  # Indonesia's PDI score
+        validators=[MinValueValidator(0), MaxValueValidator(100)]
+    )
+    individualism_preference = models.FloatField(
+        default=14.0,  # Indonesia's IDV score
+        validators=[MinValueValidator(0), MaxValueValidator(100)]
+    )
+    masculinity_preference = models.FloatField(
+        default=46.0,  # Indonesia's MAS score
+        validators=[MinValueValidator(0), MaxValueValidator(100)]
+    )
+    uncertainty_avoidance_preference = models.FloatField(
+        default=48.0,  # Indonesia's UAI score
+        validators=[MinValueValidator(0), MaxValueValidator(100)]
+    )
+    long_term_orientation_preference = models.FloatField(
+        default=62.0,  # Indonesia's LTO score
+        validators=[MinValueValidator(0), MaxValueValidator(100)]
+    )
+
+    # Gamification Settings
+    preferred_reward_type = models.CharField(
+        max_length=20,
+        choices=[
+            ('badges', _('Badges')),
+            ('points', _('Points')),
+            ('achievements', _('Achievements')),
+            ('leaderboard', _('Leaderboard')),
+        ],
+        default='badges'
+    )
+    enable_notifications = models.BooleanField(default=True)
+    enable_reminders = models.BooleanField(default=True)
+
+    # Statistics
+    total_practice_time = models.IntegerField(default=0)  # in minutes
+    streak_days = models.IntegerField(default=0)
+    last_practice_date = models.DateField(null=True, blank=True)
+
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'user_profiles'
+        verbose_name = _('User Profile')
+        verbose_name_plural = _('User Profiles')
+
+    def __str__(self):
+        return f"Profile of {self.user.email}"
+
+
+class LearningPreference(models.Model):
+    """
+    Detailed learning preferences and adaptations
+    """
+    SCENARIO_TYPES = [
+        ('formal', _('Formal')),
+        ('informal', _('Informal')),
+        ('business', _('Business')),
+        ('academic', _('Academic')),
+        ('social', _('Social')),
+        ('cultural', _('Cultural')),
+    ]
+
+    user = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name='learning_preference'
+    )
+
+    # Scenario Preferences
+    preferred_scenarios = models.JSONField(
+        default=list,
+        help_text=_('List of preferred scenario types')
+    )
+    avoided_topics = models.JSONField(
+        default=list,
+        help_text=_('List of topics to avoid')
+    )
+
+    # Learning Style
+    visual_learning = models.IntegerField(
+        default=5,
+        validators=[MinValueValidator(1), MaxValueValidator(10)],
+        help_text=_('Preference for visual learning (1-10)')
+    )
+    auditory_learning = models.IntegerField(
+        default=5,
+        validators=[MinValueValidator(1), MaxValueValidator(10)],
+        help_text=_('Preference for auditory learning (1-10)')
+    )
+    kinesthetic_learning = models.IntegerField(
+        default=5,
+        validators=[MinValueValidator(1), MaxValueValidator(10)],
+        help_text=_('Preference for kinesthetic learning (1-10)')
+    )
+
+    # Feedback Preferences
+    immediate_correction = models.BooleanField(
+        default=True,
+        help_text=_('Prefer immediate correction during practice')
+    )
+    detailed_feedback = models.BooleanField(
+        default=True,
+        help_text=_('Prefer detailed feedback after sessions')
+    )
+    cultural_context = models.BooleanField(
+        default=True,
+        help_text=_('Include cultural context in feedback')
+    )
+
+    # AI Adaptation Settings
+    ai_personality = models.CharField(
+        max_length=20,
+        choices=[
+            ('friendly', _('Friendly')),
+            ('professional', _('Professional')),
+            ('encouraging', _('Encouraging')),
+            ('strict', _('Strict')),
+            ('casual', _('Casual')),
+        ],
+        default='encouraging'
+    )
+    difficulty_adaptation_speed = models.FloatField(
+        default=0.5,
+        validators=[MinValueValidator(0.1), MaxValueValidator(1.0)],
+        help_text=_('How quickly to adapt difficulty (0.1-1.0)')
+    )
+
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'learning_preferences'
+        verbose_name = _('Learning Preference')
+        verbose_name_plural = _('Learning Preferences')
+
+    def __str__(self):
+        return f"Learning preferences for {self.user.email}"
+
+
+class UserAchievement(models.Model):
+    """
+    User achievements and milestones
+    """
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='achievements'
+    )
+
+    achievement_type = models.CharField(max_length=50)
+    achievement_name = models.CharField(max_length=100)
+    achievement_description = models.TextField()
+
+    # Achievement metadata
+    category = models.CharField(
+        max_length=20,
+        choices=[
+            ('practice', _('Practice')),
+            ('streak', _('Streak')),
+            ('proficiency', _('Proficiency')),
+            ('social', _('Social')),
+            ('cultural', _('Cultural')),
+        ]
+    )
+    points_earned = models.IntegerField(default=0)
+    badge_image_url = models.URLField(blank=True)
+
+    # Progress tracking
+    progress_current = models.IntegerField(default=0)
+    progress_target = models.IntegerField(default=1)
+    is_completed = models.BooleanField(default=False)
+
+    # Timestamps
+    earned_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'user_achievements'
+        verbose_name = _('User Achievement')
+        verbose_name_plural = _('User Achievements')
+        unique_together = ['user', 'achievement_type']
+
+    def __str__(self):
+        return f"{self.achievement_name} - {self.user.email}"
