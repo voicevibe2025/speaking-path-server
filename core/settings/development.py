@@ -42,8 +42,14 @@ CSRF_COOKIE_SECURE = False
 MEDIA_ROOT = BASE_DIR / 'media_dev'
 
 # Simplified logging for development
-LOGGING['loggers']['django']['level'] = 'DEBUG'
-LOGGING['loggers']['apps']['level'] = 'DEBUG'
+LOGGING['loggers']['django']['level'] = 'ERROR'
+# Ensure 'apps' logger exists and keep it quiet by default
+LOGGING['loggers'].setdefault('apps', {
+    'handlers': ['console'],
+    'level': 'ERROR',
+    'propagate': False,
+})
+LOGGING['loggers']['apps']['level'] = 'ERROR'
 
 # Celery - Use synchronous mode in development
 CELERY_TASK_ALWAYS_EAGER = True
