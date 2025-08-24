@@ -44,10 +44,8 @@ class RegisterView(generics.CreateAPIView):
 
         return Response({
             'user': UserSerializer(user).data,
-            'tokens': {
-                'refresh': str(refresh),
-                'access': str(refresh.access_token),
-            },
+            'refresh': str(refresh),
+            'access': str(refresh.access_token),
             'message': 'User registered successfully'
         }, status=status.HTTP_201_CREATED)
 
@@ -74,10 +72,8 @@ class LoginView(APIView):
 
         return Response({
             'user': UserSerializer(user).data,
-            'tokens': {
-                'refresh': str(refresh),
-                'access': str(refresh.access_token),
-            },
+            'refresh': str(refresh),
+            'access': str(refresh.access_token),
             'message': 'Login successful'
         }, status=status.HTTP_200_OK)
 
