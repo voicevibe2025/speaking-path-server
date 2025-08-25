@@ -10,13 +10,15 @@ class UserProfileSerializer(serializers.ModelSerializer):
     """
     Serializer for user profile
     """
-    user_email = serializers.EmailField(source='user.email', read_only=True)
-    user_name = serializers.CharField(source='user.username', read_only=True)
+    first_name = serializers.CharField(source='user.first_name', read_only=True)
+    last_name = serializers.CharField(source='user.last_name', read_only=True)
+    user_name = serializers.CharField(source='user.username', allow_blank=True, required=False)
+    user_email = serializers.EmailField(source='user.email', allow_blank=True, required=False)
 
     class Meta:
         model = UserProfile
         fields = [
-            'id', 'user', 'user_email', 'user_name',
+            'id', 'user', 'user_email', 'user_name', 'first_name', 'last_name',
             'date_of_birth', 'phone_number', 'avatar_url', 'bio',
             'native_language', 'target_language', 'current_proficiency',
             'learning_goal', 'daily_practice_goal', 'preferred_session_duration',
