@@ -20,6 +20,18 @@ class UserProfileSerializer(serializers.ModelSerializer):
     experience_points = serializers.IntegerField(source='user.level_profile.experience_points', read_only=True)
     streak_days = serializers.IntegerField(source='user.level_profile.streak_days', read_only=True)
 
+    # Quick Stats from UserAnalytics model
+    total_practice_hours = serializers.SerializerMethodField()
+    lessons_completed = serializers.IntegerField(source='user.analytics.scenarios_completed', read_only=True)
+    recordings_count = serializers.IntegerField(source='user.analytics.total_sessions_completed', read_only=True)
+    avg_score = serializers.FloatField(source='user.analytics.overall_proficiency_score', read_only=True)
+
+    def get_total_practice_hours(self, obj):
+        """Convert practice time from minutes to hours"""
+        if hasattr(obj.user, 'analytics') and obj.user.analytics.total_practice_time_minutes:
+            return round(obj.user.analytics.total_practice_time_minutes / 60, 1)
+        return 0
+
     class Meta:
         model = UserProfile
         fields = [
@@ -32,6 +44,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'long_term_orientation_preference',
             'preferred_reward_type', 'enable_notifications', 'enable_reminders',
             'total_practice_time', 'current_level', 'experience_points', 'streak_days',
+            'total_practice_hours', 'lessons_completed', 'recordings_count', 'avg_score',
             'last_practice_date',
             'created_at', 'updated_at'
         ]
