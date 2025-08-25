@@ -8,6 +8,7 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 from django.db import transaction
 
+from apps.analytics.models import UserAnalytics
 from apps.users.models import UserProfile, LearningPreference, UserAchievement
 from apps.gamification.models import (
     UserLevel, Badge, UserBadge, DailyQuest, UserQuest,
@@ -68,6 +69,7 @@ class Command(BaseCommand):
             self.seed_daily_quests(user)
             self.seed_leaderboard_entries(user)
             self.seed_user_achievements(user)
+            self.seed_user_analytics(user)
 
         self.stdout.write(
             self.style.SUCCESS(f"Successfully seeded data for {email}")
@@ -89,6 +91,7 @@ class Command(BaseCommand):
         LeaderboardEntry.objects.filter(user=user).delete()
         UserAchievement.objects.filter(user=user).delete()
         UserMilestone.objects.filter(user=user).delete()
+        UserAnalytics.objects.filter(user=user).delete()
 
     def create_system_badges(self):
         """Create system badges if they don't exist"""
@@ -508,3 +511,68 @@ class Command(BaseCommand):
             )
 
         self.stdout.write("Created user achievements")
+
+    def seed_user_analytics(self, user):
+        """Create user analytics with calculated stats from seeded data"""
+        # Calculate stats from our seeded data
+        practice_sessions = PracticeSession.objects.filter(user=user, session_status='completed')
+        total_sessions = practice_sessions.count()
+
+        # Calculate total practice time in minutes
+        total_duration_seconds = sum(session.duration_seconds for session in practice_sessions)
+        total_practice_minutes = total_duration_seconds // 60
+
+        # Calculate average scores
+        scores = [session.overall_score for session in practice_sessions if session.overall_score]
+        overall_avg_score = sum(scores) / len(scores) if scores else 0
+
+        pronunciation_scores = [session.pronunciation_score for session in practice_sessions if session.pronunciation_score]
+        pronunciation_avg = sum(pronunciation_scores) / len(pronunciation_scores) if pronunciation_scores else 0
+
+        fluency_scores = [session.fluency_score for session in practice_sessions if session.fluency_score]
+        fluency_avg = sum(fluency_scores) / len(fluency_scores) if fluency_scores else 0
+
+        grammar_scores = [session.grammar_score for session in practice_sessions if session.grammar_score]
+        grammar_avg = sum(grammar_scores) / len(grammar_scores) if grammar_scores else 0
+
+        vocabulary_scores = [session.vocabulary_score for session in practice_sessions if session.vocabulary_score]
+        vocabulary_avg = sum(vocabulary_scores) / len(vocabulary_scores) if vocabulary_scores else 0
+
+        # Count completed learning progress
+        completed_lessons = UserProgress.objects.filter(user=user, status='completed').count()
+
+        analytics, created = UserAnalytics.objects.get_or_create(
+            user=user,
+            defaults={
+                'total_practice_time_minutes': total_practice_minutes,
+                'total_sessions_completed': total_sessions,
+                'average_session_duration_minutes': total_practice_minutes / total_sessions if total_sessions > 0 else 0,
+                'current_streak_days': 12,  # Match our user profile streak
+                'longest_streak_days': 15,
+                'last_practice_date': timezone.now().date(),
+
+                # Performance scores
+                'overall_proficiency_score': round(overall_avg_score, 1),
+                'pronunciation_score': round(pronunciation_avg, 1),
+                'fluency_score': round(fluency_avg, 1),
+                'vocabulary_score': round(vocabulary_avg, 1),
+                'grammar_score': round(grammar_avg, 1),
+                'coherence_score': round(overall_avg_score * 0.85, 1),  # Slightly lower than overall
+
+                # Improvement tracking
+                'initial_proficiency_score': round(overall_avg_score - 15, 1),  # Show improvement
+                'improvement_rate': 2.5,  # 2.5% improvement per week
+
+                # Learning patterns
+                'preferred_practice_time': 'evening',
+                'average_words_per_minute': random.randint(120, 150),
+                'vocabulary_size_estimate': random.randint(800, 1200),
+
+                # Engagement metrics
+                'scenarios_completed': completed_lessons,
+                'achievements_earned': UserBadge.objects.filter(user=user).count(),
+                'feedback_interactions': total_sessions * random.randint(2, 4)
+            }
+        )
+
+        self.stdout.write(f"{'Created' if created else 'Updated'} user analytics")
