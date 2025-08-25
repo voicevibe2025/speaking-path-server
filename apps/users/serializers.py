@@ -15,6 +15,11 @@ class UserProfileSerializer(serializers.ModelSerializer):
     user_name = serializers.CharField(source='user.username', allow_blank=True, required=False)
     user_email = serializers.EmailField(source='user.email', allow_blank=True, required=False)
 
+    # Gamification fields from UserLevel model
+    current_level = serializers.IntegerField(source='user.level_profile.current_level', read_only=True)
+    experience_points = serializers.IntegerField(source='user.level_profile.experience_points', read_only=True)
+    streak_days = serializers.IntegerField(source='user.level_profile.streak_days', read_only=True)
+
     class Meta:
         model = UserProfile
         fields = [
@@ -26,10 +31,11 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'masculinity_preference', 'uncertainty_avoidance_preference',
             'long_term_orientation_preference',
             'preferred_reward_type', 'enable_notifications', 'enable_reminders',
-            'total_practice_time', 'streak_days', 'last_practice_date',
+            'total_practice_time', 'current_level', 'experience_points', 'streak_days',
+            'last_practice_date',
             'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'user', 'total_practice_time', 'streak_days', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'user', 'total_practice_time', 'created_at', 'updated_at']
 
 
 class LearningPreferenceSerializer(serializers.ModelSerializer):
