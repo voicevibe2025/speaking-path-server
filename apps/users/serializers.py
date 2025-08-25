@@ -33,6 +33,11 @@ class UserProfileSerializer(serializers.ModelSerializer):
     # Recent Achievements from UserBadge model
     recent_achievements = serializers.SerializerMethodField()
 
+    # Learning Preferences from UserProfile model
+    daily_practice_goal = serializers.IntegerField(read_only=True)
+    learning_goal = serializers.CharField(read_only=True)
+    target_language = serializers.CharField(read_only=True)
+
     def get_total_practice_hours(self, obj):
         """Convert practice time from minutes to hours"""
         if hasattr(obj.user, 'analytics') and obj.user.analytics.total_practice_time_minutes:
