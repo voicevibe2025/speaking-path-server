@@ -2,8 +2,12 @@
 User profile serializers for VoiceVibe
 """
 from rest_framework import serializers
+from django.contrib.auth import get_user_model
 from apps.authentication.models import User
 from .models import UserProfile, LearningPreference, UserAchievement
+from apps.gamification.serializers import UserBadgeSerializer
+
+User = get_user_model()
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
@@ -26,11 +30,19 @@ class UserProfileSerializer(serializers.ModelSerializer):
     recordings_count = serializers.IntegerField(source='user.analytics.total_sessions_completed', read_only=True)
     avg_score = serializers.FloatField(source='user.analytics.overall_proficiency_score', read_only=True)
 
+    # Recent Achievements from UserBadge model
+    recent_achievements = serializers.SerializerMethodField()
+
     def get_total_practice_hours(self, obj):
         """Convert practice time from minutes to hours"""
         if hasattr(obj.user, 'analytics') and obj.user.analytics.total_practice_time_minutes:
             return round(obj.user.analytics.total_practice_time_minutes / 60, 1)
         return 0
+
+    def get_recent_achievements(self, obj):
+        """Get the 3 most recent achievements earned by the user"""
+        recent_badges = obj.user.earned_badges.select_related('badge').order_by('-earned_at')[:3]
+        return UserBadgeSerializer(recent_badges, many=True).data
 
     class Meta:
         model = UserProfile
@@ -46,7 +58,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'total_practice_time', 'current_level', 'experience_points', 'streak_days',
             'total_practice_hours', 'lessons_completed', 'recordings_count', 'avg_score',
             'last_practice_date',
-            'created_at', 'updated_at'
+            'created_at', 'updated_at', 'recent_achievements'
         ]
         read_only_fields = ['id', 'user', 'total_practice_time', 'created_at', 'updated_at']
 
