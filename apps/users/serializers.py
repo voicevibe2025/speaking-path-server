@@ -3,6 +3,7 @@ User profile serializers for VoiceVibe
 """
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
+from django.db.models import Avg, Count, Sum
 from apps.authentication.models import User
 from .models import UserProfile, LearningPreference, UserAchievement
 from apps.gamification.serializers import UserBadgeSerializer
@@ -24,11 +25,11 @@ class UserProfileSerializer(serializers.ModelSerializer):
     experience_points = serializers.IntegerField(source='user.level_profile.experience_points', read_only=True)
     streak_days = serializers.IntegerField(source='user.level_profile.streak_days', read_only=True)
 
-    # Quick Stats from UserAnalytics model
+    # Quick Stats calculated from existing models
     total_practice_hours = serializers.SerializerMethodField()
-    lessons_completed = serializers.IntegerField(source='user.analytics.scenarios_completed', read_only=True)
-    recordings_count = serializers.IntegerField(source='user.analytics.total_sessions_completed', read_only=True)
-    avg_score = serializers.FloatField(source='user.analytics.overall_proficiency_score', read_only=True)
+    lessons_completed = serializers.SerializerMethodField()
+    recordings_count = serializers.SerializerMethodField()
+    avg_score = serializers.SerializerMethodField()
 
     # Recent Achievements from UserBadge model
     recent_achievements = serializers.SerializerMethodField()
@@ -39,10 +40,56 @@ class UserProfileSerializer(serializers.ModelSerializer):
     target_language = serializers.CharField(read_only=True)
 
     def get_total_practice_hours(self, obj):
-        """Convert practice time from minutes to hours"""
-        if hasattr(obj.user, 'analytics') and obj.user.analytics.total_practice_time_minutes:
-            return round(obj.user.analytics.total_practice_time_minutes / 60, 1)
+        """Calculate total practice hours from PracticeSession durations"""
+        if hasattr(obj, 'user') and obj.user:
+            # Sum duration from completed practice sessions
+            from apps.speaking_sessions.models import PracticeSession
+            total_seconds = PracticeSession.objects.filter(
+                user=obj.user,
+                session_status='completed'
+            ).aggregate(
+                total=Sum('duration_seconds')
+            )['total'] or 0
+
+            # Convert seconds to hours, rounded to 1 decimal place
+            return round(total_seconds / 3600, 1)
+        return 0.0
+
+    def get_lessons_completed(self, obj):
+        """Calculate completed lessons from UserProgress"""
+        if hasattr(obj, 'user') and obj.user:
+            from apps.learning_paths.models import UserProgress
+            return UserProgress.objects.filter(
+                user=obj.user,
+                status='completed'
+            ).count()
         return 0
+
+    def get_recordings_count(self, obj):
+        """Calculate total recordings from PracticeSession count"""
+        if hasattr(obj, 'user') and obj.user:
+            from apps.speaking_sessions.models import PracticeSession
+            return PracticeSession.objects.filter(
+                user=obj.user,
+                session_status='completed'
+            ).count()
+        return 0
+
+    def get_avg_score(self, obj):
+        """Calculate average score from completed PracticeSession overall scores"""
+        if hasattr(obj, 'user') and obj.user:
+            from apps.speaking_sessions.models import PracticeSession
+            avg_data = PracticeSession.objects.filter(
+                user=obj.user,
+                session_status='completed',
+                overall_score__isnull=False
+            ).aggregate(
+                avg_score=Avg('overall_score')
+            )
+
+            avg_score = avg_data.get('avg_score')
+            return round(avg_score, 1) if avg_score else 0.0
+        return 0.0
 
     def get_recent_achievements(self, obj):
         """Get the 3 most recent achievements earned by the user"""
