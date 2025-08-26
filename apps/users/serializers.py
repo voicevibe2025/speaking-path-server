@@ -57,6 +57,9 @@ class UserProfileSerializer(serializers.ModelSerializer):
     monthly_xp_earned = serializers.SerializerMethodField()
     monthly_lessons_completed = serializers.SerializerMethodField()
 
+    # Recent Activities Feed
+    recent_activities = serializers.SerializerMethodField()
+
     def get_total_practice_hours(self, obj):
         """Convert practice time from minutes to hours"""
         if hasattr(obj.user, 'analytics') and obj.user.analytics.total_practice_time_minutes:
@@ -125,6 +128,115 @@ class UserProfileSerializer(serializers.ModelSerializer):
             completed_at__lte=end_of_month
         ).count()
 
+    def get_recent_activities(self, obj):
+        """Get a unified feed of recent user activities"""
+        activities = []
+
+        # Get recent practice sessions (last 10)
+        recent_sessions = PracticeSession.objects.filter(
+            user=obj.user,
+            session_status='completed'
+        ).order_by('-completed_at')[:10]
+
+        for session in recent_sessions:
+            activity = {
+                'type': 'practice_session',
+                'title': f"Practiced {session.scenario_title or session.session_type.replace('_', ' ').title()}",
+                'timestamp': session.completed_at,
+                'icon': 'mic',
+                'color': '#1976D2'  # Material Blue
+            }
+            activities.append(activity)
+
+        # Get recent completed modules/lessons (last 10)
+        recent_completions = UserProgress.objects.filter(
+            user=obj.user,
+            status='completed'
+        ).select_related('learning_path', 'module', 'activity').order_by('-completed_at')[:10]
+
+        for completion in recent_completions:
+            if completion.module:
+                title = f"Completed {completion.module.name}"
+            elif completion.activity:
+                title = f"Completed {completion.activity.name}"
+            else:
+                title = f"Completed {completion.learning_path.name} activity"
+
+            activity = {
+                'type': 'module_completion',
+                'title': title,
+                'timestamp': completion.completed_at,
+                'icon': 'check_circle',
+                'color': '#4CAF50'  # Material Green
+            }
+            activities.append(activity)
+
+        # Get recent badges earned (last 5)
+        recent_badges = obj.user.earned_badges.select_related('badge').order_by('-earned_at')[:5]
+
+        for user_badge in recent_badges:
+            activity = {
+                'type': 'badge_earned',
+                'title': f"Earned '{user_badge.badge.name}' badge",
+                'timestamp': user_badge.earned_at,
+                'icon': 'emoji_events',
+                'color': '#FFD700'  # Gold
+            }
+            activities.append(activity)
+
+        # Get recent learning path starts (last 3)
+        recent_paths = obj.user.learning_paths.filter(
+            started_at__isnull=False
+        ).order_by('-started_at')[:3]
+
+        for path in recent_paths:
+            activity = {
+                'type': 'path_started',
+                'title': f"Started {path.name}",
+                'timestamp': path.started_at,
+                'icon': 'school',
+                'color': '#9C27B0'  # Material Purple
+            }
+            activities.append(activity)
+
+        # Sort all activities by timestamp (most recent first) and return top 10
+        activities.sort(key=lambda x: x['timestamp'] if x['timestamp'] else timezone.now(), reverse=True)
+
+        # Convert timestamps to relative time strings and return top 10
+        for activity in activities[:10]:
+            if activity['timestamp']:
+                activity['relative_time'] = self._get_relative_time(activity['timestamp'])
+            else:
+                activity['relative_time'] = 'Unknown'
+            # Remove the raw timestamp from the response
+            del activity['timestamp']
+
+        return activities[:10]
+
+    def _get_relative_time(self, timestamp):
+        """Convert timestamp to relative time string"""
+        if not timestamp:
+            return 'Unknown'
+
+        now = timezone.now()
+        diff = now - timestamp
+
+        if diff.days > 7:
+            return f"{diff.days // 7} week{'s' if diff.days // 7 > 1 else ''} ago"
+        elif diff.days > 0:
+            if diff.days == 1:
+                return "Yesterday"
+            else:
+                return f"{diff.days} day{'s' if diff.days > 1 else ''} ago"
+        elif diff.seconds > 3600:
+            hours = diff.seconds // 3600
+            return f"{hours} hour{'s' if hours > 1 else ''} ago"
+        elif diff.seconds > 60:
+            minutes = diff.seconds // 60
+            return f"{minutes} minute{'s' if minutes > 1 else ''} ago"
+        else:
+            return "Just now"
+
     class Meta:
         model = UserProfile
         fields = [
@@ -140,9 +252,10 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'total_practice_hours', 'lessons_completed', 'recordings_count', 'avg_score',
             'daily_practice_goal', 'learning_goal', 'target_language',
             'speaking_score', 'listening_score', 'grammar_score', 'vocabulary_score', 'pronunciation_score',
+            'monthly_days_active', 'monthly_xp_earned', 'monthly_lessons_completed',
+            'recent_activities',
             'last_practice_date',
-            'created_at', 'updated_at', 'recent_achievements',
-            'monthly_days_active', 'monthly_xp_earned', 'monthly_lessons_completed'
+            'created_at', 'updated_at', 'recent_achievements'
         ]
         read_only_fields = ['id', 'user', 'total_practice_time', 'created_at', 'updated_at']
 
