@@ -60,6 +60,9 @@ class UserProfileSerializer(serializers.ModelSerializer):
     # Recent Activities Feed
     recent_activities = serializers.SerializerMethodField()
 
+    # Membership Status
+    membership_status = serializers.SerializerMethodField()
+
     def get_total_practice_hours(self, obj):
         """Convert practice time from minutes to hours"""
         if hasattr(obj.user, 'analytics') and obj.user.analytics.total_practice_time_minutes:
@@ -213,6 +216,20 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
         return activities[:10]
 
+    def get_membership_status(self, obj):
+        """Determine membership status based on user activity and level"""
+        if hasattr(obj.user, 'level_profile'):
+            level = obj.user.level_profile.current_level or 0
+            if level >= 20:
+                return "Premium Member"
+            elif level >= 10:
+                return "Gold Member"
+            elif level >= 5:
+                return "Silver Member"
+            else:
+                return "Bronze Member"
+        return "New Member"
+
     def _get_relative_time(self, timestamp):
         """Convert timestamp to relative time string"""
         if not timestamp:
@@ -253,7 +270,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'daily_practice_goal', 'learning_goal', 'target_language',
             'speaking_score', 'listening_score', 'grammar_score', 'vocabulary_score', 'pronunciation_score',
             'monthly_days_active', 'monthly_xp_earned', 'monthly_lessons_completed',
-            'recent_activities',
+            'recent_activities', 'membership_status',
             'last_practice_date',
             'created_at', 'updated_at', 'recent_achievements'
         ]
