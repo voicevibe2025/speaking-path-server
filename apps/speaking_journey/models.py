@@ -1,0 +1,52 @@
+from django.db import models
+from django.contrib.auth import get_user_model
+from django.utils.translation import gettext_lazy as _
+import uuid
+
+User = get_user_model()
+
+
+class Topic(models.Model):
+    """
+    Speaking Journey Topic with ordered sequence and material lines
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    title = models.CharField(max_length=200, unique=True)
+    material_lines = models.JSONField(default=list, blank=True)
+    sequence = models.PositiveIntegerField(unique=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = 'speaking_journey_topics'
+        verbose_name = _('Speaking Journey Topic')
+        verbose_name_plural = _('Speaking Journey Topics')
+        ordering = ['sequence']
+        indexes = [
+            models.Index(fields=['sequence']),
+        ]
+
+    def __str__(self):
+        return f"{self.sequence}. {self.title}"
+
+
+class TopicProgress(models.Model):
+    """
+    Per-user topic completion state
+    """
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='topic_progress')
+    topic = models.ForeignKey(Topic, on_delete=models.CASCADE, related_name='progress_items')
+    completed = models.BooleanField(default=False)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'speaking_journey_topic_progress'
+        unique_together = ('user', 'topic')
+        verbose_name = _('Topic Progress')
+        verbose_name_plural = _('Topic Progress')
+        indexes = [
+            models.Index(fields=['user']),
+            models.Index(fields=['topic']),
+        ]
+
+    def __str__(self):
+        return f"{self.user_id} - {self.topic_id} - {'completed' if self.completed else 'pending'}"

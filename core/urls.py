@@ -28,6 +28,8 @@ urlpatterns = [
     path(f'{API_V1_PREFIX}gamification/', include('apps.gamification.urls')),
     path(f'{API_V1_PREFIX}cultural/', include('apps.cultural_adaptation.urls')),
     path(f'{API_V1_PREFIX}analytics/', include('apps.analytics.urls')),
+    path(f'{API_V1_PREFIX}speaking/', include('apps.speaking_journey.urls')),
+    path(f'{API_V1_PREFIX}practice/', include('apps.practice.urls')),
 ]
 
 # Serve media files in development

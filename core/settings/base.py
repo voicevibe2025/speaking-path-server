@@ -53,6 +53,8 @@ LOCAL_APPS = [
     'apps.gamification',
     'apps.cultural_adaptation',
     'apps.analytics',
+    'apps.speaking_journey',
+    'apps.practice',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
