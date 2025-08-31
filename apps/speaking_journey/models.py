@@ -54,6 +54,60 @@ class TopicProgress(models.Model):
         return f"{self.user_id} - {self.topic_id} - {'completed' if self.completed else 'pending'}"
 
 
+class PhraseProgress(models.Model):
+    """
+    Per-user phrase learning progress within each topic
+    """
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='phrase_progress')
+    topic = models.ForeignKey(Topic, on_delete=models.CASCADE, related_name='phrase_progress_items')
+    current_phrase_index = models.PositiveIntegerField(default=0)  # Which phrase user is currently on (0-based)
+    completed_phrases = models.JSONField(default=list, blank=True)  # List of completed phrase indices
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'speaking_journey_phrase_progress'
+        unique_together = ('user', 'topic')
+        verbose_name = _('Phrase Progress')
+        verbose_name_plural = _('Phrase Progress')
+        indexes = [
+            models.Index(fields=['user', 'topic']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} - {self.topic.title} - phrase {self.current_phrase_index}"
+
+    def is_phrase_completed(self, phrase_index):
+        """Check if a specific phrase has been completed"""
+        return phrase_index in (self.completed_phrases or [])
+
+    def mark_phrase_completed(self, phrase_index):
+        """Mark a phrase as completed and advance to next if needed"""
+        completed = self.completed_phrases or []
+        if phrase_index not in completed:
+            completed.append(phrase_index)
+            self.completed_phrases = completed
+
+            # Advance to next phrase if this was the current one
+            if phrase_index == self.current_phrase_index:
+                self.current_phrase_index = phrase_index + 1
+
+            self.save(update_fields=['completed_phrases', 'current_phrase_index'])
+
+    def reset_progress(self):
+        """Reset phrase progress back to beginning"""
+        self.current_phrase_index = 0
+        self.completed_phrases = []
+        self.save(update_fields=['current_phrase_index', 'completed_phrases'])
+
+    @property
+    def is_all_phrases_completed(self):
+        """Check if all phrases in the topic are completed"""
+        topic_phrase_count = len(self.topic.material_lines or [])
+        completed_count = len(self.completed_phrases or [])
+        return completed_count >= topic_phrase_count and topic_phrase_count > 0
+
+
 class UserProfile(models.Model):
     """
     User profile for Speaking Journey tracking

@@ -6,12 +6,20 @@ class ConversationTurnSerializer(serializers.Serializer):
     text = serializers.CharField()
 
 
+class PhraseProgressSerializer(serializers.Serializer):
+    currentPhraseIndex = serializers.IntegerField()
+    completedPhrases = serializers.ListField(child=serializers.IntegerField())
+    totalPhrases = serializers.IntegerField()
+    isAllPhrasesCompleted = serializers.BooleanField()
+
+
 class SpeakingTopicDtoSerializer(serializers.Serializer):
     id = serializers.CharField()
     title = serializers.CharField()
     description = serializers.CharField(allow_blank=True, required=False)
     material = serializers.ListField(child=serializers.CharField())
     conversation = ConversationTurnSerializer(many=True, required=False)
+    phraseProgress = PhraseProgressSerializer(required=False)
     unlocked = serializers.BooleanField()
     completed = serializers.BooleanField()
 
@@ -32,3 +40,12 @@ class CompleteTopicResponseSerializer(serializers.Serializer):
     message = serializers.CharField()
     completedTopicId = serializers.CharField()
     unlockedTopicId = serializers.CharField(allow_null=True)
+
+
+class PhraseSubmissionResultSerializer(serializers.Serializer):
+    success = serializers.BooleanField()
+    accuracy = serializers.FloatField()
+    transcription = serializers.CharField()
+    feedback = serializers.CharField(allow_blank=True, required=False)
+    nextPhraseIndex = serializers.IntegerField(allow_null=True, required=False)
+    topicCompleted = serializers.BooleanField(default=False)
