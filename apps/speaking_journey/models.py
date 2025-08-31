@@ -52,3 +52,22 @@ class TopicProgress(models.Model):
 
     def __str__(self):
         return f"{self.user_id} - {self.topic_id} - {'completed' if self.completed else 'pending'}"
+
+
+class UserProfile(models.Model):
+    """
+    User profile for Speaking Journey tracking
+    """
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='speaking_journey_profile')
+    last_visited_topic = models.ForeignKey(Topic, on_delete=models.SET_NULL, null=True, blank=True)
+    first_visit = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'speaking_journey_user_profiles'
+        verbose_name = _('User Profile')
+        verbose_name_plural = _('User Profiles')
+
+    def __str__(self):
+        return f"{self.user.username} - Journey Profile"

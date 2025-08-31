@@ -3,11 +3,12 @@ from rest_framework.response import Response
 from rest_framework import status, permissions
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from .models import Topic, TopicProgress
+from .models import Topic, TopicProgress, UserProfile
 from .serializers import (
     SpeakingTopicsResponseSerializer,
     SpeakingTopicDtoSerializer,
     CompleteTopicResponseSerializer,
+    UserProfileSerializer,
 )
 
 
@@ -36,6 +37,13 @@ class SpeakingTopicsView(APIView):
 
     def get(self, request):
         topics, completed_sequences, unlocked_sequences = _compute_unlocks(request.user)
+
+        # Get or create user profile for welcome screen personalization
+        profile, created = UserProfile.objects.get_or_create(
+            user=request.user,
+            defaults={'first_visit': True}
+        )
+
         payload = []
         for t in topics:
             payload.append({
@@ -47,8 +55,41 @@ class SpeakingTopicsView(APIView):
                 'unlocked': t.sequence in unlocked_sequences,
                 'completed': t.sequence in completed_sequences,
             })
-        serializer = SpeakingTopicsResponseSerializer({'topics': payload})
+
+        # Build user profile data
+        user_profile_data = {
+            'firstVisit': profile.first_visit,
+            'lastVisitedTopicId': str(profile.last_visited_topic.id) if profile.last_visited_topic else None,
+            'lastVisitedTopicTitle': profile.last_visited_topic.title if profile.last_visited_topic else "",
+        }
+
+        # Mark as not first visit after this request
+        if profile.first_visit:
+            profile.first_visit = False
+            profile.save(update_fields=['first_visit'])
+
+        response_data = {
+            'topics': payload,
+            'userProfile': user_profile_data
+        }
+        serializer = SpeakingTopicsResponseSerializer(response_data)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        """Update last visited topic for welcome screen personalization"""
+        topic_id = request.data.get('lastVisitedTopicId')
+        if not topic_id:
+            return Response({'detail': 'Missing lastVisitedTopicId'}, status=status.HTTP_400_BAD_REQUEST)
+
+        topic = get_object_or_404(Topic, id=topic_id, is_active=True)
+        profile, created = UserProfile.objects.get_or_create(
+            user=request.user,
+            defaults={'first_visit': False}
+        )
+        profile.last_visited_topic = topic
+        profile.save(update_fields=['last_visited_topic'])
+
+        return Response({'success': True}, status=status.HTTP_200_OK)
 
 
 class CompleteTopicView(APIView):

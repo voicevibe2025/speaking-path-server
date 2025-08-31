@@ -16,8 +16,15 @@ class SpeakingTopicDtoSerializer(serializers.Serializer):
     completed = serializers.BooleanField()
 
 
+class UserProfileSerializer(serializers.Serializer):
+    firstVisit = serializers.BooleanField()
+    lastVisitedTopicId = serializers.CharField(allow_null=True, required=False)
+    lastVisitedTopicTitle = serializers.CharField(allow_blank=True, required=False)
+
+
 class SpeakingTopicsResponseSerializer(serializers.Serializer):
     topics = SpeakingTopicDtoSerializer(many=True)
+    userProfile = UserProfileSerializer()
 
 
 class CompleteTopicResponseSerializer(serializers.Serializer):
