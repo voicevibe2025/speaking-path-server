@@ -41,7 +41,9 @@ class SpeakingTopicsView(APIView):
             payload.append({
                 'id': str(t.id),
                 'title': t.title,
+                'description': t.description or "",
                 'material': t.material_lines or [],
+                'conversation': t.conversation_example or [],
                 'unlocked': t.sequence in unlocked_sequences,
                 'completed': t.sequence in completed_sequences,
             })

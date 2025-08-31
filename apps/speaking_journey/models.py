@@ -12,7 +12,9 @@ class Topic(models.Model):
     """
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     title = models.CharField(max_length=200, unique=True)
+    description = models.TextField(blank=True, default="")
     material_lines = models.JSONField(default=list, blank=True)
+    conversation_example = models.JSONField(default=list, blank=True)
     sequence = models.PositiveIntegerField(unique=True)
     is_active = models.BooleanField(default=True)
 
