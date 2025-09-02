@@ -14,7 +14,7 @@ from rest_framework import status, permissions
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from .models import Topic, TopicProgress, UserProfile, PhraseProgress
+from .models import Topic, TopicProgress, UserProfile, PhraseProgress, UserPhraseRecording
 from apps.gamification.models import UserLevel
 from .serializers import (
     SpeakingTopicsResponseSerializer,
@@ -23,6 +23,8 @@ from .serializers import (
     UserProfileSerializer,
     PhraseProgressSerializer,
     PhraseSubmissionResultSerializer,
+    UserPhraseRecordingSerializer,
+    UserPhraseRecordingsResponseSerializer,
 )
 
 
@@ -300,6 +302,51 @@ class SubmitPhraseRecordingView(APIView):
         # Get feedback from Gemini
         feedback = _get_gemini_feedback(expected_phrase, transcription, accuracy)
 
+        # Persist user recording with audio and metadata
+        recording_id = None
+        audio_url = ''
+        try:
+            # Reset file pointer if needed before saving
+            if hasattr(audio_file, 'seek'):
+                try:
+                    audio_file.seek(0)
+                except Exception:
+                    pass
+
+            upr = UserPhraseRecording(
+                user=request.user,
+                topic=topic,
+                phrase_index=phrase_index,
+                transcription=transcription,
+                accuracy=round(accuracy, 1),
+                feedback=feedback,
+            )
+            # Save file to storage (uses upload_to path)
+            try:
+                filename = getattr(audio_file, 'name', 'recording.m4a')
+                upr.audio_file.save(filename, audio_file, save=False)
+            except Exception:
+                # As a fallback, try reading content to a ContentFile
+                try:
+                    if hasattr(audio_file, 'seek'):
+                        audio_file.seek(0)
+                    content = audio_file.read()
+                except Exception:
+                    content = b''
+                if content:
+                    upr.audio_file.save('recording.m4a', ContentFile(content), save=False)
+            upr.save()
+            recording_id = str(upr.id)
+            try:
+                if upr.audio_file:
+                    audio_url = request.build_absolute_uri(upr.audio_file.url)
+            except Exception:
+                audio_url = ''
+        except Exception:
+            # Do not fail the request if persistence fails; continue without recording info
+            recording_id = None
+            audio_url = ''
+
         # Build response
         result = {
             'success': passed,
@@ -309,6 +356,8 @@ class SubmitPhraseRecordingView(APIView):
             'nextPhraseIndex': next_phrase_index,
             'topicCompleted': topic_completed,
             'xpAwarded': xp_awarded,
+            'recordingId': recording_id,
+            'audioUrl': audio_url,
         }
 
         serializer = PhraseSubmissionResultSerializer(result)
@@ -343,3 +392,24 @@ class CompleteTopicView(APIView):
         }
         serializer = CompleteTopicResponseSerializer(resp)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class UserPhraseRecordingsView(APIView):
+    """List user's recordings for a topic, optionally filtered by phraseIndex"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, topic_id):
+        topic = get_object_or_404(Topic, id=topic_id, is_active=True)
+        qs = UserPhraseRecording.objects.filter(user=request.user, topic=topic).order_by('-created_at')
+
+        phrase_index = request.query_params.get('phraseIndex')
+        if phrase_index is not None:
+            try:
+                idx = int(phrase_index)
+                qs = qs.filter(phrase_index=idx)
+            except (TypeError, ValueError):
+                return Response({'detail': 'Invalid phraseIndex'}, status=status.HTTP_400_BAD_REQUEST)
+
+        serializer = UserPhraseRecordingSerializer(qs, many=True, context={'request': request})
+        data = {'recordings': serializer.data}
+        return Response(data, status=status.HTTP_200_OK)

@@ -50,3 +50,29 @@ class PhraseSubmissionResultSerializer(serializers.Serializer):
     nextPhraseIndex = serializers.IntegerField(allow_null=True, required=False)
     topicCompleted = serializers.BooleanField(default=False)
     xpAwarded = serializers.IntegerField(default=0)
+    recordingId = serializers.CharField(allow_null=True, required=False)
+    audioUrl = serializers.CharField(allow_blank=True, required=False)
+
+
+class UserPhraseRecordingSerializer(serializers.Serializer):
+    id = serializers.CharField()
+    phraseIndex = serializers.IntegerField(source='phrase_index')
+    audioUrl = serializers.SerializerMethodField()
+    transcription = serializers.CharField(allow_blank=True)
+    accuracy = serializers.FloatField(allow_null=True)
+    feedback = serializers.CharField(allow_blank=True)
+    createdAt = serializers.DateTimeField(source='created_at')
+
+    def get_audioUrl(self, obj):
+        request = self.context.get('request') if hasattr(self, 'context') else None
+        try:
+            url = obj.audio_file.url if obj.audio_file else ''
+        except Exception:
+            url = ''
+        if request and url:
+            return request.build_absolute_uri(url)
+        return url
+
+
+class UserPhraseRecordingsResponseSerializer(serializers.Serializer):
+    recordings = UserPhraseRecordingSerializer(many=True)

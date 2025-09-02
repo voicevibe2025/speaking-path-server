@@ -125,3 +125,47 @@ class UserProfile(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - Journey Profile"
+
+
+def user_phrase_audio_upload_to(instance, filename):
+    """Build a storage path for user phrase recordings.
+    Example: speaking_journey/<user_id>/<topic_id>/phrase_<idx>/<uuid>.<ext>
+    """
+    ext = filename.split('.')[-1].lower() if '.' in filename else 'm4a'
+    return f"speaking_journey/{instance.user_id}/{instance.topic_id}/phrase_{instance.phrase_index}/{uuid.uuid4()}.{ext}"
+
+
+class UserPhraseRecording(models.Model):
+    """
+    Per-user stored recordings for Speaking Journey phrases.
+    We store the audio file in MEDIA_ROOT via default storage and link it to the user/topic/phrase.
+    Multiple attempts per phrase are allowed.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='journey_phrase_recordings')
+    topic = models.ForeignKey(Topic, on_delete=models.CASCADE, related_name='phrase_recordings')
+    phrase_index = models.PositiveIntegerField()
+
+    # Audio file persisted to storage
+    audio_file = models.FileField(upload_to=user_phrase_audio_upload_to)
+
+    # Metadata and results
+    transcription = models.TextField(blank=True)
+    accuracy = models.FloatField(null=True, blank=True)
+    feedback = models.TextField(blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'speaking_journey_user_phrase_recordings'
+        verbose_name = _('User Phrase Recording')
+        verbose_name_plural = _('User Phrase Recordings')
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', 'topic']),
+            models.Index(fields=['topic', 'phrase_index']),
+            models.Index(fields=['user', 'topic', 'phrase_index']),
+        ]
+
+    def __str__(self):
+        return f"Recording {self.id} - {self.user_id} - {self.topic_id} - phrase {self.phrase_index}"
