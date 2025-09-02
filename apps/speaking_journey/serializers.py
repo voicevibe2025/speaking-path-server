@@ -49,3 +49,4 @@ class PhraseSubmissionResultSerializer(serializers.Serializer):
     feedback = serializers.CharField(allow_blank=True, required=False)
     nextPhraseIndex = serializers.IntegerField(allow_null=True, required=False)
     topicCompleted = serializers.BooleanField(default=False)
+    xpAwarded = serializers.IntegerField(default=0)

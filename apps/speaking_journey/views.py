@@ -15,6 +15,7 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from .models import Topic, TopicProgress, UserProfile, PhraseProgress
+from apps.gamification.models import UserLevel
 from .serializers import (
     SpeakingTopicsResponseSerializer,
     SpeakingTopicDtoSerializer,
@@ -268,8 +269,17 @@ class SubmitPhraseRecordingView(APIView):
         passed = accuracy >= 80.0
         next_phrase_index = None
         topic_completed = False
+        xp_awarded = 0
 
         if passed:
+            # Award XP
+            xp_to_award = 50
+            user_level, _ = UserLevel.objects.get_or_create(user=request.user)
+            user_level.experience_points += xp_to_award
+            user_level.total_points_earned += xp_to_award
+            user_level.save()
+            xp_awarded = xp_to_award
+
             # Mark phrase as completed and advance
             phrase_progress.mark_phrase_completed(phrase_index)
             next_phrase_index = phrase_progress.current_phrase_index
@@ -298,6 +308,7 @@ class SubmitPhraseRecordingView(APIView):
             'feedback': feedback,
             'nextPhraseIndex': next_phrase_index,
             'topicCompleted': topic_completed,
+            'xpAwarded': xp_awarded,
         }
 
         serializer = PhraseSubmissionResultSerializer(result)
