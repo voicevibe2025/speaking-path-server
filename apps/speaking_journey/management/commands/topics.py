@@ -78,11 +78,10 @@ TOPICS = [
         ],
         "conversation": [
             {"speaker": "A", "text": "So, what do you like to do in your free time?"},
-            {"speaker": "B", "text": "I'm really into photography. I love taking pictures of nature on the weekends."},
-            {"speaker": "A", "text": "That sounds amazing! What about you? Do you have any hobbies?"},
-            {"speaker": "B", "text": "I enjoy cooking. I try to make a new recipe every Sunday."},
-            {"speaker": "A", "text": "Oh, really? How long have you been doing that?"},
-            {"speaker": "B", "text": "For about a year now. It's a great way to relax."}
+            {"speaker": "B", "text": "I'm really into photography. I love taking pictures of nature on the weekends.What about you? Do you have any hobbies?"},
+            {"speaker": "A", "text": "I enjoy cooking. I try to make a new recipe every Sunday."},
+            {"speaker": "B", "text": "Oh, really? How long have you been doing that?"},
+            {"speaker": "A", "text": "For about a year now. It's a great way to relax."}
         ]
     },
     {
