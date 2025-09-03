@@ -4,6 +4,7 @@ from .views import (
     CompleteTopicView,
     SubmitPhraseRecordingView,
     UserPhraseRecordingsView,
+    GenerateTTSView,
 )
 
 app_name = 'speaking_journey'
@@ -13,4 +14,5 @@ urlpatterns = [
     path('topics/<uuid:topic_id>/complete', CompleteTopicView.as_view(), name='complete_topic'),
     path('topics/<uuid:topic_id>/phrases/submit', SubmitPhraseRecordingView.as_view(), name='submit_phrase'),
     path('topics/<uuid:topic_id>/recordings', UserPhraseRecordingsView.as_view(), name='topic_recordings'),
+    path('tts/generate', GenerateTTSView.as_view(), name='tts_generate'),
 ]

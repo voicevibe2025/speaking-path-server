@@ -2,6 +2,11 @@ import re
 import string
 import tempfile
 import os
+import base64
+import io
+import wave
+import uuid
+import logging
 from difflib import SequenceMatcher
 import whisper
 import google.generativeai as genai
@@ -14,6 +19,7 @@ from rest_framework import status, permissions
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+import requests
 from .models import Topic, TopicProgress, UserProfile, PhraseProgress, UserPhraseRecording
 from apps.gamification.models import UserLevel
 from .serializers import (
@@ -27,6 +33,7 @@ from .serializers import (
     UserPhraseRecordingsResponseSerializer,
 )
 
+logger = logging.getLogger(__name__)
 
 def _compute_unlocks(user):
     topics = list(Topic.objects.filter(is_active=True).order_by('sequence'))
@@ -428,3 +435,110 @@ class UserPhraseRecordingsView(APIView):
         serializer = UserPhraseRecordingSerializer(qs, many=True, context={'request': request})
         data = {'recordings': serializer.data}
         return Response(data, status=status.HTTP_200_OK)
+
+
+class GenerateTTSView(APIView):
+    """Generate TTS audio via Gemini and return a temporary WAV URL.
+
+    Request JSON body:
+      { "text": "Hello world", "voiceName": "Kore" }
+    Response JSON body:
+      { "audioUrl": "https://.../media/speaking_journey/tts/<id>.wav", "sampleRate": 24000, "voiceName": "Kore" }
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        text = request.data.get('text')
+        voice_name = request.data.get('voiceName') or 'Kore'
+
+        if not text or not isinstance(text, str) or not text.strip():
+            return Response({'detail': 'Missing or invalid "text"'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            api_key = (
+                getattr(settings, 'GEMINI_API_KEY', '') or
+                getattr(settings, 'GOOGLE_API_KEY', '') or
+                os.environ.get('GEMINI_API_KEY', '') or
+                os.environ.get('GOOGLE_API_KEY', '')
+            )
+            if not api_key:
+                logger.error('Server misconfiguration: GEMINI_API_KEY/GOOGLE_API_KEY not set')
+                return Response({'detail': 'Server misconfiguration: GEMINI_API_KEY/GOOGLE_API_KEY not set'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+            url = (
+                'https://generativelanguage.googleapis.com/v1beta/models/'
+                'gemini-2.5-flash-preview-tts:generateContent'
+            )
+
+            payload = {
+                'model': 'gemini-2.5-flash-preview-tts',
+                'contents': [{
+                    'parts': [{ 'text': text.strip() }]
+                }],
+                'generationConfig': {
+                    'responseModalities': ['AUDIO'],
+                    'speechConfig': {
+                        'voiceConfig': {
+                            'prebuiltVoiceConfig': { 'voiceName': voice_name }
+                        }
+                    }
+                }
+            }
+            headers = {
+                'x-goog-api-key': api_key,
+                'Content-Type': 'application/json'
+            }
+
+            resp = requests.post(url, json=payload, headers=headers, timeout=60)
+            if resp.status_code != 200:
+                detail = resp.text
+                logger.error('Gemini TTS request failed', extra={'status_code': resp.status_code, 'body': detail[:1000]})
+                return Response(
+                    {'detail': 'Gemini TTS request failed', 'status': resp.status_code, 'body': detail[:800]},
+                    status=status.HTTP_502_BAD_GATEWAY
+                )
+
+            data = resp.json()
+            try:
+                b64 = (
+                    data['candidates'][0]['content']['parts'][0]['inlineData']['data']
+                )
+            except Exception:
+                return Response(
+                    {'detail': 'Unexpected response format from Gemini', 'response': data},
+                    status=status.HTTP_502_BAD_GATEWAY
+                )
+
+            # Decode PCM (s16le, 24kHz, mono) to WAV
+            pcm_bytes = base64.b64decode(b64)
+            buf = io.BytesIO()
+            with wave.open(buf, 'wb') as wf:
+                wf.setnchannels(1)
+                wf.setsampwidth(2)  # 16-bit PCM
+                wf.setframerate(24000)
+                wf.writeframes(pcm_bytes)
+            wav_bytes = buf.getvalue()
+
+            # Persist to media storage for HTTP streaming via GET
+            filename = f"speaking_journey/tts/{uuid.uuid4().hex}.wav"
+            saved_path = default_storage.save(filename, ContentFile(wav_bytes))
+            try:
+                file_url = request.build_absolute_uri(default_storage.url(saved_path))
+            except Exception:
+                # Fallback to constructing from MEDIA_URL
+                base_url = request.build_absolute_uri(getattr(settings, 'MEDIA_URL', '/media/'))
+                file_url = base_url.rstrip('/') + '/' + saved_path.lstrip('/')
+
+            return Response(
+                {
+                    'audioUrl': file_url,
+                    'sampleRate': 24000,
+                    'voiceName': voice_name,
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            logger.exception('TTS generation failed')
+            return Response({'detail': 'TTS generation failed', 'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

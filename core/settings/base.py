@@ -305,6 +305,10 @@ AI_CONFIG = {
     'TEMPERATURE': env.float('TEMPERATURE', default=0.7),
 }
 
+# Google/Gemini API Keys
+GOOGLE_API_KEY = env('GOOGLE_API_KEY', default='')
+GEMINI_API_KEY = env('GEMINI_API_KEY', default=GOOGLE_API_KEY)
+
 # Indonesian Cultural Configuration (Hofstede Dimensions)
 CULTURAL_CONFIG = {
     'POWER_DISTANCE': 78,
