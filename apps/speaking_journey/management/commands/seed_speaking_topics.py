@@ -8,50 +8,86 @@ TOPICS = [
         'title': 'Greetings and Introductions',
         'description': 'Learn common phrases for greeting people and introducing yourself in everyday situations such as meeting new classmates or colleagues.',
         'material': [
-            'Hello! My name is [Your Name].',
+            'Hi, I\'m Sarah.',
             'Nice to meet you.',
-            'How are you today?',
-            'I am from Indonesia.',
-            'I am learning English to improve my communication skills.'
+            'Where are you from?',
+            'I\'m from Jakarta.',
+            'How are you doing?',
+            'I\'m doing well, thanks.'
         ],
         'conversation': [
-            {'speaker': 'A', 'text': 'Hi! I\'m Alex. Nice to meet you.'},
-            {'speaker': 'B', 'text': 'Nice to meet you too, Alex. I\'m Maya.'},
-            {'speaker': 'A', 'text': 'How are you today?'},
-            {'speaker': 'B', 'text': 'I\'m good, thank you. And you?'},
-            {'speaker': 'A', 'text': 'Doing well, thanks!'}
+            {'speaker': 'A', 'text': 'Hey, I don\'t think we\'ve met before. I\'m Sarah.'},
+            {'speaker': 'B', 'text': 'Hi Sarah, nice to meet you. I\'m David.'},
+            {'speaker': 'A', 'text': 'Nice to meet you too, David. Where are you from?'},
+            {'speaker': 'B', 'text': 'I\'m from Bandung. How about you?'},
+            {'speaker': 'A', 'text': 'I\'m from Jakarta.'},
+            {'speaker': 'B', 'text': 'Cool! So, how are you doing today?'},
+            {'speaker': 'A', 'text': 'I\'m doing well, thanks. And you?'},
+            {'speaker': 'B', 'text': 'Pretty good, thanks for asking.'}
         ]
     },
-    {
-        'title': 'Daily Activities',
-        'description': 'Talk about your daily routine, including mornings, commute, work or school, and evening activities.',
+{
+    'title': 'Daily Activities',
+    'description': 'Talk about your daily routine, including mornings, commute, work or school, and evening activities.',
+    'material': [
+        'I usually wake up around 6:30.',
+        'I grab a quick breakfast before work.',
+        'I take the bus to the office every day.',
+        'After work, I sometimes hang out with friends or just relax at home.',
+        'On weekends, I like to sleep in and spend time with my family.'
+    ],
+    'conversation': [
+        {'speaker': 'A', 'text': 'What time do you usually wake up?'},
+        {'speaker': 'B', 'text': 'Around 6:30. I check my phone, then get ready for work.'},
+        {'speaker': 'A', 'text': 'Do you eat breakfast at home or on the way?'},
+        {'speaker': 'B', 'text': 'Usually at home. Just something quick like bread and coffee.'},
+        {'speaker': 'A', 'text': 'How do you get to work?'},
+        {'speaker': 'B', 'text': 'I take the bus. It takes about 30 minutes.'},
+        {'speaker': 'A', 'text': 'What do you usually do after work?'},
+        {'speaker': 'B', 'text': 'Sometimes I go out with friends, but most days I just relax and watch TV.'},
+        {'speaker': 'A', 'text': 'Sounds nice. How about weekends?'},
+        {'speaker': 'B', 'text': 'I usually sleep in, do some chores, and spend time with my family.'}
+    ]
+},
+{
+    'title': 'Asking for Directions',
+    'description': 'Politely ask for and follow directions in public places like streets, stations, or malls.',
+    'material': [
+        'Excuse me, do you know where the train station is?',
+        'How far is it from here?',
+        'Should I go straight or turn at the next corner?',
+        'Thanks a lot for your help.',
+        'I’m not from around here.'
+    ],
+    'conversation': [
+        {'speaker': 'A', 'text': 'Excuse me, could you tell me how to get to the train station?'},
+        {'speaker': 'B', 'text': 'Sure. Just go straight for about five minutes, then turn left at the traffic light.'},
+        {'speaker': 'A', 'text': 'Is it walking distance, or should I take a bus?'},
+        {'speaker': 'B', 'text': 'It’s pretty close, you can walk. It’s only a couple of blocks away.'},
+        {'speaker': 'A', 'text': 'Okay, so straight ahead and then left at the light, right?'},
+        {'speaker': 'B', 'text': 'That’s right. You’ll see the station on your right-hand side.'},
+        {'speaker': 'A', 'text': 'Perfect, thanks a lot!'},
+        {'speaker': 'B', 'text': 'No problem. Have a good day!'}
+    ]
+},
+        {
+        'title': 'Hobbies and Interests',
+        'description': 'Learn to talk about your hobbies, what you do in your free time, and ask others about their interests.',
         'material': [
-            'I wake up at six in the morning.',
-            'I go to work by bus.',
-            'In the evening, I like to read books or watch movies.',
-            'On weekends, I spend time with my family.'
+            'What do you do for fun?',
+            'In my free time, I like to read books.',
+            'I\'m really into hiking.',
+            'Do you have any hobbies?',
+            'I enjoy playing guitar and watching movies.',
+            'How long have you been doing that?'
         ],
         'conversation': [
-            {'speaker': 'A', 'text': 'What time do you usually get up?'},
-            {'speaker': 'B', 'text': 'Around six. I make breakfast and then catch the bus.'},
-            {'speaker': 'A', 'text': 'Do you have time to exercise?'},
-            {'speaker': 'B', 'text': 'Yes, I go for a short walk in the evening.'}
-        ]
-    },
-    {
-        'title': 'Asking for Directions',
-        'description': 'Politely ask for and follow directions in public places like streets, stations, or malls.',
-        'material': [
-            'Excuse me, could you tell me how to get to the train station?',
-            'Is it far from here?',
-            'Should I turn left or right at the next intersection?',
-            'Thank you for your help.'
-        ],
-        'conversation': [
-            {'speaker': 'A', 'text': 'Excuse me, where is the nearest train station?'},
-            {'speaker': 'B', 'text': 'Go straight two blocks, then turn right. You\'ll see it on your left.'},
-            {'speaker': 'A', 'text': 'Thank you so much!'},
-            {'speaker': 'B', 'text': 'You\'re welcome.'}
+            {'speaker': 'A', 'text': 'So, what do you like to do in your free time?'},
+            {'speaker': 'B', 'text': 'I\'m really into photography. I love taking pictures of nature on the weekends.'},
+            {'speaker': 'A', 'text': 'That sounds amazing! What about you? Do you have any hobbies?'},
+            {'speaker': 'B', 'text': 'I enjoy cooking. I try to make a new recipe every Sunday.'},
+            {'speaker': 'A', 'text': 'Oh, really? How long have you been doing that?'},
+            {'speaker': 'B', 'text': 'For about a year now. It\'s a great way to relax.'}
         ]
     },
 ]
