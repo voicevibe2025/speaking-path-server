@@ -8,11 +8,11 @@ class Command(BaseCommand):
 
     def handle(self, *args, **kwargs):
         # Hard-coded values (you can later replace with inputs)
-        first_name = "John"
-        last_name = "Doe"
-        email = "john.doe@example.com"
-        password = "SuperSecure123!"
-        retype_password = "SuperSecure123!"
+        first_name = "Rina"
+        last_name = "Rina"
+        email = "gamedev456545@gmail.com"
+        password = "btm12345"
+        retype_password = "btm12345"
         accept_terms = True
 
         # Check password match
