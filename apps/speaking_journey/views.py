@@ -288,16 +288,25 @@ class SubmitPhraseRecordingView(APIView):
 
             # Check if all phrases completed
             if phrase_progress.is_all_phrases_completed:
-                # Auto-complete topic
+                # Mark pronunciation mode complete and, for testing, auto-complete other modes
                 topic_progress, _ = TopicProgress.objects.get_or_create(
                     user=request.user,
                     topic=topic
                 )
-                if not topic_progress.completed:
+                # Pronunciation mode done because all phrases are completed
+                topic_progress.pronunciation_completed = True
+                # TESTING TEMP: auto-mark remaining modes complete until those features are implemented
+                topic_progress.fluency_completed = True
+                topic_progress.vocabulary_completed = True
+                topic_progress.listening_completed = True
+                topic_progress.grammar_completed = True
+
+                # Complete the topic only if all modes are completed
+                if not topic_progress.completed and topic_progress.all_modes_completed:
                     topic_progress.completed = True
                     topic_progress.completed_at = timezone.now()
-                    topic_progress.save()
-                    topic_completed = True
+                topic_progress.save()
+                topic_completed = topic_progress.completed
 
         # Get feedback from Gemini
         feedback = _get_gemini_feedback(expected_phrase, transcription, accuracy)
@@ -370,13 +379,19 @@ class CompleteTopicView(APIView):
     def post(self, request, topic_id):
         topic = get_object_or_404(Topic, id=topic_id, is_active=True)
         progress, created = TopicProgress.objects.get_or_create(user=request.user, topic=topic)
+        # Mark all modes completed when manually completing a topic (keeps behavior consistent during testing)
+        progress.pronunciation_completed = True
+        progress.fluency_completed = True
+        progress.vocabulary_completed = True
+        progress.listening_completed = True
+        progress.grammar_completed = True
         message = 'Topic marked as completed'
         if not progress.completed:
             progress.completed = True
             progress.completed_at = timezone.now()
-            progress.save()
         else:
             message = 'Topic already completed'
+        progress.save()
 
         # Determine next topic to unlock
         next_topic = (

@@ -39,6 +39,12 @@ class TopicProgress(models.Model):
     topic = models.ForeignKey(Topic, on_delete=models.CASCADE, related_name='progress_items')
     completed = models.BooleanField(default=False)
     completed_at = models.DateTimeField(null=True, blank=True)
+    # Per-mode completion flags (all must be True to consider the topic fully completed)
+    pronunciation_completed = models.BooleanField(default=False)
+    fluency_completed = models.BooleanField(default=False)
+    vocabulary_completed = models.BooleanField(default=False)
+    listening_completed = models.BooleanField(default=False)
+    grammar_completed = models.BooleanField(default=False)
 
     class Meta:
         db_table = 'speaking_journey_topic_progress'
@@ -49,6 +55,17 @@ class TopicProgress(models.Model):
             models.Index(fields=['user']),
             models.Index(fields=['topic']),
         ]
+
+    @property
+    def all_modes_completed(self):
+        """Return True only if all five practice modes are completed."""
+        return (
+            self.pronunciation_completed and
+            self.fluency_completed and
+            self.vocabulary_completed and
+            self.listening_completed and
+            self.grammar_completed
+        )
 
     def __str__(self):
         return f"{self.user_id} - {self.topic_id} - {'completed' if self.completed else 'pending'}"
