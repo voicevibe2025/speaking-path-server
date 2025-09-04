@@ -33,6 +33,29 @@ class UserProfileView(generics.RetrieveUpdateAPIView):
         return profile
 
 
+class UserProfileDetailView(generics.RetrieveAPIView):
+    """
+    Retrieve any user profile by user ID
+    """
+    serializer_class = UserProfileSerializer
+    permission_classes = [IsAuthenticated]
+    lookup_field = 'user__id'
+    lookup_url_kwarg = 'user_id'
+
+    def get_queryset(self):
+        return UserProfile.objects.select_related('user')
+
+    def get_object(self):
+        user_id = self.kwargs.get('user_id')
+        try:
+            user = User.objects.get(id=user_id)
+            profile, created = UserProfile.objects.get_or_create(user=user)
+            return profile
+        except User.DoesNotExist:
+            from django.http import Http404
+            raise Http404("User not found")
+
+
 class LearningPreferenceView(generics.RetrieveUpdateAPIView):
     """
     Retrieve and update learning preferences

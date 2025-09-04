@@ -4,6 +4,7 @@ User profile URL patterns for VoiceVibe
 from django.urls import path
 from .views import (
     UserProfileView,
+    UserProfileDetailView,
     LearningPreferenceView,
     UserAchievementListView,
     UserAchievementDetailView,
@@ -17,6 +18,7 @@ app_name = 'users'
 urlpatterns = [
     # Profile endpoints
     path('profile/', UserProfileView.as_view(), name='profile'),
+    path('<int:user_id>/', UserProfileDetailView.as_view(), name='user_profile_detail'),
     path('preferences/', LearningPreferenceView.as_view(), name='preferences'),
 
     # Achievement endpoints

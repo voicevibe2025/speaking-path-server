@@ -23,14 +23,35 @@ class UserProfileSerializer(serializers.ModelSerializer):
     """
     first_name = serializers.CharField(source='user.first_name', read_only=True)
     last_name = serializers.CharField(source='user.last_name', read_only=True)
-    user_name = serializers.CharField(source='user.username', allow_blank=True, required=False)
+    username = serializers.CharField(source='user.username', read_only=True)
+    email = serializers.EmailField(source='user.email', read_only=True)
+    displayName = serializers.SerializerMethodField()
     user_email = serializers.EmailField(source='user.email', allow_blank=True, required=False)
 
     # New avatar fields
     avatar = serializers.ImageField(write_only=True, required=False, allow_null=True)
     avatar_url = serializers.SerializerMethodField()
 
-    # Gamification fields from UserLevel model
+    # Required fields to match frontend UserProfile data class
+    level = serializers.IntegerField(source='user.level_profile.current_level', default=1)
+    xp = serializers.IntegerField(source='user.level_profile.experience_points', default=0)
+    xpToNextLevel = serializers.SerializerMethodField()
+    streakDays = serializers.IntegerField(source='user.level_profile.streak_days', default=0)
+    longestStreak = serializers.SerializerMethodField()
+    joinedDate = serializers.DateTimeField(source='user.date_joined', read_only=True)
+    lastActiveDate = serializers.DateTimeField(source='user.last_login', read_only=True)
+    language = serializers.CharField(source='target_language', default='English')
+    isVerified = serializers.BooleanField(default=False)
+    isPremium = serializers.BooleanField(default=False)
+    isOnline = serializers.BooleanField(default=False)
+    isFollowing = serializers.BooleanField(default=False)
+    isFollower = serializers.BooleanField(default=False)
+    isBlocked = serializers.BooleanField(default=False)
+    stats = serializers.SerializerMethodField()
+    badges = serializers.SerializerMethodField()
+    preferences = serializers.SerializerMethodField()
+    
+    # Legacy fields for backward compatibility
     current_level = serializers.IntegerField(source='user.level_profile.current_level', read_only=True)
     experience_points = serializers.IntegerField(source='user.level_profile.experience_points', read_only=True)
     streak_days = serializers.IntegerField(source='user.level_profile.streak_days', read_only=True)
@@ -234,6 +255,75 @@ class UserProfileSerializer(serializers.ModelSerializer):
                 return "Bronze Member"
         return "New Member"
 
+    def get_displayName(self, obj):
+        """Generate display name from first_name + last_name or fallback to username"""
+        if obj.user.first_name and obj.user.last_name:
+            return f"{obj.user.first_name} {obj.user.last_name}"
+        return obj.user.username or "User"
+        
+    def get_xpToNextLevel(self, obj):
+        """Calculate XP needed to reach next level"""
+        current_xp = getattr(obj.user, 'level_profile', None)
+        if current_xp:
+            current_level = current_xp.current_level or 1
+            # Simple formula: each level requires 100 * level XP
+            next_level_xp = 100 * (current_level + 1)
+            current_xp_val = current_xp.experience_points or 0
+            return max(0, next_level_xp - current_xp_val)
+        return 100
+        
+    def get_longestStreak(self, obj):
+        """Get longest streak - for now return current streak"""
+        if hasattr(obj.user, 'level_profile') and obj.user.level_profile.streak_days:
+            return obj.user.level_profile.streak_days
+        return 0
+        
+    def get_stats(self, obj):
+        """Generate UserStats object"""
+        return {
+            'totalPracticeSessions': getattr(obj.user, 'analytics', None) and obj.user.analytics.total_sessions_completed or 0,
+            'totalPracticeMinutes': getattr(obj.user, 'analytics', None) and obj.user.analytics.total_practice_time_minutes or 0,
+            'averageAccuracy': 0.0,
+            'averageFluency': getattr(obj.user, 'analytics', None) and obj.user.analytics.fluency_score or 0.0,
+            'completedLessons': getattr(obj.user, 'analytics', None) and obj.user.analytics.scenarios_completed or 0,
+            'achievementsUnlocked': obj.user.earned_badges.count(),
+            'followersCount': 0,
+            'followingCount': 0,
+            'globalRank': None,
+            'weeklyXp': 0,
+            'monthlyXp': 0,
+            'totalWords': 0,
+            'improvementRate': 0.0
+        }
+        
+    def get_badges(self, obj):
+        """Get user badges"""
+        return []
+        
+    def get_preferences(self, obj):
+        """Generate UserPreferences object"""
+        return {
+            'dailyGoalMinutes': obj.daily_practice_goal or 15,
+            'practiceRemindersEnabled': obj.enable_reminders or True,
+            'reminderTime': None,
+            'soundEffectsEnabled': True,
+            'vibrationEnabled': True,
+            'darkModeEnabled': False,
+            'autoPlayAudio': True,
+            'showPronunciationGuide': True,
+            'difficulty': 'INTERMEDIATE',
+            'focusAreas': [],
+            'privacy': {
+                'profileVisibility': 'PUBLIC',
+                'showOnlineStatus': True,
+                'showAchievements': True,
+                'showStatistics': True,
+                'allowFriendRequests': True,
+                'allowMessages': True,
+                'allowChallenges': True
+            }
+        }
+
     def get_avatar_url(self, obj):
         """Return absolute URL to uploaded avatar if present, otherwise fallback to stored URL string.
         This ensures clients can always render a usable avatar URL."""
@@ -276,7 +366,10 @@ class UserProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserProfile
         fields = [
-            'id', 'user', 'user_email', 'user_name', 'first_name', 'last_name',
+            'id', 'user', 'user_email', 'username', 'email', 'displayName', 'first_name', 'last_name',
+            'level', 'xp', 'xpToNextLevel', 'streakDays', 'longestStreak', 'joinedDate', 'lastActiveDate',
+            'language', 'isVerified', 'isPremium', 'isOnline', 'isFollowing', 'isFollower', 'isBlocked',
+            'stats', 'badges', 'preferences',
             'date_of_birth', 'phone_number', 'avatar', 'avatar_url', 'bio',
             'native_language', 'target_language', 'current_proficiency',
             'learning_goal', 'daily_practice_goal', 'preferred_session_duration',

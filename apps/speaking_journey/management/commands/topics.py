@@ -124,5 +124,28 @@ TOPICS = [
             {"speaker": "B", "text": "It's March 15th. Why?"},
             {"speaker": "A", "text": "Because tomorrow is my birthday!"}
         ]
-    }
+    },
+    {
+    "title": "Shopping and Prices",
+    "description": "Practice useful phrases for shopping, asking about prices, sizes, and making purchases in stores or markets.",
+    "material": [
+        "How much is this?",
+        "Do you have this in a larger size?",
+        "Can I try this on?",
+        "That's too expensive.",
+        "I'll take it, please.",
+        "Do you accept credit cards?"
+    ],
+    "conversation": [
+        {"speaker": "A", "text": "Excuse me, how much is this T-shirt?"},
+        {"speaker": "B", "text": "It's 150,000 rupiah."},
+        {"speaker": "A", "text": "Do you have it in a larger size?"},
+        {"speaker": "B", "text": "Yes, we have medium and large. Would you like to try it on?"},
+        {"speaker": "A", "text": "Yes, please."},
+        {"speaker": "B", "text": "Here you go. The fitting room is over there."},
+        {"speaker": "A", "text": "It fits well. I'll take it, please. Do you accept credit cards?"},
+        {"speaker": "B", "text": "Yes, we do. Please come to the cashier."}
+    ]
+}
+
 ]
