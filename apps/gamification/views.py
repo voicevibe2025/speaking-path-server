@@ -10,6 +10,7 @@ from django.utils import timezone
 from django.db.models import Q, Count, Avg, Sum
 from django.db import transaction
 import logging
+from datetime import timedelta
 
 from .models import (
     UserLevel,
@@ -369,32 +370,48 @@ class LeaderboardViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=False, methods=['get'])
     def weekly(self, request):
         """Get weekly leaderboard"""
+        period_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=7)
         leaderboard, created = Leaderboard.objects.get_or_create(
             leaderboard_type='weekly',
-            period_start=timezone.now().replace(hour=0, minute=0, second=0) - timezone.timedelta(days=7),
-            period_end=timezone.now()
+            period_start=period_start,
+            defaults={'period_end': timezone.now()}
         )
         
-        if created or (timezone.now() - leaderboard.last_updated).hours > 1:
+        # Refresh if older than 1 hour
+        if created or (timezone.now() - leaderboard.last_updated).total_seconds() > 3600:
             self._update_leaderboard(leaderboard)
         
-        serializer = self.get_serializer(leaderboard)
-        return Response(serializer.data)
+        # Return Android-friendly LeaderboardData shape
+        data = self._build_leaderboard_response(
+            leaderboard=leaderboard,
+            request=request,
+            type_label='WEEKLY',
+            filter_label='WEEKLY_XP'
+        )
+        return Response(data)
     
     @action(detail=False, methods=['get'])
     def monthly(self, request):
         """Get monthly leaderboard"""
+        period_start = timezone.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         leaderboard, created = Leaderboard.objects.get_or_create(
             leaderboard_type='monthly',
-            period_start=timezone.now().replace(day=1, hour=0, minute=0, second=0),
-            period_end=timezone.now()
+            period_start=period_start,
+            defaults={'period_end': timezone.now()}
         )
         
-        if created or (timezone.now() - leaderboard.last_updated).hours > 1:
+        # Refresh if older than 1 hour
+        if created or (timezone.now() - leaderboard.last_updated).total_seconds() > 3600:
             self._update_leaderboard(leaderboard)
         
-        serializer = self.get_serializer(leaderboard)
-        return Response(serializer.data)
+        # Return Android-friendly LeaderboardData shape
+        data = self._build_leaderboard_response(
+            leaderboard=leaderboard,
+            request=request,
+            type_label='MONTHLY',
+            filter_label='MONTHLY_XP'
+        )
+        return Response(data)
     
     def _update_leaderboard(self, leaderboard):
         """Update leaderboard entries"""
@@ -413,8 +430,81 @@ class LeaderboardViewSet(viewsets.ReadOnlyModelViewSet):
                 wayang_character=user_level.wayang_character
             )
         
-        leaderboard.last_updated = timezone.now()
+        now = timezone.now()
+        leaderboard.last_updated = now
+        leaderboard.period_end = now
         leaderboard.save()
+
+    def _build_leaderboard_response(self, leaderboard, request, type_label: str, filter_label: str):
+        """Construct Android-friendly LeaderboardData payload.
+        Matches app's domain model fields and naming.
+        """
+        entries_qs = leaderboard.entries.select_related('user', 'primary_badge').order_by('rank')
+
+        entries = []
+        current_user_entry = None
+
+        for e in entries_qs:
+            # Derive user fields
+            user = e.user
+            try:
+                level = user.level_profile.current_level
+                streak = user.level_profile.streak_days
+            except Exception:
+                level = 0
+                streak = 0
+
+            display_name = getattr(user, 'get_full_name', None)
+            if callable(display_name):
+                name_val = (user.get_full_name() or '').strip()
+                if not name_val:
+                    name_val = user.username
+            else:
+                name_val = user.username
+
+            badge_obj = None
+            if e.primary_badge:
+                badge_color = getattr(e.primary_badge, 'pattern_color', None) or '#000000'
+                badge_obj = {
+                    'id': str(getattr(e.primary_badge, 'badge_id', e.primary_badge.id)),
+                    'name': e.primary_badge.name,
+                    'icon': e.primary_badge.icon,
+                    'color': badge_color,
+                }
+
+            entry_data = {
+                'rank': e.rank,
+                'userId': str(user.id),
+                'username': user.username,
+                'displayName': name_val,
+                'avatarUrl': None,
+                'score': e.score,
+                'level': level,
+                'streakDays': streak,
+                'country': None,
+                'countryCode': None,
+                'isCurrentUser': user.id == getattr(request.user, 'id', None),
+                'change': 'NONE',
+                'achievements': 0,
+                'weeklyXp': e.score if type_label == 'WEEKLY' else 0,
+                'monthlyXp': e.score if type_label == 'MONTHLY' else 0,
+                'badge': badge_obj,
+            }
+
+            if entry_data['isCurrentUser']:
+                current_user_entry = entry_data
+
+            entries.append(entry_data)
+
+        data = {
+            'type': type_label,
+            'filter': filter_label,
+            'entries': entries,
+            'currentUserEntry': current_user_entry,
+            'lastUpdated': leaderboard.last_updated,
+            'totalParticipants': len(entries),
+        }
+        return data
 
 
 class DailyQuestViewSet(viewsets.ReadOnlyModelViewSet):

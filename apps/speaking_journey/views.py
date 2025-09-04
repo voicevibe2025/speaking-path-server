@@ -7,6 +7,7 @@ import io
 import wave
 import uuid
 import logging
+import hashlib
 from difflib import SequenceMatcher
 import whisper
 import google.generativeai as genai
@@ -456,6 +457,31 @@ class GenerateTTSView(APIView):
             return Response({'detail': 'Missing or invalid "text"'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
+            # Deterministic cache key and path
+            sample_rate = 24000
+            model_name = 'gemini-2.5-flash-preview-tts'
+            text_norm = ' '.join(text.split())
+            key_str = f"{model_name}|voice={voice_name}|rate={sample_rate}|text={text_norm}"
+            cache_hash = hashlib.sha256(key_str.encode('utf-8')).hexdigest()
+            relative_path = f"speaking_journey/tts/{cache_hash[:2]}/{cache_hash}.wav"
+
+            # If file already exists, return it immediately (no external API call)
+            if default_storage.exists(relative_path):
+                try:
+                    file_url = request.build_absolute_uri(default_storage.url(relative_path))
+                except Exception:
+                    base_url = request.build_absolute_uri(getattr(settings, 'MEDIA_URL', '/media/'))
+                    file_url = base_url.rstrip('/') + '/' + relative_path.lstrip('/')
+                return Response(
+                    {
+                        'audioUrl': file_url,
+                        'sampleRate': sample_rate,
+                        'voiceName': voice_name,
+                        'cached': True,
+                    },
+                    status=status.HTTP_200_OK
+                )
+
             api_key = (
                 getattr(settings, 'GEMINI_API_KEY', '') or
                 getattr(settings, 'GOOGLE_API_KEY', '') or
@@ -516,13 +542,12 @@ class GenerateTTSView(APIView):
             with wave.open(buf, 'wb') as wf:
                 wf.setnchannels(1)
                 wf.setsampwidth(2)  # 16-bit PCM
-                wf.setframerate(24000)
+                wf.setframerate(sample_rate)
                 wf.writeframes(pcm_bytes)
             wav_bytes = buf.getvalue()
 
-            # Persist to media storage for HTTP streaming via GET
-            filename = f"speaking_journey/tts/{uuid.uuid4().hex}.wav"
-            saved_path = default_storage.save(filename, ContentFile(wav_bytes))
+            # Persist to media storage under deterministic cache path for HTTP streaming via GET
+            saved_path = default_storage.save(relative_path, ContentFile(wav_bytes))
             try:
                 file_url = request.build_absolute_uri(default_storage.url(saved_path))
             except Exception:
@@ -533,8 +558,9 @@ class GenerateTTSView(APIView):
             return Response(
                 {
                     'audioUrl': file_url,
-                    'sampleRate': 24000,
+                    'sampleRate': sample_rate,
                     'voiceName': voice_name,
+                    'cached': False,
                 },
                 status=status.HTTP_200_OK
             )

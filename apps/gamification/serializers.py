@@ -148,19 +148,36 @@ class LeaderboardEntrySerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='user.username', read_only=True)
     user_avatar = serializers.SerializerMethodField()
     badge_info = BadgeSerializer(source='primary_badge', read_only=True)
+    user_level = serializers.SerializerMethodField()
+    streak_days = serializers.SerializerMethodField()
     
     class Meta:
         model = LeaderboardEntry
         fields = [
             'rank', 'user', 'username', 'user_avatar', 'score',
             'sessions_completed', 'average_score', 'improvement_rate',
-            'wayang_character', 'primary_badge', 'badge_info', 'created_at'
+            'wayang_character', 'primary_badge', 'badge_info', 'created_at',
+            'user_level', 'streak_days'
         ]
     
     def get_user_avatar(self, obj):
         """Get user avatar URL if available"""
         # Placeholder for user avatar logic
         return None
+
+    def get_user_level(self, obj):
+        """Get the user's current level for this leaderboard entry"""
+        try:
+            return obj.user.level_profile.current_level
+        except Exception:
+            return 0
+
+    def get_streak_days(self, obj):
+        """Get the user's current streak days for this leaderboard entry"""
+        try:
+            return obj.user.level_profile.streak_days
+        except Exception:
+            return 0
 
 
 class LeaderboardSerializer(serializers.ModelSerializer):
