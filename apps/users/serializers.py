@@ -26,6 +26,10 @@ class UserProfileSerializer(serializers.ModelSerializer):
     user_name = serializers.CharField(source='user.username', allow_blank=True, required=False)
     user_email = serializers.EmailField(source='user.email', allow_blank=True, required=False)
 
+    # New avatar fields
+    avatar = serializers.ImageField(write_only=True, required=False, allow_null=True)
+    avatar_url = serializers.SerializerMethodField()
+
     # Gamification fields from UserLevel model
     current_level = serializers.IntegerField(source='user.level_profile.current_level', read_only=True)
     experience_points = serializers.IntegerField(source='user.level_profile.experience_points', read_only=True)
@@ -230,6 +234,21 @@ class UserProfileSerializer(serializers.ModelSerializer):
                 return "Bronze Member"
         return "New Member"
 
+    def get_avatar_url(self, obj):
+        """Return absolute URL to uploaded avatar if present, otherwise fallback to stored URL string.
+        This ensures clients can always render a usable avatar URL."""
+        request = self.context.get('request')
+        try:
+            if obj.avatar and hasattr(obj.avatar, 'url'):
+                # Build absolute URL for media file
+                if request is not None:
+                    return request.build_absolute_uri(obj.avatar.url)
+                return obj.avatar.url
+        except Exception:
+            pass
+        # Fallback to legacy avatar_url field (might be external URL)
+        return obj.avatar_url or None
+
     def _get_relative_time(self, timestamp):
         """Convert timestamp to relative time string"""
         if not timestamp:
@@ -258,7 +277,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
         model = UserProfile
         fields = [
             'id', 'user', 'user_email', 'user_name', 'first_name', 'last_name',
-            'date_of_birth', 'phone_number', 'avatar_url', 'bio',
+            'date_of_birth', 'phone_number', 'avatar', 'avatar_url', 'bio',
             'native_language', 'target_language', 'current_proficiency',
             'learning_goal', 'daily_practice_goal', 'preferred_session_duration',
             'power_distance_preference', 'individualism_preference',

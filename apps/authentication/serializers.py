@@ -156,10 +156,30 @@ class UserSerializer(serializers.ModelSerializer):
     """
     Serializer for user details
     """
+    avatar_url = serializers.SerializerMethodField()
     class Meta:
         model = User
         fields = (
             'id', 'email', 'username', 'first_name',
-            'last_name', 'is_active', 'is_verified', 'date_joined'
+            'last_name', 'is_active', 'is_verified', 'date_joined',
+            'avatar_url'
         )
         read_only_fields = ('id', 'email', 'is_active', 'is_verified', 'date_joined')
+
+    def get_avatar_url(self, obj):
+        """Return absolute avatar URL from user's profile if available."""
+        try:
+            profile = obj.profile
+        except Exception:
+            return None
+        request = self.context.get('request') if hasattr(self, 'context') else None
+        # Prefer uploaded image
+        try:
+            if getattr(profile, 'avatar', None) and hasattr(profile.avatar, 'url'):
+                if request is not None:
+                    return request.build_absolute_uri(profile.avatar.url)
+                return profile.avatar.url
+        except Exception:
+            pass
+        # Fallback to stored external URL
+        return getattr(profile, 'avatar_url', None)

@@ -161,8 +161,16 @@ class LeaderboardEntrySerializer(serializers.ModelSerializer):
         ]
     
     def get_user_avatar(self, obj):
-        """Get user avatar URL if available"""
-        # Placeholder for user avatar logic
+        """Return the user's avatar URL, preferring uploaded image over legacy URL."""
+        request = self.context.get('request') if hasattr(self, 'context') else None
+        try:
+            profile = obj.user.profile  # OneToOne related_name='profile'
+            if profile and getattr(profile, 'avatar', None) and hasattr(profile.avatar, 'url'):
+                return request.build_absolute_uri(profile.avatar.url) if request else profile.avatar.url
+            if profile and getattr(profile, 'avatar_url', None):
+                return profile.avatar_url
+        except Exception:
+            pass
         return None
 
     def get_user_level(self, obj):

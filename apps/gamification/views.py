@@ -11,6 +11,7 @@ from django.db.models import Q, Count, Avg, Sum
 from django.db import transaction
 import logging
 from datetime import timedelta
+from django.contrib.auth import get_user_model
 
 from .models import (
     UserLevel,
@@ -41,6 +42,7 @@ from .serializers import (
     JoinChallengeSerializer,
     UpdateStreakSerializer
 )
+from apps.users.models import UserFollow
 
 logger = logging.getLogger(__name__)
 
@@ -391,6 +393,29 @@ class LeaderboardViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(data)
     
     @action(detail=False, methods=['get'])
+    def daily(self, request):
+        """Get daily leaderboard"""
+        period_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        leaderboard, created = Leaderboard.objects.get_or_create(
+            leaderboard_type='daily',
+            period_start=period_start,
+            defaults={'period_end': timezone.now()}
+        )
+        
+        # Refresh if older than 1 hour
+        if created or (timezone.now() - leaderboard.last_updated).total_seconds() > 3600:
+            self._update_leaderboard(leaderboard)
+        
+        # Return Android-friendly LeaderboardData shape
+        data = self._build_leaderboard_response(
+            leaderboard=leaderboard,
+            request=request,
+            type_label='DAILY',
+            filter_label='DAILY_XP'
+        )
+        return Response(data)
+    
+    @action(detail=False, methods=['get'])
     def monthly(self, request):
         """Get monthly leaderboard"""
         period_start = timezone.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
@@ -410,6 +435,91 @@ class LeaderboardViewSet(viewsets.ReadOnlyModelViewSet):
             request=request,
             type_label='MONTHLY',
             filter_label='MONTHLY_XP'
+        )
+        return Response(data)
+
+    @action(detail=False, methods=['get'])
+    def all_time(self, request):
+        """Get all-time leaderboard"""
+        # Use a stable epoch-like start to ensure a single all-time row
+        epoch_like = timezone.now().replace(year=1970, month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+        leaderboard, created = Leaderboard.objects.get_or_create(
+            leaderboard_type='all_time',
+            period_start=epoch_like,
+            defaults={'period_end': timezone.now()}
+        )
+
+        # Refresh if older than 1 hour
+        if created or (timezone.now() - leaderboard.last_updated).total_seconds() > 3600:
+            self._update_leaderboard(leaderboard)
+
+        data = self._build_leaderboard_response(
+            leaderboard=leaderboard,
+            request=request,
+            type_label='ALL_TIME',
+            filter_label='OVERALL_XP'
+        )
+        return Response(data)
+
+    @action(detail=False, methods=['get'])
+    def friends(self, request):
+        """Get friends leaderboard (current user + users they follow), based on all-time points"""
+        # Determine friend set: following + self
+        following_ids = list(UserFollow.objects.filter(
+            follower=request.user
+        ).values_list('following_id', flat=True))
+        friend_ids = set(following_ids + [request.user.id])
+
+        # Build friend rankings directly from UserLevel to include all friends
+        friend_levels = (
+            UserLevel.objects.select_related('user')
+            .filter(user_id__in=friend_ids)
+            .order_by('-total_points_earned')
+        )
+
+        prebuilt_entries = []
+        current_user_entry = None
+
+        for rank, ul in enumerate(friend_levels, 1):
+            user = ul.user
+            # Prefer full name if available
+            display_name = getattr(user, 'get_full_name', None)
+            if callable(display_name):
+                name_val = (user.get_full_name() or '').strip() or user.username
+            else:
+                name_val = user.username
+
+            entry = {
+                'rank': rank,
+                'userId': str(user.id),
+                'username': user.username,
+                'displayName': name_val,
+                'avatarUrl': None,
+                'score': ul.total_points_earned,
+                'level': ul.current_level,
+                'streakDays': ul.streak_days,
+                'country': None,
+                'countryCode': None,
+                'isCurrentUser': user.id == getattr(request.user, 'id', None),
+                'change': 'NONE',
+                'achievements': 0,
+                'weeklyXp': 0,
+                'monthlyXp': 0,
+                'badge': None,
+            }
+            if entry['isCurrentUser']:
+                current_user_entry = entry
+            prebuilt_entries.append(entry)
+
+        data = self._build_leaderboard_response(
+            leaderboard=None,
+            request=request,
+            type_label='FRIENDS',
+            filter_label='OVERALL_XP',
+            entries_qs_override=None,
+            last_updated_override=timezone.now(),
+            prebuilt_entries=prebuilt_entries,
+            current_user_entry_override=current_user_entry,
         )
         return Response(data)
     
@@ -435,73 +545,130 @@ class LeaderboardViewSet(viewsets.ReadOnlyModelViewSet):
         leaderboard.period_end = now
         leaderboard.save()
 
-    def _build_leaderboard_response(self, leaderboard, request, type_label: str, filter_label: str):
+    def _get_user_avatar_url(self, user, request):
+        """Resolve a user's avatar URL.
+        Priority:
+        1) Uploaded image from UserProfile.avatar (build absolute URI)
+        2) Legacy UserProfile.avatar_url
+        Returns None if not available.
+        """
+        try:
+            profile = getattr(user, 'profile', None)
+            if not profile:
+                return None
+
+            avatar_field = getattr(profile, 'avatar', None)
+            if avatar_field:
+                # Uploaded image
+                url = getattr(avatar_field, 'url', None)
+                if url:
+                    try:
+                        return request.build_absolute_uri(url) if request is not None else url
+                    except Exception:
+                        return url
+
+            legacy = getattr(profile, 'avatar_url', '') or ''
+            return legacy or None
+        except Exception:
+            return None
+
+    def _build_leaderboard_response(self, leaderboard, request, type_label: str, filter_label: str, entries_qs_override=None, last_updated_override=None, prebuilt_entries=None, current_user_entry_override=None):
         """Construct Android-friendly LeaderboardData payload.
         Matches app's domain model fields and naming.
         """
-        entries_qs = leaderboard.entries.select_related('user', 'primary_badge').order_by('rank')
-
-        entries = []
-        current_user_entry = None
-
-        for e in entries_qs:
-            # Derive user fields
-            user = e.user
+        if prebuilt_entries is not None:
+            entries = prebuilt_entries
+            current_user_entry = current_user_entry_override
+            # Enrich avatar URLs for prebuilt entries when missing
             try:
-                level = user.level_profile.current_level
-                streak = user.level_profile.streak_days
+                user_ids = []
+                for it in entries:
+                    if not it.get('avatarUrl'):
+                        uid = it.get('userId')
+                        try:
+                            user_ids.append(int(uid))
+                        except Exception:
+                            continue
+                if user_ids:
+                    User = get_user_model()
+                    users = User.objects.filter(id__in=set(user_ids)).select_related('profile')
+                    users_by_id = {u.id: u for u in users}
+                    for it in entries:
+                        if not it.get('avatarUrl'):
+                            uid = it.get('userId')
+                            try:
+                                user_obj = users_by_id.get(int(uid))
+                            except Exception:
+                                user_obj = None
+                            if user_obj:
+                                it['avatarUrl'] = self._get_user_avatar_url(user_obj, request)
             except Exception:
-                level = 0
-                streak = 0
+                pass
+        else:
+            entries_qs = entries_qs_override or leaderboard.entries.select_related('user', 'user__profile', 'primary_badge').order_by('rank')
 
-            display_name = getattr(user, 'get_full_name', None)
-            if callable(display_name):
-                name_val = (user.get_full_name() or '').strip()
-                if not name_val:
+            entries = []
+            current_user_entry = None
+
+            for e in entries_qs:
+                # Derive user fields
+                user = e.user
+                try:
+                    level = user.level_profile.current_level
+                    streak = user.level_profile.streak_days
+                except Exception:
+                    level = 0
+                    streak = 0
+
+                display_name = getattr(user, 'get_full_name', None)
+                if callable(display_name):
+                    name_val = (user.get_full_name() or '').strip()
+                    if not name_val:
+                        name_val = user.username
+                else:
                     name_val = user.username
-            else:
-                name_val = user.username
 
-            badge_obj = None
-            if e.primary_badge:
-                badge_color = getattr(e.primary_badge, 'pattern_color', None) or '#000000'
-                badge_obj = {
-                    'id': str(getattr(e.primary_badge, 'badge_id', e.primary_badge.id)),
-                    'name': e.primary_badge.name,
-                    'icon': e.primary_badge.icon,
-                    'color': badge_color,
+                badge_obj = None
+                if e.primary_badge:
+                    badge_color = getattr(e.primary_badge, 'pattern_color', None) or '#000000'
+                    badge_obj = {
+                        'id': str(getattr(e.primary_badge, 'badge_id', e.primary_badge.id)),
+                        'name': e.primary_badge.name,
+                        'icon': e.primary_badge.icon,
+                        'color': badge_color,
+                    }
+
+                avatar_url = self._get_user_avatar_url(user, request)
+                entry_data = {
+                    'rank': e.rank,
+                    'userId': str(user.id),
+                    'username': user.username,
+                    'displayName': name_val,
+                    'avatarUrl': avatar_url,
+                    'score': e.score,
+                    'level': level,
+                    'streakDays': streak,
+                    'country': None,
+                    'countryCode': None,
+                    'isCurrentUser': user.id == getattr(request.user, 'id', None),
+                    'change': 'NONE',
+                    'achievements': 0,
+                    'weeklyXp': e.score if type_label == 'WEEKLY' else 0,
+                    'monthlyXp': e.score if type_label == 'MONTHLY' else 0,
+                    'badge': badge_obj,
                 }
 
-            entry_data = {
-                'rank': e.rank,
-                'userId': str(user.id),
-                'username': user.username,
-                'displayName': name_val,
-                'avatarUrl': None,
-                'score': e.score,
-                'level': level,
-                'streakDays': streak,
-                'country': None,
-                'countryCode': None,
-                'isCurrentUser': user.id == getattr(request.user, 'id', None),
-                'change': 'NONE',
-                'achievements': 0,
-                'weeklyXp': e.score if type_label == 'WEEKLY' else 0,
-                'monthlyXp': e.score if type_label == 'MONTHLY' else 0,
-                'badge': badge_obj,
-            }
+                if entry_data['isCurrentUser']:
+                    current_user_entry = entry_data
 
-            if entry_data['isCurrentUser']:
-                current_user_entry = entry_data
-
-            entries.append(entry_data)
+                entries.append(entry_data)
 
         data = {
             'type': type_label,
             'filter': filter_label,
             'entries': entries,
             'currentUserEntry': current_user_entry,
-            'lastUpdated': leaderboard.last_updated,
+            'lastUpdated': last_updated_override or (leaderboard.last_updated if leaderboard else timezone.now()),
             'totalParticipants': len(entries),
         }
         return data

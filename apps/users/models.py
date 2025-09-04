@@ -40,6 +40,7 @@ class UserProfile(models.Model):
     # Personal Information
     date_of_birth = models.DateField(null=True, blank=True)
     phone_number = models.CharField(max_length=20, blank=True)
+    avatar = models.ImageField(upload_to='avatars/', null=True, blank=True)
     avatar_url = models.URLField(blank=True)
     bio = models.TextField(max_length=500, blank=True)
 
@@ -267,3 +268,31 @@ class UserAchievement(models.Model):
 
     def __str__(self):
         return f"{self.achievement_name} - {self.user.email}"
+
+
+class UserFollow(models.Model):
+    """
+    Simple follow relationship between users
+    - follower follows following
+    """
+    follower = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='following_relations'
+    )
+    following = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='follower_relations'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ['follower', 'following']
+        indexes = [
+            models.Index(fields=['follower']),
+            models.Index(fields=['following']),
+        ]
+
+    def __str__(self):
+        return f"{self.follower_id} -> {self.following_id}"
