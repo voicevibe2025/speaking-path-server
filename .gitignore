@@ -158,3 +158,6 @@ supabase/.supabase/
 
 # Ignore local dev secrets
 secrets.json
+
+# Ignore media_dev
+media_dev/
