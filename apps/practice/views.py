@@ -76,7 +76,12 @@ class SubmitRecordingView(APIView):
         # Save uploaded audio to storage
         filename = f"practice/{timezone.now().strftime('%Y%m%d%H%M%S')}_{audio_file.name}"
         path = default_storage.save(filename, ContentFile(audio_file.read()))
-        audio_url = settings.MEDIA_URL + path if settings.MEDIA_URL else path
+        # Build an absolute URL to the stored file so mobile clients can stream it
+        try:
+            storage_url = default_storage.url(path)  # typically MEDIA_URL + path
+        except Exception:
+            storage_url = f"{settings.MEDIA_URL}{path}" if getattr(settings, 'MEDIA_URL', None) else path
+        audio_url = request.build_absolute_uri(storage_url)
 
         # Create submission; for now, we simulate immediate evaluation
         submission = PracticeSubmission.objects.create(
@@ -103,10 +108,14 @@ class SubmitRecordingView(APIView):
             'phoneticErrors': [
                 {'word': 'comfortable', 'expected': 'kumf-tuh-buhl', 'actual': 'com-for-ta-ble', 'timestamp': 4.2}
             ],
+            'pauses': [0.6, 1.4],
+            'stutters': 0,
             'createdAt': timezone.now().isoformat(),
         }
+        # For demo purposes, store a simulated transcript so the client UI can show it
+        submission.transcription = "I am asking for directions to the museum. Could you tell me how to get there?"
         submission.evaluation = evaluation_payload
-        submission.save(update_fields=['evaluation'])
+        submission.save(update_fields=['evaluation', 'transcription'])
 
         result = {
             'sessionId': str(submission.id),

@@ -3,7 +3,7 @@ from .models import PracticePrompt, PracticeSubmission
 
 
 class PracticePromptSerializer(serializers.ModelSerializer):
-    id = serializers.UUIDField(format='hex', read_only=True)
+    id = serializers.UUIDField(format='hex_verbose', read_only=True)
     targetDuration = serializers.IntegerField(source='target_duration')
     culturalContext = serializers.CharField(source='cultural_context', allow_null=True, required=False)
     scenarioType = serializers.CharField(source='scenario_type')
@@ -47,6 +47,8 @@ class SpeakingEvaluationSerializer(serializers.Serializer):
     feedback = serializers.CharField()
     suggestions = serializers.ListField(child=serializers.CharField())
     phoneticErrors = PhoneticErrorSerializer(many=True)
+    pauses = serializers.ListField(child=serializers.FloatField(), required=False)
+    stutters = serializers.IntegerField(required=False)
     createdAt = serializers.CharField()
 
 
