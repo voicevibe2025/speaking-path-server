@@ -279,11 +279,19 @@ def analyze_fluency(audio_path: str) -> Dict[str, Any]:
     word_count = len(token_list)
     wpm = round(word_count / (duration_sec / 60.0), 1) if duration_sec > 0 and word_count > 0 else None
     # Filler words
-    filler_vocab = {"um","uh","erm","hmm","like","you","know","i","mean","sort","of","kind","of","actually","basically","literally","so","well"}
+    single_fillers = {"um","uh","erm","hmm","like","actually","basically","literally","so","well"}
+    phrase_fillers = [("you","know"), ("i","mean"), ("sort","of"), ("kind","of")]
     filler_counts: Dict[str, int] = {}
-    for i, tok in enumerate(token_list):
-        if tok in filler_vocab:
+    # Count single-token fillers
+    for tok in token_list:
+        if tok in single_fillers:
             filler_counts[tok] = filler_counts.get(tok, 0) + 1
+    # Count bigram phrase fillers
+    for i in range(len(token_list) - 1):
+        pair = (token_list[i], token_list[i + 1])
+        if pair in phrase_fillers:
+            key = " ".join(pair)
+            filler_counts[key] = filler_counts.get(key, 0) + 1
     filler_total = sum(filler_counts.values())
     # Pause stats
     longest_pause = max(pauses) if pauses else None
