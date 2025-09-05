@@ -26,6 +26,12 @@ openai==1.3.0
 anthropic==0.7.0
 requests==2.31.0
 google-generativeai==0.7.2
+faster-whisper==0.10.0
+
+# Optional heavy extras (install only if needed; require CUDA-capable environment or large downloads)
+# pyannote-audio==3.1.1  # for high-quality VAD/diarization (requires torch + HF token)
+# whisperx==3.1.1        # for Whisper + alignment
+# montreal-forced-aligner==2.2.17  # MFA; usually installed via conda/installer, not pip
 
 # NOTE: Do not install the deprecated 'google' meta-package as it conflicts with namespace packages
 # If you accidentally installed it, run: pip uninstall -y google

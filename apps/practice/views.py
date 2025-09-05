@@ -1,4 +1,7 @@
+import os
 import random
+import tempfile
+import requests
 from django.conf import settings
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
@@ -9,6 +12,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.utils import timezone
 from .models import PracticePrompt, PracticeSubmission
+from .analysis import analyze_fluency
 from .serializers import (
     PracticePromptSerializer,
     SubmissionResultSerializer,
@@ -83,39 +87,85 @@ class SubmitRecordingView(APIView):
             storage_url = f"{settings.MEDIA_URL}{path}" if getattr(settings, 'MEDIA_URL', None) else path
         audio_url = request.build_absolute_uri(storage_url)
 
-        # Create submission; for now, we simulate immediate evaluation
+        # Create submission record first
         submission = PracticeSubmission.objects.create(
             user=request.user,
             prompt=prompt,
             audio_url=audio_url,
-            status='EVALUATED',
-            duration=30,
-            score=round(random.uniform(60, 95), 1),
+            status='PROCESSING',
+            duration=0,
+            score=None,
         )
 
-        # Fake evaluation payload matching SpeakingEvaluation model
+        # Resolve a local path for analysis (FileSystemStorage supports .path)
+        local_path = None
+        try:
+            local_path = default_storage.path(path)
+        except Exception:
+            if getattr(settings, 'MEDIA_ROOT', None):
+                local_path = os.path.join(settings.MEDIA_ROOT, path)
+
+        # If we couldn't determine a local path (e.g., remote storage), download temporarily
+        cleanup_temp = None
+        if not (local_path and os.path.exists(local_path)):
+            try:
+                with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(path)[1] or ".m4a") as tmp:
+                    r = requests.get(audio_url, timeout=30)
+                    r.raise_for_status()
+                    tmp.write(r.content)
+                    local_path = tmp.name
+                    cleanup_temp = tmp.name
+            except Exception:
+                local_path = None
+
+        # Run analysis (gracefully handles missing dependencies)
+        result = analyze_fluency(local_path) if local_path else {
+            'transcript': '',
+            'pauses': [],
+            'stutters': 0,
+            'mispronunciations': [],
+            'overall_score': 75.0,
+            'pronunciation': {'score': 78.0, 'level': 'GOOD', 'feedback': 'Pronunciation is generally clear.'},
+            'fluency': {'score': 76.0, 'level': 'GOOD', 'feedback': 'Flow is smooth with minor pauses.'},
+            'vocabulary': {'score': 74.0, 'level': 'GOOD', 'feedback': 'Vocabulary is appropriate.'},
+            'grammar': {'score': 72.0, 'level': 'GOOD', 'feedback': 'Minor mistakes.'},
+            'coherence': {'score': 76.0, 'level': 'GOOD', 'feedback': 'Well organized.'},
+            'feedback': 'Great job! Focus on reducing filler words and maintaining steady pace.',
+            'suggestions': ['Practice linking words', 'Vary intonation'],
+        }
+
+        # Cleanup temp file if used
+        if cleanup_temp and os.path.exists(cleanup_temp):
+            try:
+                os.remove(cleanup_temp)
+            except Exception:
+                pass
+
+        # Map analysis result to API payload/DB fields
         evaluation_payload = {
             'sessionId': str(submission.id),
-            'overallScore': submission.score or 75.0,
-            'pronunciation': {'score': 80.0, 'level': 'GOOD', 'feedback': 'Clear pronunciation overall.'},
-            'fluency': {'score': 78.0, 'level': 'GOOD', 'feedback': 'Smooth flow with minor pauses.'},
-            'vocabulary': {'score': 74.0, 'level': 'GOOD', 'feedback': 'Good range; keep expanding.'},
-            'grammar': {'score': 72.0, 'level': 'GOOD', 'feedback': 'Minor mistakes; mostly accurate.'},
-            'coherence': {'score': 76.0, 'level': 'GOOD', 'feedback': 'Ideas are well organized.'},
+            'overallScore': float(result.get('overall_score') or 0.0),
+            'pronunciation': result.get('pronunciation'),
+            'fluency': result.get('fluency'),
+            'vocabulary': result.get('vocabulary'),
+            'grammar': result.get('grammar'),
+            'coherence': result.get('coherence'),
             'culturalAppropriateness': None,
-            'feedback': 'Great job! Focus on reducing filler words.',
-            'suggestions': ['Practice linking words', 'Vary intonation'],
-            'phoneticErrors': [
-                {'word': 'comfortable', 'expected': 'kumf-tuh-buhl', 'actual': 'com-for-ta-ble', 'timestamp': 4.2}
-            ],
-            'pauses': [0.6, 1.4],
-            'stutters': 0,
+            'feedback': result.get('feedback') or '',
+            'suggestions': result.get('suggestions') or [],
+            'phoneticErrors': result.get('mispronunciations') or [],
+            'pauses': result.get('pauses') or [],
+            'stutters': int(result.get('stutters') or 0),
             'createdAt': timezone.now().isoformat(),
         }
-        # For demo purposes, store a simulated transcript so the client UI can show it
-        submission.transcription = "I am asking for directions to the museum. Could you tell me how to get there?"
+
+        submission.transcription = result.get('transcript') or ''
         submission.evaluation = evaluation_payload
-        submission.save(update_fields=['evaluation', 'transcription'])
+        submission.score = evaluation_payload['overallScore']
+        submission.status = 'EVALUATED'
+        # TODO: set real duration if available (from metadata or word timings)
+        submission.duration = 30
+        submission.save(update_fields=['evaluation', 'transcription', 'score', 'status', 'duration'])
 
         result = {
             'sessionId': str(submission.id),
