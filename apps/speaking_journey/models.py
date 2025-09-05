@@ -15,6 +15,8 @@ class Topic(models.Model):
     description = models.TextField(blank=True, default="")
     material_lines = models.JSONField(default=list, blank=True)
     conversation_example = models.JSONField(default=list, blank=True)
+    # List of key vocabulary words for this topic (e.g., ["arrival", "departure", ...])
+    vocabulary = models.JSONField(default=list, blank=True)
     sequence = models.PositiveIntegerField(unique=True)
     is_active = models.BooleanField(default=True)
 

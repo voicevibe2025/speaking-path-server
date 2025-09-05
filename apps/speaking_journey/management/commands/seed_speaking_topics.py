@@ -24,6 +24,7 @@ class Command(BaseCommand):
                 'description': item.get('description', ''),
                 'material_lines': item.get('material', []),
                 'conversation_example': item.get('conversation', []),
+                'vocabulary': item.get('vocabulary', []),
                 'sequence': idx,
                 'is_active': True,
             }

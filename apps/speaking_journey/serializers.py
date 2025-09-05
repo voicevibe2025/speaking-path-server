@@ -18,6 +18,7 @@ class SpeakingTopicDtoSerializer(serializers.Serializer):
     title = serializers.CharField()
     description = serializers.CharField(allow_blank=True, required=False)
     material = serializers.ListField(child=serializers.CharField())
+    vocabulary = serializers.ListField(child=serializers.CharField(), required=False)
     conversation = ConversationTurnSerializer(many=True, required=False)
     phraseProgress = PhraseProgressSerializer(required=False)
     unlocked = serializers.BooleanField()

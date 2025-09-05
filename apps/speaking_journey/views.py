@@ -182,6 +182,7 @@ class SpeakingTopicsView(APIView):
                 'title': t.title,
                 'description': t.description or "",
                 'material': t.material_lines or [],
+                'vocabulary': t.vocabulary or [],
                 'conversation': t.conversation_example or [],
                 'phraseProgress': phrase_progress_data,
                 'unlocked': t.sequence in unlocked_sequences,

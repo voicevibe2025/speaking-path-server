@@ -19,6 +19,10 @@ TOPICS = [
             {"speaker": "B", "text": "Cool! So, how are you doing today?"},
             {"speaker": "A", "text": "I'm doing well, thanks. And you?"},
             {"speaker": "B", "text": "Pretty good, thanks for asking."}
+        ],
+        "vocabulary": [
+            "greeting", "introduction", "meet", "hello", "hi", "name", 
+            "from", "country", "city", "nice", "pleasure", "acquaintance"
         ]
     },
     {
@@ -42,6 +46,10 @@ TOPICS = [
             {"speaker": "B", "text": "Sometimes I go out with friends, but most days I just relax and watch TV."},
             {"speaker": "A", "text": "Sounds nice. How about weekends?"},
             {"speaker": "B", "text": "I usually sleep in, do some chores, and spend time with my family."}
+        ],
+        "vocabulary": [
+            "routine", "wake up", "breakfast", "commute", "transportation", "bus", 
+            "work", "office", "relax", "weekend", "chores", "family", "schedule"
         ]
     },
     {
@@ -63,6 +71,10 @@ TOPICS = [
             {"speaker": "B", "text": "That's right. You'll see the station on your right-hand side."},
             {"speaker": "A", "text": "Perfect, thanks a lot!"},
             {"speaker": "B", "text": "No problem. Have a good day!"}
+        ],
+        "vocabulary": [
+            "directions", "location", "station", "distance", "straight", "turn", 
+            "left", "right", "corner", "traffic light", "block", "walking", "bus"
         ]
     },
     {
@@ -82,6 +94,10 @@ TOPICS = [
             {"speaker": "A", "text": "I enjoy cooking. I try to make a new recipe every Sunday."},
             {"speaker": "B", "text": "Oh, really? How long have you been doing that?"},
             {"speaker": "A", "text": "For about a year now. It's a great way to relax."}
+        ],
+        "vocabulary": [
+            "hobby", "interest", "photography", "cooking", "reading", "hiking", 
+            "guitar", "movies", "free time", "relax", "weekend", "activity", "passion"
         ]
     },
     {
@@ -102,6 +118,10 @@ TOPICS = [
             {"speaker": "A", "text": "Yes, fries please. Do you have any vegetarian options?"},
             {"speaker": "Waiter", "text": "Yes, we have a veggie burger and a salad."},
             {"speaker": "A", "text": "Great, I'll take the veggie burger for my friend."}
+        ],
+        "vocabulary": [
+            "menu", "order", "recommend", "cheeseburger", "fries", "water", 
+            "vegetarian", "bill", "waiter", "restaurant", "café", "food", "drink"
         ]
     },
     {
@@ -123,6 +143,10 @@ TOPICS = [
             {"speaker": "A", "text": "Oh, right. What's the date today?"},
             {"speaker": "B", "text": "It's March 15th. Why?"},
             {"speaker": "A", "text": "Because tomorrow is my birthday!"}
+        ],
+        "vocabulary": [
+            "time", "clock", "hour", "minute", "day", "week", "month", 
+            "year", "birthday", "holiday", "date", "calendar", "schedule"
         ]
     },
     {
@@ -145,6 +169,10 @@ TOPICS = [
         {"speaker": "B", "text": "Here you go. The fitting room is over there."},
         {"speaker": "A", "text": "It fits well. I'll take it, please. Do you accept credit cards?"},
         {"speaker": "B", "text": "Yes, we do. Please come to the cashier."}
+    ],
+    "vocabulary": [
+        "shopping", "price", "size", "try on", "expensive", "purchase", 
+        "credit card", "cash", "store", "market", "clothing", "accessory", "sale"
     ]
 }
 
