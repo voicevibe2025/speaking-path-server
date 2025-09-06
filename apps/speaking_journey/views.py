@@ -46,6 +46,27 @@ from .serializers import (
 
 logger = logging.getLogger(__name__)
 
+# Simple in-process cache for word definitions to speed up repeat sessions
+_DEF_CACHE: dict[str, str] = {}
+
+def _cache_get(word: str) -> str | None:
+    try:
+        return _DEF_CACHE.get((word or '').strip())
+    except Exception:
+        return None
+
+def _cache_set(word: str, definition: str):
+    try:
+        w = (word or '').strip()
+        if not w:
+            return
+        # Basic size guard to avoid unbounded growth
+        if len(_DEF_CACHE) > 1000:
+            _DEF_CACHE.clear()
+        _DEF_CACHE[w] = (definition or '').strip()
+    except Exception:
+        pass
+
 def _compute_unlocks(user):
     topics = list(Topic.objects.filter(is_active=True).order_by('sequence'))
     completed_sequences = set(
@@ -175,13 +196,20 @@ def _get_gemini_definition(word: str) -> str:
     The definition should avoid repeating the word itself and be 5–18 words.
     Fallback returns a heuristic placeholder if API is unavailable.
     """
+    safe_word = (word or '').strip()
+    # Cache first
+    cached = _cache_get(safe_word)
+    if cached:
+        return cached
+
     api_key = (
         getattr(settings, 'GEMINI_API_KEY', '') or os.environ.get('GEMINI_API_KEY', '') or os.environ.get('GOOGLE_API_KEY', '')
     )
-    safe_word = (word or '').strip()
     if not api_key or not safe_word:
         # Heuristic fallback
-        return f"A definition describing '{safe_word}' in everyday English."
+        out = f"A definition describing '{safe_word}' in everyday English."
+        _cache_set(safe_word, out)
+        return out
 
     candidates = [
         getattr(settings, 'GEMINI_TEXT_MODEL', None) or os.environ.get('GEMINI_MODEL') or 'gemini-2.5-flash',
@@ -216,12 +244,102 @@ def _get_gemini_definition(word: str) -> str:
                     out = out.replace(safe_word, '▢▢▢')
                 # Trim to a single sentence and length
                 out = out.split('\n')[0].strip()
+                _cache_set(safe_word, out)
                 return out
         except Exception as e:
             logger.warning('Gemini definition via %s failed: %s', name, e)
             continue
-    return "A short learner-friendly definition."
+    out = "A short learner-friendly definition."
+    _cache_set(safe_word, out)
+    return out
 
+
+def _get_gemini_definitions_batch(words: list[str]) -> dict:
+    """Generate concise definitions for a list of words in a single Gemini call.
+
+    Returns a mapping {word: definition}. Falls back to empty dict on failure.
+    """
+    words = [w for w in (words or []) if isinstance(w, str) and w.strip()]
+    if not words:
+        return {}
+    api_key = (
+        getattr(settings, 'GEMINI_API_KEY', '') or os.environ.get('GEMINI_API_KEY', '') or os.environ.get('GOOGLE_API_KEY', '')
+    )
+    if not api_key:
+        # Fallback: no API key
+        d = {w: f"A definition describing '{w}' in everyday English." for w in words}
+        for w, v in d.items():
+            _cache_set(w, v)
+        return d
+
+    # Prefer fast model first
+    candidates = [
+        getattr(settings, 'GEMINI_TEXT_MODEL', None) or os.environ.get('GEMINI_MODEL') or 'gemini-2.5-flash',
+        'gemini-2.5-pro',
+        'gemini-1.5-flash',
+        'gemini-1.5-pro',
+        'gemini-pro',
+    ]
+    # Build a strict JSON-only instruction
+    prompt = (
+        "You are an English vocabulary tutor.\n"
+        "For each TARGET word, return a JSON object mapping the word to a concise definition (5–18 words).\n"
+        "Rules: Do NOT include or reveal the word itself in the definition; one sentence only; no examples; no quotes; no markdown.\n"
+        "Output JSON only, with keys exactly the input words.\n"
+        "WORDS: " + json.dumps(words, ensure_ascii=False)
+    )
+    try:
+        genai.configure(api_key=api_key)
+    except Exception:
+        d = {w: "A short learner-friendly definition." for w in words}
+        for w, v in d.items():
+            _cache_set(w, v)
+        return d
+
+    for name in candidates:
+        try:
+            model = genai.GenerativeModel(name)
+            resp = model.generate_content(prompt)
+            txt = getattr(resp, 'text', None)
+            if not txt:
+                continue
+            # Try to locate JSON in the response
+            raw = txt.strip()
+            # If the model adds markdown fences, strip them robustly
+            if raw.startswith('```'):
+                # remove opening fence and optional language hint
+                first_nl = raw.find('\n')
+                if first_nl != -1:
+                    raw = raw[first_nl + 1:]
+                # remove closing fence if present
+                if raw.endswith('```'):
+                    raw = raw[:-3]
+                raw = raw.strip()
+            # Attempt to parse JSON
+            try:
+                data = json.loads(raw)
+                out = {}
+                for w in words:
+                    val = str(data.get(w, '')).strip()
+                    if not val:
+                        continue
+                    # avoid echoing word
+                    if w.lower() in val.lower():
+                        val = val.replace(w, '▢▢▢')
+                    # single line
+                    val = val.split('\n')[0].strip()
+                    out[w] = val
+                if out:
+                    for ww, dd in out.items():
+                        _cache_set(ww, dd)
+                    return out
+            except Exception as e:
+                logger.warning('Gemini batch JSON parse failed: %s', e)
+                continue
+        except Exception as e:
+            logger.warning('Gemini batch via %s failed: %s', name, e)
+            continue
+    return {}
 
 def _sample_vocabulary_questions(topic: Topic, n: int) -> list[dict]:
     """Build n questions from topic.vocabulary with AI definitions and 3 distractors each.
@@ -235,6 +353,15 @@ def _sample_vocabulary_questions(topic: Topic, n: int) -> list[dict]:
     random.shuffle(words)
     pick = words[: max(1, min(n, len(words)))]
     remaining_pool = [w for w in words if w not in pick]
+    # Try to fetch definitions in a single batch to reduce latency
+    # Resolve from cache first to minimize API calls
+    cached_defs = {w: (_cache_get(w) or '') for w in pick}
+    missing = [w for w in pick if not cached_defs.get(w)]
+    defs_map = {}
+    if missing:
+        defs_map = _get_gemini_definitions_batch(missing)
+    # merge cached + fetched
+    defs_map = {**{w: v for w, v in cached_defs.items() if v}, **defs_map}
     qs: list[dict] = []
     for w in pick:
         # Build distractors from other words in topic (fallback duplicates if insufficient)
@@ -245,10 +372,11 @@ def _sample_vocabulary_questions(topic: Topic, n: int) -> list[dict]:
             distractors.append(random.choice(words))
         options = distractors + [w]
         random.shuffle(options)
+        definition = defs_map.get(w) or _get_gemini_definition(w)
         q = {
             'id': str(uuid.uuid4()),
             'word': w,
-            'definition': _get_gemini_definition(w),
+            'definition': definition,
             'options': options,
             'answered': False,
             'correct': None,
