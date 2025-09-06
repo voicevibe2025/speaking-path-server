@@ -12,6 +12,7 @@ import subprocess
 import json
 from difflib import SequenceMatcher
 import whisper
+from typing import Optional
 import google.generativeai as genai
 from django.conf import settings
 from django.core.files.storage import default_storage
@@ -46,12 +47,17 @@ from .serializers import (
 
 logger = logging.getLogger(__name__)
 
-# Simple in-process cache for word definitions to speed up repeat sessions
+# Simple in-process cache for word clues to speed up repeat sessions
+DEF_STYLE_VERSION = "fun_v1"
 _DEF_CACHE: dict[str, str] = {}
 
-def _cache_get(word: str) -> str | None:
+def _cache_get(word: str) -> Optional[str]:
     try:
-        return _DEF_CACHE.get((word or '').strip())
+        w = (word or '').strip()
+        if not w:
+            return None
+        key = f"{DEF_STYLE_VERSION}|{w}"
+        return _DEF_CACHE.get(key)
     except Exception:
         return None
 
@@ -63,7 +69,8 @@ def _cache_set(word: str, definition: str):
         # Basic size guard to avoid unbounded growth
         if len(_DEF_CACHE) > 1000:
             _DEF_CACHE.clear()
-        _DEF_CACHE[w] = (definition or '').strip()
+        key = f"{DEF_STYLE_VERSION}|{w}"
+        _DEF_CACHE[key] = (definition or '').strip()
     except Exception:
         pass
 
@@ -219,18 +226,18 @@ def _get_gemini_definition(word: str) -> str:
         'gemini-pro',
     ]
     prompt = (
-        "You are an English vocabulary tutor.\n"
-        "Task: Provide a concise definition (5–18 words) for the TARGET word.\n"
+        "You are an English tutor writing a playful single-line clue for a TARGET word.\n"
+        "Use styles like: situational, personification, exaggeration/humor, or action/sound.\n"
         "Rules:\n"
-        "- Do NOT include or reveal the word itself.\n"
-        "- Be simple and clear for learners.\n"
-        "- One sentence only. No examples, no quotes, no markdown.\n"
-        "TARGET: " + safe_word
+        "- Exactly one sentence, 12–24 words.\n"
+        "- Do NOT include or hint the word itself.\n"
+        "- No quotes, no markdown, no lists, no colons.\n"
+        f"TARGET: {safe_word}"
     )
     try:
         genai.configure(api_key=api_key)
     except Exception:
-        return "A short learner-friendly definition."
+        return "A playful, single-line clue in plain English."
     for name in candidates:
         try:
             model = genai.GenerativeModel(name)
@@ -267,7 +274,7 @@ def _get_gemini_definitions_batch(words: list[str]) -> dict:
     )
     if not api_key:
         # Fallback: no API key
-        d = {w: f"A definition describing '{w}' in everyday English." for w in words}
+        d = {w: f"A playful clue about '{w}' in plain English." for w in words}
         for w, v in d.items():
             _cache_set(w, v)
         return d
@@ -280,18 +287,19 @@ def _get_gemini_definitions_batch(words: list[str]) -> dict:
         'gemini-1.5-pro',
         'gemini-pro',
     ]
-    # Build a strict JSON-only instruction
+    # Build a strict JSON-only instruction for fun clues
     prompt = (
-        "You are an English vocabulary tutor.\n"
-        "For each TARGET word, return a JSON object mapping the word to a concise definition (5–18 words).\n"
-        "Rules: Do NOT include or reveal the word itself in the definition; one sentence only; no examples; no quotes; no markdown.\n"
-        "Output JSON only, with keys exactly the input words.\n"
+        "You are an English tutor. For each TARGET word, return a JSON object mapping the word\n"
+        "to exactly one playful clue sentence.\n"
+        "Styles: situational/roleplay, personification, exaggeration/humor, action/sound.\n"
+        "Rules: one sentence only; 12–24 words; avoid the word itself; no quotes; no markdown.\n"
+        "Output JSON only, keys must be the input words, values are the clue sentences.\n"
         "WORDS: " + json.dumps(words, ensure_ascii=False)
     )
     try:
         genai.configure(api_key=api_key)
     except Exception:
-        d = {w: "A short learner-friendly definition." for w in words}
+        d = {w: "A playful, single-line clue in plain English." for w in words}
         for w, v in d.items():
             _cache_set(w, v)
         return d
@@ -326,6 +334,9 @@ def _get_gemini_definitions_batch(words: list[str]) -> dict:
                     # avoid echoing word
                     if w.lower() in val.lower():
                         val = val.replace(w, '▢▢▢')
+                    # strip wrapping quotes if present
+                    if (val.startswith('"') and val.endswith('"')) or (val.startswith("'") and val.endswith("'")):
+                        val = val[1:-1].strip()
                     # single line
                     val = val.split('\n')[0].strip()
                     out[w] = val
