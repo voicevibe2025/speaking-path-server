@@ -101,3 +101,4 @@ class SubmitFluencyPromptResponseSerializer(serializers.Serializer):
     fluencyTotalScore = serializers.IntegerField()
     fluencyCompleted = serializers.BooleanField()
     promptScores = serializers.ListField(child=serializers.IntegerField())
+    xpAwarded = serializers.IntegerField(default=0)

@@ -780,12 +780,62 @@ class SubmitFluencyPromptView(APIView):
         except Exception:
             new_next = None
 
+        # XP awarding logic
+        xp_awarded = 0
+        try:
+            # +50 for this prompt if score >= 80
+            if score >= 80:
+                xp_awarded += 50
+                user_level, _ = UserLevel.objects.get_or_create(user=request.user)
+                user_level.experience_points += 50
+                user_level.total_points_earned += 50
+                user_level.save()
+                try:
+                    PointsTransaction.objects.create(
+                        user=request.user,
+                        amount=50,
+                        source='fluency',
+                        context={
+                            'topicId': str(topic.id),
+                            'promptIndex': prompt_index,
+                            'score': score,
+                            'type': 'prompt'
+                        }
+                    )
+                except Exception:
+                    pass
+
+            # Bonus +100 if all prompts are now completed
+            if new_next is None:
+                user_level, _ = UserLevel.objects.get_or_create(user=request.user)
+                user_level.experience_points += 100
+                user_level.total_points_earned += 100
+                user_level.save()
+                xp_awarded += 100
+                try:
+                    PointsTransaction.objects.create(
+                        user=request.user,
+                        amount=100,
+                        source='fluency',
+                        context={
+                            'topicId': str(topic.id),
+                            'bonus': 'complete_all_prompts',
+                            'promptScores': [int(s) for s in scores if isinstance(s, int)]
+                        }
+                    )
+                except Exception:
+                    pass
+        except Exception:
+            # XP failures are non-fatal
+            pass
+
         resp = {
             'success': True,
             'nextPromptIndex': new_next,
             'fluencyTotalScore': tp.fluency_total_score,
             'fluencyCompleted': tp.fluency_completed,
             'promptScores': [int(s) for s in scores if isinstance(s, int)],
+            'xpAwarded': xp_awarded,
         }
         out = SubmitFluencyPromptResponseSerializer(resp)
         return Response(out.data, status=status.HTTP_200_OK)
