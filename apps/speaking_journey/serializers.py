@@ -20,6 +20,8 @@ class SpeakingTopicDtoSerializer(serializers.Serializer):
     material = serializers.ListField(child=serializers.CharField())
     vocabulary = serializers.ListField(child=serializers.CharField(), required=False)
     conversation = ConversationTurnSerializer(many=True, required=False)
+    fluencyPracticePrompts = serializers.ListField(child=serializers.CharField(), required=False)
+    fluencyProgress = serializers.DictField(child=serializers.JSONField(), required=False)
     phraseProgress = PhraseProgressSerializer(required=False)
     unlocked = serializers.BooleanField()
     completed = serializers.BooleanField()
@@ -77,3 +79,25 @@ class UserPhraseRecordingSerializer(serializers.Serializer):
 
 class UserPhraseRecordingsResponseSerializer(serializers.Serializer):
     recordings = UserPhraseRecordingSerializer(many=True)
+
+
+class FluencyProgressSerializer(serializers.Serializer):
+    promptsCount = serializers.IntegerField()
+    promptScores = serializers.ListField(child=serializers.IntegerField())
+    totalScore = serializers.IntegerField()
+    nextPromptIndex = serializers.IntegerField(allow_null=True)
+    completed = serializers.BooleanField()
+
+
+class SubmitFluencyPromptRequestSerializer(serializers.Serializer):
+    promptIndex = serializers.IntegerField()
+    score = serializers.IntegerField(min_value=0)
+    sessionId = serializers.CharField(allow_blank=True, required=False)
+
+
+class SubmitFluencyPromptResponseSerializer(serializers.Serializer):
+    success = serializers.BooleanField()
+    nextPromptIndex = serializers.IntegerField(allow_null=True)
+    fluencyTotalScore = serializers.IntegerField()
+    fluencyCompleted = serializers.BooleanField()
+    promptScores = serializers.ListField(child=serializers.IntegerField())

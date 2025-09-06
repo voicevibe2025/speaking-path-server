@@ -220,6 +220,7 @@ class Leaderboard(models.Model):
     Different types of leaderboards
     """
     LEADERBOARD_TYPES = (
+        ('daily', 'Daily'),
         ('weekly', 'Weekly'),
         ('monthly', 'Monthly'),
         ('all_time', 'All Time'),
@@ -280,6 +281,28 @@ class LeaderboardEntry(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - Rank {self.rank}"
+
+
+class PointsTransaction(models.Model):
+    """
+    Timestamped log of points (XP) earned or spent.
+
+    We record positive amounts for earnings (practice rewards, quests, streak bonuses, challenges, etc.).
+    Negative amounts may be used for spends (e.g., shop purchases), but leaderboards will only aggregate
+    positive earnings per time window.
+    """
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='points_transactions')
+    amount = models.IntegerField(help_text='Positive for earnings; negative for spends/deductions')
+    source = models.CharField(max_length=50, help_text='origin label e.g. pronunciation, daily_quest, streak_bonus, challenge, manual')
+    context = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        sign = '+' if self.amount >= 0 else ''
+        return f"{self.user.username} {sign}{self.amount} ({self.source}) @ {self.created_at}"
 
 
 class DailyQuest(models.Model):

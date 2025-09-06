@@ -25,6 +25,7 @@ class Command(BaseCommand):
                 'material_lines': item.get('material', []),
                 'conversation_example': item.get('conversation', []),
                 'vocabulary': item.get('vocabulary', []),
+                'fluency_practice_prompt': item.get('fluency_practice_prompt', []),
                 'sequence': idx,
                 'is_active': True,
             }

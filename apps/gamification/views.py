@@ -21,6 +21,7 @@ from .models import (
     ChallengeParticipation,
     Leaderboard,
     LeaderboardEntry,
+    PointsTransaction,
     DailyQuest,
     UserQuest,
     RewardShop,
@@ -112,6 +113,17 @@ class UserLevelViewSet(viewsets.ModelViewSet):
             
             # Check if leveled up
             leveled_up = profile.current_level > old_level
+            # Log transaction (only for positive points)
+            try:
+                if points and int(points) != 0:
+                    PointsTransaction.objects.create(
+                        user=request.user,
+                        amount=int(points),
+                        source='add_experience',
+                        context={'source': source}
+                    )
+            except Exception:
+                pass
             
             return Response({
                 'success': True,
@@ -173,6 +185,15 @@ class UserLevelViewSet(viewsets.ModelViewSet):
                 profile.experience_points += bonus_points
                 profile.total_points_earned += bonus_points
                 profile.save()
+                try:
+                    PointsTransaction.objects.create(
+                        user=request.user,
+                        amount=bonus_points,
+                        source='streak_bonus',
+                        context={'streakDays': profile.streak_days}
+                    )
+                except Exception:
+                    pass
             
             return Response({
                 'streak_days': profile.streak_days,
@@ -342,6 +363,15 @@ class GotongRoyongChallengeViewSet(viewsets.ModelViewSet):
                         profile.experience_points += challenge.reward_points
                         profile.total_points_earned += challenge.reward_points
                         profile.save()
+                        try:
+                            PointsTransaction.objects.create(
+                                user=participant.user,
+                                amount=challenge.reward_points,
+                                source='challenge_reward',
+                                context={'challengeId': str(challenge.challenge_id), 'name': challenge.name}
+                            )
+                        except Exception:
+                            pass
                     except UserLevel.DoesNotExist:
                         pass
             
@@ -372,7 +402,10 @@ class LeaderboardViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=False, methods=['get'])
     def weekly(self, request):
         """Get weekly leaderboard"""
-        period_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=7)
+        now = timezone.now()
+        # Start of current week (Monday 00:00)
+        start_of_week = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+        period_start = start_of_week
         leaderboard, created = Leaderboard.objects.get_or_create(
             leaderboard_type='weekly',
             period_start=period_start,
@@ -380,7 +413,8 @@ class LeaderboardViewSet(viewsets.ReadOnlyModelViewSet):
         )
         
         # Refresh if older than 1 hour
-        if created or (timezone.now() - leaderboard.last_updated).total_seconds() > 3600:
+        refresh_flag = str(request.query_params.get('refresh', '')).lower() in ('1', 'true', 'yes', 'y')
+        if created or refresh_flag or (timezone.now() - leaderboard.last_updated).total_seconds() > 3600:
             self._update_leaderboard(leaderboard)
         
         # Return Android-friendly LeaderboardData shape
@@ -403,7 +437,8 @@ class LeaderboardViewSet(viewsets.ReadOnlyModelViewSet):
         )
         
         # Refresh if older than 1 hour
-        if created or (timezone.now() - leaderboard.last_updated).total_seconds() > 3600:
+        refresh_flag = str(request.query_params.get('refresh', '')).lower() in ('1', 'true', 'yes', 'y')
+        if created or refresh_flag or (timezone.now() - leaderboard.last_updated).total_seconds() > 3600:
             self._update_leaderboard(leaderboard)
         
         # Return Android-friendly LeaderboardData shape
@@ -426,7 +461,8 @@ class LeaderboardViewSet(viewsets.ReadOnlyModelViewSet):
         )
         
         # Refresh if older than 1 hour
-        if created or (timezone.now() - leaderboard.last_updated).total_seconds() > 3600:
+        refresh_flag = str(request.query_params.get('refresh', '')).lower() in ('1', 'true', 'yes', 'y')
+        if created or refresh_flag or (timezone.now() - leaderboard.last_updated).total_seconds() > 3600:
             self._update_leaderboard(leaderboard)
         
         # Return Android-friendly LeaderboardData shape
@@ -450,7 +486,8 @@ class LeaderboardViewSet(viewsets.ReadOnlyModelViewSet):
         )
 
         # Refresh if older than 1 hour
-        if created or (timezone.now() - leaderboard.last_updated).total_seconds() > 3600:
+        refresh_flag = str(request.query_params.get('refresh', '')).lower() in ('1', 'true', 'yes', 'y')
+        if created or refresh_flag or (timezone.now() - leaderboard.last_updated).total_seconds() > 3600:
             self._update_leaderboard(leaderboard)
 
         data = self._build_leaderboard_response(
@@ -527,19 +564,46 @@ class LeaderboardViewSet(viewsets.ReadOnlyModelViewSet):
         """Update leaderboard entries"""
         # Clear existing entries
         leaderboard.entries.all().delete()
-        
-        # Get top users by total points
-        top_users = UserLevel.objects.all().order_by('-total_points_earned')[:100]
-        
-        for rank, user_level in enumerate(top_users, 1):
-            LeaderboardEntry.objects.create(
-                leaderboard=leaderboard,
-                user=user_level.user,
-                rank=rank,
-                score=user_level.total_points_earned,
-                wayang_character=user_level.wayang_character
-            )
-        
+
+        # Determine time window
+        start = leaderboard.period_start or timezone.now().replace(year=1970, month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+        end = timezone.now()
+
+        # Aggregate positive earnings within the window
+        from django.db.models import Sum
+        tx_qs = PointsTransaction.objects.filter(created_at__gte=start, created_at__lt=end, amount__gt=0)
+        sums = (
+            tx_qs.values('user_id')
+            .annotate(total=Sum('amount'))
+            .order_by('-total')[:100]
+        )
+
+        # Fallback: if no transactions in window, show top all-time totals
+        if not sums:
+            top_users = UserLevel.objects.all().order_by('-total_points_earned')[:100]
+            for rank, user_level in enumerate(top_users, 1):
+                LeaderboardEntry.objects.create(
+                    leaderboard=leaderboard,
+                    user=user_level.user,
+                    rank=rank,
+                    score=user_level.total_points_earned,
+                    wayang_character=user_level.wayang_character
+                )
+        else:
+            # Create entries based on windowed sums
+            user_ids = [row['user_id'] for row in sums]
+            levels = {ul.user_id: ul for ul in UserLevel.objects.filter(user_id__in=user_ids)}
+            for rank, row in enumerate(sums, 1):
+                ul = levels.get(row['user_id'])
+                wayang = getattr(ul, 'wayang_character', None) if ul else None
+                LeaderboardEntry.objects.create(
+                    leaderboard=leaderboard,
+                    user_id=row['user_id'],
+                    rank=rank,
+                    score=row['total'] or 0,
+                    wayang_character=wayang
+                )
+
         now = timezone.now()
         leaderboard.last_updated = now
         leaderboard.period_end = now
@@ -734,6 +798,15 @@ class DailyQuestViewSet(viewsets.ReadOnlyModelViewSet):
                     profile.experience_points += quest.experience_points
                     profile.total_points_earned += quest.experience_points
                     profile.save()
+                    try:
+                        PointsTransaction.objects.create(
+                            user=user,
+                            amount=quest.experience_points,
+                            source='daily_quest',
+                            context={'questId': str(quest.quest_id), 'name': quest.name}
+                        )
+                    except Exception:
+                        pass
                 except UserLevel.DoesNotExist:
                     pass
             
@@ -794,6 +867,15 @@ class RewardShopViewSet(viewsets.ReadOnlyModelViewSet):
             with transaction.atomic():
                 profile.total_points_earned -= reward.point_cost
                 profile.save()
+                try:
+                    PointsTransaction.objects.create(
+                        user=user,
+                        amount=(-reward.point_cost),
+                        source='purchase',
+                        context={'rewardId': str(reward.reward_id), 'name': reward.name}
+                    )
+                except Exception:
+                    pass
                 
                 user_reward = UserReward.objects.create(
                     user=user,

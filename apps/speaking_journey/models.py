@@ -17,6 +17,8 @@ class Topic(models.Model):
     conversation_example = models.JSONField(default=list, blank=True)
     # List of key vocabulary words for this topic (e.g., ["arrival", "departure", ...])
     vocabulary = models.JSONField(default=list, blank=True)
+    # List of fluency practice prompts for this topic
+    fluency_practice_prompt = models.JSONField(default=list, blank=True)
     sequence = models.PositiveIntegerField(unique=True)
     is_active = models.BooleanField(default=True)
 
@@ -47,6 +49,13 @@ class TopicProgress(models.Model):
     vocabulary_completed = models.BooleanField(default=False)
     listening_completed = models.BooleanField(default=False)
     grammar_completed = models.BooleanField(default=False)
+    # Sum of latest accuracies (0-100) across all phrases in this topic
+    # This accumulates as the user practices phrases and is finalized when all phrases are done
+    pronunciation_total_score = models.IntegerField(default=0)
+    # Fluency scoring across up to 3 prompts per topic
+    fluency_total_score = models.IntegerField(default=0)
+    # Per-prompt scores recorded in order; length up to number of prompts (typically 3)
+    fluency_prompt_scores = models.JSONField(default=list, blank=True)
 
     class Meta:
         db_table = 'speaking_journey_topic_progress'

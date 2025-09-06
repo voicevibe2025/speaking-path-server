@@ -23,6 +23,11 @@ TOPICS = [
         "vocabulary": [
             "greeting", "introduction", "meet", "hello", "hi", "name", 
             "from", "country", "city", "nice", "pleasure", "acquaintance"
+        ],
+        "fluency_practice_prompt": [
+            "Introduce yourself to a new classmate. Include your name, where you're from, what you do, and one hobby.",
+            "Role-play meeting a colleague for the first time at work. Greet them, exchange names, and ask a simple question.",
+            "Share a short self-introduction for a club meeting. Add one fun fact about yourself."
         ]
     },
     {
@@ -50,6 +55,11 @@ TOPICS = [
         "vocabulary": [
             "routine", "wake up", "breakfast", "commute", "transportation", "bus", 
             "work", "office", "relax", "weekend", "chores", "family", "schedule"
+        ],
+        "fluency_practice_prompt": [
+            "Describe your weekday routine from morning to evening. Mention times and how you commute.",
+            "Talk about your perfect weekend. What do you usually do and why?",
+            "Explain how you balance study/work and free time during a typical day."
         ]
     },
     {
@@ -75,6 +85,11 @@ TOPICS = [
         "vocabulary": [
             "directions", "location", "station", "distance", "straight", "turn", 
             "left", "right", "corner", "traffic light", "block", "walking", "bus"
+        ],
+        "fluency_practice_prompt": [
+            "Explain how you would ask for directions to the nearest cinema. Include polite phrases.",
+            "Give clear directions from a train station to your favorite café.",
+            "Describe a time you got lost and how you found your way."
         ]
     },
     {
@@ -98,6 +113,11 @@ TOPICS = [
         "vocabulary": [
             "hobby", "interest", "photography", "cooking", "reading", "hiking", 
             "guitar", "movies", "free time", "relax", "weekend", "activity", "passion"
+        ],
+        "fluency_practice_prompt": [
+            "Talk about a hobby you love. Explain why you enjoy it and how you got started.",
+            "Describe a new activity you want to try this year and what you need to begin.",
+            "Share a memorable experience related to one of your interests."
         ]
     },
     {
@@ -122,6 +142,11 @@ TOPICS = [
         "vocabulary": [
             "menu", "order", "recommend", "cheeseburger", "fries", "water", 
             "vegetarian", "bill", "waiter", "restaurant", "café", "food", "drink"
+        ],
+        "fluency_practice_prompt": [
+            "Role-play ordering dinner at a restaurant. Ask for a recommendation and mention any dietary preferences.",
+            "Describe your favorite meal and how it is prepared.",
+            "Explain a positive or negative experience you had at a café or restaurant."
         ]
     },
     {
@@ -147,6 +172,11 @@ TOPICS = [
         "vocabulary": [
             "time", "clock", "hour", "minute", "day", "week", "month", 
             "year", "birthday", "holiday", "date", "calendar", "schedule"
+        ],
+        "fluency_practice_prompt": [
+            "Describe your weekly schedule. Mention classes or work, and important times.",
+            "Talk about a special date you celebrate and how you celebrate it.",
+            "Explain how you plan your day to be on time for appointments."
         ]
     },
     {
@@ -173,6 +203,11 @@ TOPICS = [
     "vocabulary": [
         "shopping", "price", "size", "try on", "expensive", "purchase", 
         "credit card", "cash", "store", "market", "clothing", "accessory", "sale"
+    ],
+    "fluency_practice_prompt": [
+        "Role-play buying clothes. Ask about price, size, and payment options.",
+        "Describe how you compare prices and decide what to buy.",
+        "Explain a time you bargained or asked for a discount in a market."
     ]
 }
 
