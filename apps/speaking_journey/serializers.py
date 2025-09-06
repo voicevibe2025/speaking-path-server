@@ -102,3 +102,44 @@ class SubmitFluencyPromptResponseSerializer(serializers.Serializer):
     fluencyCompleted = serializers.BooleanField()
     promptScores = serializers.ListField(child=serializers.IntegerField())
     xpAwarded = serializers.IntegerField(default=0)
+
+
+# --- Vocabulary Practice ---
+class VocabularyQuestionSerializer(serializers.Serializer):
+    id = serializers.CharField()
+    definition = serializers.CharField()
+    options = serializers.ListField(child=serializers.CharField())
+
+
+class StartVocabularyPracticeResponseSerializer(serializers.Serializer):
+    sessionId = serializers.CharField()
+    totalQuestions = serializers.IntegerField()
+    questions = VocabularyQuestionSerializer(many=True)
+
+
+class SubmitVocabularyAnswerRequestSerializer(serializers.Serializer):
+    sessionId = serializers.CharField()
+    questionId = serializers.CharField()
+    selected = serializers.CharField()
+
+
+class SubmitVocabularyAnswerResponseSerializer(serializers.Serializer):
+    correct = serializers.BooleanField()
+    xpAwarded = serializers.IntegerField()
+    nextIndex = serializers.IntegerField(allow_null=True)
+    completed = serializers.BooleanField()
+    totalScore = serializers.IntegerField()
+
+
+class CompleteVocabularyPracticeRequestSerializer(serializers.Serializer):
+    sessionId = serializers.CharField()
+
+
+class CompleteVocabularyPracticeResponseSerializer(serializers.Serializer):
+    success = serializers.BooleanField()
+    totalQuestions = serializers.IntegerField()
+    correctCount = serializers.IntegerField()
+    totalScore = serializers.IntegerField()
+    xpAwarded = serializers.IntegerField()
+    vocabularyTotalScore = serializers.IntegerField()
+    topicCompleted = serializers.BooleanField()

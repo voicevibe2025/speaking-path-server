@@ -23,7 +23,7 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 import requests
-from .models import Topic, TopicProgress, UserProfile, PhraseProgress, UserPhraseRecording
+from .models import Topic, TopicProgress, UserProfile, PhraseProgress, UserPhraseRecording, VocabularyPracticeSession
 from apps.gamification.models import UserLevel, PointsTransaction
 from .serializers import (
     SpeakingTopicsResponseSerializer,
@@ -36,6 +36,12 @@ from .serializers import (
     UserPhraseRecordingsResponseSerializer,
     SubmitFluencyPromptRequestSerializer,
     SubmitFluencyPromptResponseSerializer,
+    # Vocabulary practice
+    StartVocabularyPracticeResponseSerializer,
+    SubmitVocabularyAnswerRequestSerializer,
+    SubmitVocabularyAnswerResponseSerializer,
+    CompleteVocabularyPracticeRequestSerializer,
+    CompleteVocabularyPracticeResponseSerializer,
 )
 
 logger = logging.getLogger(__name__)
@@ -162,54 +168,93 @@ def _get_gemini_feedback(expected_phrase: str, transcribed_text: str, accuracy: 
             tips = ["Speak slightly slower and emphasize vowel sounds.", "End each word crisply—avoid dropping final consonants."]
         return base + "\n- " + "\n- ".join(tips[:3])
 
-    # Try Gemini 2.5 first, then fallback to 1.5-flash
-    model_candidates = [
+
+def _get_gemini_definition(word: str) -> str:
+    """Generate a concise learner-friendly definition for a word using Gemini.
+
+    The definition should avoid repeating the word itself and be 5–18 words.
+    Fallback returns a heuristic placeholder if API is unavailable.
+    """
+    api_key = (
+        getattr(settings, 'GEMINI_API_KEY', '') or os.environ.get('GEMINI_API_KEY', '') or os.environ.get('GOOGLE_API_KEY', '')
+    )
+    safe_word = (word or '').strip()
+    if not api_key or not safe_word:
+        # Heuristic fallback
+        return f"A definition describing '{safe_word}' in everyday English."
+
+    candidates = [
         getattr(settings, 'GEMINI_TEXT_MODEL', None) or os.environ.get('GEMINI_MODEL') or 'gemini-2.5-flash',
         'gemini-2.5-pro',
         'gemini-1.5-flash',
         'gemini-1.5-pro',
         'gemini-pro',
     ]
-
     prompt = (
-        "You are a precise, supportive English pronunciation coach. Use the expected target and the user's exact transcript, "
-        "plus the numeric match score, to give targeted feedback.\n"
-        "Instructions:\n"
-        "- Focus primarily on the weak tokens (words the user missed or substituted).\n"
-        "- Briefly acknowledge what was said correctly (good tokens).\n"
-        "- Write 2–4 sentences, concise and encouraging.\n"
-        "- Then output a short bulleted list (2–3 items) of pronunciation tips tailored to the weak tokens.\n"
-        "- Avoid phonetic overkill; give practical, easy-to-apply tips (e.g., slow down, stress first syllable, soften 'th').\n"
-        "- Do not add markdown headers. Bullets should start with '-' only.\n"
+        "You are an English vocabulary tutor.\n"
+        "Task: Provide a concise definition (5–18 words) for the TARGET word.\n"
+        "Rules:\n"
+        "- Do NOT include or reveal the word itself.\n"
+        "- Be simple and clear for learners.\n"
+        "- One sentence only. No examples, no quotes, no markdown.\n"
+        "TARGET: " + safe_word
     )
-    json_block = json.dumps(context, ensure_ascii=False)
-
-    for name in model_candidates:
+    try:
+        genai.configure(api_key=api_key)
+    except Exception:
+        return "A short learner-friendly definition."
+    for name in candidates:
         try:
-            genai.configure(api_key=api_key)
             model = genai.GenerativeModel(name)
-            resp = model.generate_content(prompt + "\nCONTEXT:\n" + json_block)
+            resp = model.generate_content(prompt)
             txt = getattr(resp, 'text', None)
             if txt:
-                return txt.strip()
+                out = txt.strip()
+                # Guard: avoid echoing the word
+                if safe_word.lower() in out.lower():
+                    # try to mask
+                    out = out.replace(safe_word, '▢▢▢')
+                # Trim to a single sentence and length
+                out = out.split('\n')[0].strip()
+                return out
         except Exception as e:
-            logger.warning('Gemini model %s failed: %s', name, e)
+            logger.warning('Gemini definition via %s failed: %s', name, e)
             continue
+    return "A short learner-friendly definition."
 
-    # Final fallback heuristic
-    weak = diffs.get('weakTokens') or []
-    good = diffs.get('goodTokens') or []
-    base = f"Match score {accuracy:.1f}%. "
-    if weak:
-        base += f"Watch the words {', '.join(weak[:3])}; articulate each syllable and slow slightly. "
-    if good:
-        base += f"Good clarity on {', '.join(good[:3])}. "
-    tips = [
-        "Slow down by ~10% and stress key vowels.",
-        "Open your mouth a bit more on long vowels; keep final consonants crisp.",
-        "Record once more focusing on the weak words first, then the full phrase.",
-    ]
-    return base + "\n- " + "\n- ".join(tips[:3])
+
+def _sample_vocabulary_questions(topic: Topic, n: int) -> list[dict]:
+    """Build n questions from topic.vocabulary with AI definitions and 3 distractors each.
+    Returns a list of dict questions with id, word, definition, options, answered, correct.
+    """
+    words = list((topic.vocabulary or [])[:])
+    words = [w for w in words if isinstance(w, str) and w.strip()]
+    if not words:
+        return []
+    import random
+    random.shuffle(words)
+    pick = words[: max(1, min(n, len(words)))]
+    remaining_pool = [w for w in words if w not in pick]
+    qs: list[dict] = []
+    for w in pick:
+        # Build distractors from other words in topic (fallback duplicates if insufficient)
+        pool = [x for x in words if x != w]
+        random.shuffle(pool)
+        distractors = pool[:3]
+        while len(distractors) < 3:
+            distractors.append(random.choice(words))
+        options = distractors + [w]
+        random.shuffle(options)
+        q = {
+            'id': str(uuid.uuid4()),
+            'word': w,
+            'definition': _get_gemini_definition(w),
+            'options': options,
+            'answered': False,
+            'correct': None,
+        }
+        qs.append(q)
+    return qs
 
 
 def _transcribe_audio_with_whisper(audio_file):
@@ -552,9 +597,8 @@ class SubmitPhraseRecordingView(APIView):
             )
             # Pronunciation mode done because all phrases are completed
             topic_progress.pronunciation_completed = True
-            # TESTING TEMP: auto-mark remaining modes complete until those features are implemented
-            topic_progress.fluency_completed = True
-            topic_progress.vocabulary_completed = True
+            # TESTING TEMP: Only auto-mark modes that are not yet implemented (listening, grammar)
+            # Fluency and Vocabulary now have dedicated practice flows.
             topic_progress.listening_completed = True
             topic_progress.grammar_completed = True
 
@@ -971,3 +1015,203 @@ class GenerateTTSView(APIView):
         except Exception as e:
             logger.exception('TTS generation failed')
             return Response({'detail': 'TTS generation failed', 'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class StartVocabularyPracticeView(APIView):
+    """Start a vocabulary practice session for a topic.
+
+    Computes ~60% of topic vocabulary as questions.
+    Response: { sessionId, totalQuestions, questions: [{id, definition, options}] }
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, topic_id):
+        topic = get_object_or_404(Topic, id=topic_id, is_active=True)
+        vocab = topic.vocabulary or []
+        total = len([w for w in vocab if isinstance(w, str) and w.strip()])
+        if total < 1:
+            return Response({'detail': 'No vocabulary available for this topic'}, status=status.HTTP_400_BAD_REQUEST)
+        # 60% rule
+        import math
+        q_count = max(1, int(round(0.6 * total)))
+
+        # Create session and generate questions
+        questions = _sample_vocabulary_questions(topic, q_count)
+        session = VocabularyPracticeSession.objects.create(
+            user=request.user,
+            topic=topic,
+            questions=questions,
+            total_questions=len(questions),
+            current_index=0,
+            correct_count=0,
+            total_score=0,
+            completed=False,
+        )
+
+        payload = {
+            'sessionId': str(session.session_id),
+            'totalQuestions': session.total_questions,
+            'questions': [
+                {
+                    'id': q.get('id'),
+                    'definition': q.get('definition') or '',
+                    'options': q.get('options') or [],
+                }
+                for q in session.questions
+            ],
+        }
+        out = StartVocabularyPracticeResponseSerializer(payload)
+        return Response(out.data, status=status.HTTP_200_OK)
+
+
+class SubmitVocabularyAnswerView(APIView):
+    """Submit an answer for a vocabulary question.
+
+    Request: { sessionId, questionId, selected }
+    Response: { correct, xpAwarded, nextIndex, completed, totalScore }
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, topic_id):
+        topic = get_object_or_404(Topic, id=topic_id, is_active=True)
+        ser = SubmitVocabularyAnswerRequestSerializer(data=request.data)
+        if not ser.is_valid():
+            return Response(ser.errors, status=status.HTTP_400_BAD_REQUEST)
+        data = ser.validated_data
+        session_id = data.get('sessionId')
+        question_id = data.get('questionId')
+        selected = (data.get('selected') or '').strip()
+
+        session = get_object_or_404(VocabularyPracticeSession, session_id=session_id, user=request.user, topic=topic)
+        if session.completed:
+            # Already done
+            next_idx = None
+            return Response({'correct': False, 'xpAwarded': 0, 'nextIndex': next_idx, 'completed': True, 'totalScore': session.total_score}, status=status.HTTP_200_OK)
+
+        # Find question
+        questions = list(session.questions or [])
+        idx = next((i for i, q in enumerate(questions) if str(q.get('id')) == str(question_id)), None)
+        if idx is None:
+            return Response({'detail': 'Invalid questionId'}, status=status.HTTP_400_BAD_REQUEST)
+        q = questions[idx]
+        if q.get('answered'):
+            # Idempotent: do not double-award
+            # Move to next unanswered index
+            next_index = None
+            for j, item in enumerate(questions):
+                if not item.get('answered'):
+                    next_index = j
+                    break
+            return Response({'correct': bool(q.get('correct')), 'xpAwarded': 0, 'nextIndex': next_index, 'completed': next_index is None, 'totalScore': session.total_score}, status=status.HTTP_200_OK)
+
+        correct_word = q.get('word')
+        is_correct = (selected == correct_word)
+
+        # Update question state
+        q['answered'] = True
+        q['correct'] = bool(is_correct)
+        questions[idx] = q
+
+        xp_awarded = 0
+        if is_correct:
+            session.correct_count = int(session.correct_count or 0) + 1
+            session.total_score = int(session.total_score or 0) + 10
+            # Award +20 XP for correct answer
+            try:
+                user_level, _ = UserLevel.objects.get_or_create(user=request.user)
+                user_level.experience_points += 20
+                user_level.total_points_earned += 20
+                user_level.save()
+                PointsTransaction.objects.create(
+                    user=request.user,
+                    amount=20,
+                    source='vocabulary',
+                    context={'topicId': str(topic.id), 'questionId': str(question_id), 'type': 'answer'}
+                )
+                xp_awarded = 20
+            except Exception:
+                pass
+
+        # Update session
+        session.questions = questions
+        # Move to next unanswered question index
+        next_index = None
+        for j, item in enumerate(questions):
+            if not item.get('answered'):
+                next_index = j
+                break
+        session.current_index = next_index if next_index is not None else len(questions)
+        # Mark completed if no more
+        session.completed = next_index is None
+        session.save(update_fields=['questions', 'correct_count', 'total_score', 'current_index', 'completed', 'updated_at'])
+
+        resp = {
+            'correct': is_correct,
+            'xpAwarded': xp_awarded,
+            'nextIndex': next_index,
+            'completed': session.completed,
+            'totalScore': int(session.total_score or 0),
+        }
+        out = SubmitVocabularyAnswerResponseSerializer(resp)
+        return Response(out.data, status=status.HTTP_200_OK)
+
+
+class CompleteVocabularyPracticeView(APIView):
+    """Complete the vocabulary session, persist topic progress and award completion XP.
+
+    Request: { sessionId }
+    Response: totals and XP, plus whether the topic is now completed.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, topic_id):
+        topic = get_object_or_404(Topic, id=topic_id, is_active=True)
+        ser = CompleteVocabularyPracticeRequestSerializer(data=request.data)
+        if not ser.is_valid():
+            return Response(ser.errors, status=status.HTTP_400_BAD_REQUEST)
+        session_id = ser.validated_data.get('sessionId')
+        session = get_object_or_404(VocabularyPracticeSession, session_id=session_id, user=request.user, topic=topic)
+
+        # If some questions unanswered, mark as completed but do not award bonus XP (still persist score)
+        all_answered = all(bool(q.get('answered')) for q in (session.questions or [])) if session.questions else True
+        xp_awarded = 0
+        # Persist to TopicProgress
+        tp, _ = TopicProgress.objects.get_or_create(user=request.user, topic=topic)
+        tp.vocabulary_total_score = int(session.total_score or 0)
+        tp.vocabulary_completed = True
+        # Mark topic completed if all modes completed
+        if not tp.completed and tp.all_modes_completed:
+            tp.completed = True
+            tp.completed_at = timezone.now()
+        tp.save()
+
+        # Award +150 XP for completion of this practice
+        try:
+            user_level, _ = UserLevel.objects.get_or_create(user=request.user)
+            user_level.experience_points += 150
+            user_level.total_points_earned += 150
+            user_level.save()
+            PointsTransaction.objects.create(
+                user=request.user,
+                amount=150,
+                source='vocabulary',
+                context={'topicId': str(topic.id), 'type': 'complete', 'allAnswered': all_answered}
+            )
+            xp_awarded += 150
+        except Exception:
+            pass
+
+        session.completed = True
+        session.save(update_fields=['completed', 'updated_at'])
+
+        payload = {
+            'success': True,
+            'totalQuestions': int(session.total_questions or 0),
+            'correctCount': int(session.correct_count or 0),
+            'totalScore': int(session.total_score or 0),
+            'xpAwarded': xp_awarded,
+            'vocabularyTotalScore': int(tp.vocabulary_total_score or 0),
+            'topicCompleted': bool(tp.completed),
+        }
+        out = CompleteVocabularyPracticeResponseSerializer(payload)
+        return Response(out.data, status=status.HTTP_200_OK)
