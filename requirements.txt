@@ -17,6 +17,7 @@ djangorestframework-simplejwt==5.5.1
 python-jose[cryptography]==3.3.0
 python-dotenv==1.0.0
 django-environ==0.11.2
+firebase-admin==6.5.0
 
 # Async Task Queue
 celery==5.3.1

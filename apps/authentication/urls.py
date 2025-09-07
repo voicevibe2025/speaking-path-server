@@ -12,6 +12,7 @@ from .views import (
     VerifyTokenView,
     CustomTokenObtainPairView,
     password_reset_request,
+    GoogleLoginView,
 )
 
 app_name = 'authentication'
@@ -20,6 +21,7 @@ urlpatterns = [
     # Registration and Login
     path('register/', RegisterView.as_view(), name='register'),
     path('login/', LoginView.as_view(), name='login'),
+    path('login/google/', GoogleLoginView.as_view(), name='login_google'),
     path('logout/', LogoutView.as_view(), name='logout'),
 
     # JWT Token endpoints
