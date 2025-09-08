@@ -14,6 +14,7 @@ import os
 import firebase_admin
 from firebase_admin import auth as fb_auth
 from firebase_admin import credentials as fb_credentials
+from .firebase import init_firebase
 
 from .models import User, RefreshTokenBlacklist
 from .serializers import (
@@ -97,29 +98,10 @@ class GoogleLoginView(APIView):
         if not id_token:
             return Response({'error': 'id_token is required'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Initialize Firebase app if not already
-        try:
-            firebase_admin.get_app()
-        except ValueError:
-            try:
-                cred = None
-                options = {}
-                # Prefer explicit service account if provided
-                sa_path = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS')
-                if sa_path and os.path.exists(sa_path):
-                    cred = fb_credentials.Certificate(sa_path)
-                # Accept project id via several env vars
-                project_id = (
-                    os.environ.get('GOOGLE_CLOUD_PROJECT')
-                    or os.environ.get('GCLOUD_PROJECT')
-                    or os.environ.get('FIREBASE_PROJECT_ID')
-                )
-                if project_id:
-                    options['projectId'] = project_id
-                firebase_admin.initialize_app(cred, options or None)
-            except Exception:
-                logging.exception("Failed to initialize Firebase Admin")
-                return Response({'error': 'Firebase initialization failed: project id/credentials missing'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        # Initialize Firebase via centralized helper (supports FIREBASE_CREDENTIALS_B64/JSON)
+        if not init_firebase():
+            logging.error("Firebase initialization failed")
+            return Response({'error': 'Firebase initialization failed: project id/credentials missing'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         try:
             decoded = fb_auth.verify_id_token(id_token)
