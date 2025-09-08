@@ -13,6 +13,7 @@ from .models import UserProfile, LearningPreference, UserAchievement
 from apps.gamification.serializers import UserBadgeSerializer
 from apps.speaking_sessions.models import PracticeSession
 from apps.learning_paths.models import UserProgress
+from apps.speaking_journey.models import TopicProgress, UserPhraseRecording, VocabularyPracticeSession
 
 User = get_user_model()
 
@@ -56,11 +57,11 @@ class UserProfileSerializer(serializers.ModelSerializer):
     experience_points = serializers.IntegerField(source='user.level_profile.experience_points', read_only=True)
     streak_days = serializers.IntegerField(source='user.level_profile.streak_days', read_only=True)
 
-    # Quick Stats from UserAnalytics model
+    # Quick Stats now computed from Speaking Journey data
     total_practice_hours = serializers.SerializerMethodField()
-    lessons_completed = serializers.IntegerField(source='user.analytics.scenarios_completed', read_only=True)
-    recordings_count = serializers.IntegerField(source='user.analytics.total_sessions_completed', read_only=True)
-    avg_score = serializers.FloatField(source='user.analytics.overall_proficiency_score', read_only=True)
+    lessons_completed = serializers.SerializerMethodField()
+    recordings_count = serializers.SerializerMethodField()
+    avg_score = serializers.SerializerMethodField()
 
     # Recent Achievements from UserBadge model
     recent_achievements = serializers.SerializerMethodField()
@@ -89,10 +90,112 @@ class UserProfileSerializer(serializers.ModelSerializer):
     membership_status = serializers.SerializerMethodField()
 
     def get_total_practice_hours(self, obj):
-        """Convert practice time from minutes to hours"""
-        if hasattr(obj.user, 'analytics') and obj.user.analytics.total_practice_time_minutes:
-            return round(obj.user.analytics.total_practice_time_minutes / 60, 1)
-        return 0
+        """
+        Speaking Journey practice hours (approx):
+        - Sum durations of VocabularyPracticeSession (updated_at - created_at)
+        - Estimate Pronunciation time from count of UserPhraseRecording (avg 12s each)
+        - Estimate Fluency time from number of recorded prompt scores (avg 60s each)
+
+        Returns hours rounded to 1 decimal place.
+        """
+        user = obj.user
+        # 1) Vocabulary sessions duration
+        vocab_qs = VocabularyPracticeSession.objects.filter(user=user)
+        vocab_seconds = 0.0
+        for s in vocab_qs.only('created_at', 'updated_at'):
+            try:
+                if s.created_at and s.updated_at:
+                    delta = (s.updated_at - s.created_at).total_seconds()
+                    # Guard against negative or extreme values
+                    if 0 <= delta < 3 * 3600:
+                        vocab_seconds += delta
+            except Exception:
+                continue
+
+        # 2) Pronunciation recordings estimate
+        recordings_count = UserPhraseRecording.objects.filter(user=user).count()
+        AVG_SEC_PER_RECORDING = 12  # heuristic
+        pron_seconds = recordings_count * AVG_SEC_PER_RECORDING
+
+        # 3) Fluency prompts estimate
+        fluency_prompts_done = 0
+        for row in TopicProgress.objects.filter(user=user).values_list('fluency_prompt_scores', flat=True):
+            try:
+                arr = list(row or [])
+            except Exception:
+                arr = []
+            fluency_prompts_done += sum(1 for v in arr if isinstance(v, int))
+        AVG_SEC_PER_FLUENCY_PROMPT = 60  # heuristic
+        fluency_seconds = fluency_prompts_done * AVG_SEC_PER_FLUENCY_PROMPT
+
+        total_seconds = float(vocab_seconds) + float(pron_seconds) + float(fluency_seconds)
+        hours = round(total_seconds / 3600.0, 1)
+        return max(0.0, hours)
+
+    def get_lessons_completed(self, obj):
+        """Number of Speaking Journey topics completed."""
+        return TopicProgress.objects.filter(user=obj.user, completed=True).count()
+
+    def get_recordings_count(self, obj):
+        """Total pronunciation recordings submitted in Speaking Journey."""
+        return UserPhraseRecording.objects.filter(user=obj.user).count()
+
+    def get_avg_score(self, obj):
+        """
+        Average score across Speaking Journey modes (0-100):
+        - Pronunciation: average of recording accuracies
+        - Fluency: average of all prompt scores across topics
+        - Vocabulary: average percent across completed sessions
+        Overall average is the mean of available mode averages.
+        """
+        user = obj.user
+        mode_avgs = []
+
+        # Pronunciation average (accuracy)
+        try:
+            pron_avg = UserPhraseRecording.objects.filter(user=user, accuracy__isnull=False).aggregate(avg=Avg('accuracy'))['avg'] or 0.0
+            if pron_avg > 0:
+                mode_avgs.append(float(pron_avg))
+        except Exception:
+            pass
+
+        # Fluency average (prompt scores)
+        try:
+            scores = []
+            for row in TopicProgress.objects.filter(user=user).values_list('fluency_prompt_scores', flat=True):
+                try:
+                    arr = list(row or [])
+                except Exception:
+                    arr = []
+                for v in arr:
+                    if isinstance(v, int):
+                        scores.append(int(v))
+            if scores:
+                mode_avgs.append(sum(scores) / len(scores))
+        except Exception:
+            pass
+
+        # Vocabulary average (completed sessions normalized to 0-100)
+        try:
+            v_sessions = VocabularyPracticeSession.objects.filter(user=user, completed=True)
+            percents = []
+            for s in v_sessions.only('total_questions', 'total_score'):
+                tq = int(s.total_questions or 0)
+                ts = int(s.total_score or 0)
+                if tq > 0:
+                    max_score = tq * 10
+                    perc = max(0.0, min(100.0, (ts / max(max_score, 1)) * 100.0))
+                    percents.append(perc)
+            if percents:
+                mode_avgs.append(sum(percents) / len(percents))
+        except Exception:
+            pass
+
+        if not mode_avgs:
+            return 0.0
+        overall = sum(mode_avgs) / len(mode_avgs)
+        # Round to 1 decimal to match UI formatting
+        return round(overall, 1)
 
     def get_recent_achievements(self, obj):
         """Get the 3 most recent achievements earned by the user"""

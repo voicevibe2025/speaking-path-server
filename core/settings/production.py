@@ -71,8 +71,36 @@ else:
         "BACKEND": "channels.layers.InMemoryChannelLayer",
     }
 
-# Media root (override via env if using a Railway Volume)
+# Media root / storage
+# Option A (default): local disk, optionally backed by a Railway Volume via MEDIA_ROOT
+# Option B: S3-compatible storage when USE_S3_MEDIA=true
 MEDIA_ROOT = env("MEDIA_ROOT", default=MEDIA_ROOT)
+USE_S3_MEDIA = env.bool("USE_S3_MEDIA", default=False)
+
+if USE_S3_MEDIA:
+    # django-storages S3 backend
+    DEFAULT_FILE_STORAGE = "storages.backends.s3boto3.S3Boto3Storage"
+    AWS_STORAGE_BUCKET_NAME = env("AWS_STORAGE_BUCKET_NAME")
+    AWS_ACCESS_KEY_ID = env("AWS_ACCESS_KEY_ID")
+    AWS_SECRET_ACCESS_KEY = env("AWS_SECRET_ACCESS_KEY")
+    AWS_S3_REGION_NAME = env("AWS_S3_REGION_NAME", default=None)
+    AWS_S3_ENDPOINT_URL = env("AWS_S3_ENDPOINT_URL", default=None)  # e.g., R2/B2 endpoint
+    AWS_S3_CUSTOM_DOMAIN = env("AWS_S3_CUSTOM_DOMAIN", default=None)  # optional CDN/custom domain
+    AWS_QUERYSTRING_AUTH = env.bool("AWS_QUERYSTRING_AUTH", default=False)  # public URLs by default
+
+    # Compute MEDIA_URL for public access
+    if AWS_S3_CUSTOM_DOMAIN:
+        MEDIA_URL = f"https://{AWS_S3_CUSTOM_DOMAIN.rstrip('/')}/"
+    elif AWS_S3_ENDPOINT_URL:
+        MEDIA_URL = f"{AWS_S3_ENDPOINT_URL.rstrip('/')}/{AWS_STORAGE_BUCKET_NAME}/"
+    else:
+        MEDIA_URL = f"https://{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com/"
+else:
+    # Ensure media directory exists (helpful when mounting a fresh Railway Volume)
+    try:
+        os.makedirs(str(MEDIA_ROOT), exist_ok=True)
+    except Exception:
+        pass
 
 # --- Logging ---
 LOGGING["root"]["level"] = "INFO"
