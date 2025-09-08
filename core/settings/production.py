@@ -34,10 +34,12 @@ STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 # --- Database ---
 # Prefer a single DATABASE_URL if provided (Railway Postgres) and require SSL
-_db_url = env.db("DATABASE_URL", default=None)
-if _db_url:
+# Guard against an empty string value (which can cause invalid engine warnings)
+_db_url_raw = env("DATABASE_URL", default="").strip()
+if _db_url_raw:
+    _db_url = env.db("DATABASE_URL")
     DATABASES = {"default": _db_url}
-    if DATABASES["default"]["ENGINE"].startswith("django.db.backends.postgresql"):
+    if DATABASES["default"].get("ENGINE", "").startswith("django.db.backends.postgresql"):
         DATABASES["default"].setdefault("OPTIONS", {})
         DATABASES["default"]["OPTIONS"].setdefault("sslmode", "require")
 # else fall back to base.py DB_* variables
