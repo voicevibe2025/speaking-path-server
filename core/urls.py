@@ -19,6 +19,16 @@ urlpatterns = [
     # Healthcheck
     path('health/', lambda request: JsonResponse({"status": "ok"})),
 
+    # Friendly index for root path
+    path('', lambda request: JsonResponse({
+        "name": "VoiceVibe API",
+        "version": "v1",
+        "docs": request.build_absolute_uri('/api/docs/'),
+        "schema": request.build_absolute_uri('/api/schema/'),
+        "health": request.build_absolute_uri('/health/'),
+        "baseApi": request.build_absolute_uri('/api/v1/')
+    })),
+
     # API Documentation
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
