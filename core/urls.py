@@ -2,9 +2,11 @@
 VoiceVibe URL Configuration
 """
 from django.contrib import admin
-from django.urls import path, include
+from django.urls import path, include, re_path
+from django.http import JsonResponse
 from django.conf import settings
 from django.conf.urls.static import static
+from django.views.static import serve as static_serve
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
 
 # API version prefix
@@ -13,6 +15,9 @@ API_V1_PREFIX = 'api/v1/'
 urlpatterns = [
     # Admin
     path('admin/', admin.site.urls),
+
+    # Healthcheck
+    path('health/', lambda request: JsonResponse({"status": "ok"})),
 
     # API Documentation
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
@@ -42,3 +47,9 @@ if settings.DEBUG:
     urlpatterns = [
         path('__debug__/', include(debug_toolbar.urls)),
     ] + urlpatterns
+else:
+    # In production, serve media files (e.g., cached TTS WAVs) directly from Django.
+    # Consider moving to a CDN/object storage for scale.
+    urlpatterns += [
+        re_path(r'^media/(?P<path>.*)$', static_serve, {'document_root': settings.MEDIA_ROOT}),
+    ]
