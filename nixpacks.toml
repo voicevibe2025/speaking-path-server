@@ -6,9 +6,5 @@
 [phases.setup]
 nixPkgs = ["...", "ffmpeg"]
 
-[phases.install]
-requirementsPath = "django/requirements.txt"
-
 [start]
 cmd = "daphne -b 0.0.0.0 -p ${PORT:-8000} core.asgi:application"
-
