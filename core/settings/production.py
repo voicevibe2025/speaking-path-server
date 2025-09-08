@@ -109,14 +109,18 @@ LOGGING["loggers"].setdefault("apps", {"handlers": ["console"], "level": "INFO",
 LOGGING["loggers"]["apps"]["level"] = "INFO"
 
 # --- Sentry (optional) ---
-SENTRY_DSN = env("SENTRY_DSN", default="")
-if SENTRY_DSN:
-    import sentry_sdk
-    from sentry_sdk.integrations.django import DjangoIntegration
+SENTRY_DSN = (env("SENTRY_DSN", default="") or "").strip()
+if SENTRY_DSN and "://" in SENTRY_DSN:
+    try:
+        import sentry_sdk
+        from sentry_sdk.integrations.django import DjangoIntegration
 
-    sentry_sdk.init(
-        dsn=SENTRY_DSN,
-        integrations=[DjangoIntegration()],
-        traces_sample_rate=float(env("SENTRY_TRACES_SAMPLE_RATE", default="0.0")),
-        send_default_pii=True,
-    )
+        sentry_sdk.init(
+            dsn=SENTRY_DSN,
+            integrations=[DjangoIntegration()],
+            traces_sample_rate=float(env("SENTRY_TRACES_SAMPLE_RATE", default="0.0")),
+            send_default_pii=True,
+        )
+    except Exception:
+        # Do not allow Sentry misconfiguration to crash the app
+        pass
