@@ -70,13 +70,16 @@ class LoginView(APIView):
         serializer.is_valid(raise_exception=True)
 
         user = serializer.validated_data['user']
-        login(request, user)
+        # Do not use Django session login in this JWT flow to avoid session-related 500s.
+        # DRF + SimpleJWT relies on tokens; creating a server-side session is unnecessary.
+        # If you later need session auth, pass the underlying Django request: login(request._request, user)
+        # login(request, user)
 
         # Generate JWT tokens
         refresh = RefreshToken.for_user(user)
 
         return Response({
-            'user': UserSerializer(user).data,
+            'user': UserSerializer(user, context={'request': request}).data,
             'refresh': str(refresh),
             'access': str(refresh.access_token),
             'message': 'Login successful'
