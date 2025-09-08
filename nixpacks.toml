@@ -1,10 +1,14 @@
 # Nixpacks configuration for Django on Railway
 # - Installs ffmpeg for audio processing (SpeechBrain conversion)
-# - Sets the start command to Daphne (ASGI) bound to Railway's PORT
+# - Installs dependencies from django/requirements.txt
+# - Starts Daphne ASGI server
 
 [phases.setup]
-# Extend default packages; keep "..." to retain provider defaults
 nixPkgs = ["...", "ffmpeg"]
+
+[phases.install]
+requirementsPath = "django/requirements.txt"
 
 [start]
 cmd = "daphne -b 0.0.0.0 -p ${PORT:-8000} core.asgi:application"
+
