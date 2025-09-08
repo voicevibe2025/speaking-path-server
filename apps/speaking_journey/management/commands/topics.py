@@ -214,11 +214,11 @@ TOPICS = [
     "title": "A Telephone Call",
     "description": "Learn how to make and answer a phone call, take a message, and end a conversation politely.",
     "material": [
-        "Hello, this is [Your Name].",
-        "May I speak to [Person's Name]?",
-        "I'm sorry, he/she is not here right now.",
+        "Hello, this is Sarah.",
+        "May I speak to Mark?",
+        "I'm sorry, he is not here right now.",
         "Can I take a message?",
-        "Please ask him/her to call me back.",
+        "Please ask him to call me back.",
         "Thanks for calling. Goodbye."
     ],
     "conversation": [
