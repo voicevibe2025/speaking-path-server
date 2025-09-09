@@ -47,6 +47,68 @@ from .serializers import (
 
 logger = logging.getLogger(__name__)
 
+# --- XP Helpers (Option A) ---
+def _option_a_required_xp(level: int) -> int:
+    try:
+        lvl = int(level or 1)
+    except Exception:
+        lvl = 1
+    return max(1, 100 + 25 * (lvl - 1))
+
+
+def _award_xp(user, amount: int, source: str, context: dict | None = None) -> int:
+    """Award XP using Option A level-ups and log a PointsTransaction.
+
+    Returns the effective XP added (non-negative). Safe to call; failures are non-fatal.
+    """
+    try:
+        amt = int(amount or 0)
+        if amt <= 0:
+            return 0
+        profile, _ = UserLevel.objects.get_or_create(user=user)
+        profile.experience_points = int(profile.experience_points or 0) + amt
+        profile.total_points_earned = int(profile.total_points_earned or 0) + amt
+        # Level-up loop
+        while True:
+            req = _option_a_required_xp(int(profile.current_level or 1))
+            if profile.experience_points >= req:
+                profile.experience_points -= req
+                profile.current_level = int(profile.current_level or 1) + 1
+            else:
+                break
+        profile.save()
+        try:
+            PointsTransaction.objects.create(
+                user=user,
+                amount=amt,
+                source=str(source or 'unknown'),
+                context=context or {},
+            )
+        except Exception:
+            pass
+        return amt
+    except Exception:
+        return 0
+
+
+def _award_topic_mastery_once(user, topic) -> int:
+    """Award +50 XP the first time this user completes the given topic.
+    Uses PointsTransaction to ensure idempotency.
+    """
+    try:
+        # If a previous transaction exists for this topic mastery, skip
+        exists = PointsTransaction.objects.filter(
+            user=user,
+            source='topic_mastery',
+            context__topicId=str(topic.id)
+        ).exists()
+        if exists:
+            return 0
+    except Exception:
+        # If filter on context fails, fall back to best-effort (may double-award in rare cases)
+        pass
+    return _award_xp(user, 50, 'topic_mastery', {'topicId': str(topic.id)})
+
 # Simple in-process cache for word clues to speed up repeat sessions
 DEF_STYLE_VERSION = "fun_v1"
 _DEF_CACHE: dict[str, str] = {}
@@ -711,26 +773,17 @@ class SubmitPhraseRecordingView(APIView):
 
         # Award XP only for good performance to preserve gamification balance
         if combined_accuracy >= 80.0:
-            xp_to_award = 50
-            user_level, _ = UserLevel.objects.get_or_create(user=request.user)
-            user_level.experience_points += xp_to_award
-            user_level.total_points_earned += xp_to_award
-            user_level.save()
-            try:
-                PointsTransaction.objects.create(
-                    user=request.user,
-                    amount=xp_to_award,
-                    source='pronunciation',
-                    context={
-                        'topicId': str(topic.id),
-                        'phraseIndex': phrase_index,
-                        'accuracy': round(combined_accuracy, 1),
-                    }
-                )
-            except Exception:
-                # Non-fatal if logging fails
-                pass
-            xp_awarded = xp_to_award
+            # Option A: up to +20 XP per phrase for good accuracy
+            xp_awarded += _award_xp(
+                user=request.user,
+                amount=20,
+                source='pronunciation',
+                context={
+                    'topicId': str(topic.id),
+                    'phraseIndex': phrase_index,
+                    'accuracy': round(float(combined_accuracy or 0.0), 1),
+                }
+            )
 
         # Mark phrase as completed and advance regardless of accuracy
         phrase_progress.mark_phrase_completed(phrase_index)
@@ -775,6 +828,9 @@ class SubmitPhraseRecordingView(APIView):
                 topic_progress.completed_at = timezone.now()
             topic_progress.save()
             topic_completed = topic_progress.completed
+            # Award topic mastery bonus once (+50)
+            if topic_completed:
+                xp_awarded += _award_topic_mastery_once(request.user, topic)
 
         # Get feedback from Gemini based on the best transcription and combined accuracy
         feedback = _get_gemini_feedback(expected_phrase, best_transcription, combined_accuracy)
@@ -972,54 +1028,41 @@ class SubmitFluencyPromptView(APIView):
         except Exception:
             new_next = None
 
-        # XP awarding logic
+        # XP awarding logic (Option A)
         xp_awarded = 0
-        try:
-            # +50 for this prompt if score >= 80
-            if score >= 80:
-                xp_awarded += 50
-                user_level, _ = UserLevel.objects.get_or_create(user=request.user)
-                user_level.experience_points += 50
-                user_level.total_points_earned += 50
-                user_level.save()
-                try:
-                    PointsTransaction.objects.create(
-                        user=request.user,
-                        amount=50,
-                        source='fluency',
-                        context={
-                            'topicId': str(topic.id),
-                            'promptIndex': prompt_index,
-                            'score': score,
-                            'type': 'prompt'
-                        }
-                    )
-                except Exception:
-                    pass
+        # +10 for this prompt if score >= 80
+        if score >= 80:
+            xp_awarded += _award_xp(
+                user=request.user,
+                amount=10,
+                source='fluency',
+                context={
+                    'topicId': str(topic.id),
+                    'promptIndex': prompt_index,
+                    'score': int(score),
+                    'type': 'prompt'
+                }
+            )
 
-            # Bonus +100 if all prompts are now completed
-            if new_next is None:
-                user_level, _ = UserLevel.objects.get_or_create(user=request.user)
-                user_level.experience_points += 100
-                user_level.total_points_earned += 100
-                user_level.save()
-                xp_awarded += 100
-                try:
-                    PointsTransaction.objects.create(
-                        user=request.user,
-                        amount=100,
-                        source='fluency',
-                        context={
-                            'topicId': str(topic.id),
-                            'bonus': 'complete_all_prompts',
-                            'promptScores': [int(s) for s in scores if isinstance(s, int)]
-                        }
-                    )
-                except Exception:
-                    pass
-        except Exception:
-            # XP failures are non-fatal
-            pass
+        # Bonus +50 if all prompts are now completed
+        if new_next is None:
+            xp_awarded += _award_xp(
+                user=request.user,
+                amount=50,
+                source='fluency',
+                context={
+                    'topicId': str(topic.id),
+                    'bonus': 'complete_all_prompts',
+                    'promptScores': [int(s) for s in scores if isinstance(s, int)]
+                }
+            )
+            # If all prompts complete contributes to topic completion, award mastery once
+            try:
+                tp.refresh_from_db()
+                if tp.completed:
+                    xp_awarded += _award_topic_mastery_once(request.user, topic)
+            except Exception:
+                pass
 
         resp = {
             'success': True,
@@ -1264,21 +1307,13 @@ class SubmitVocabularyAnswerView(APIView):
         if is_correct:
             session.correct_count = int(session.correct_count or 0) + 1
             session.total_score = int(session.total_score or 0) + 10
-            # Award +20 XP for correct answer
-            try:
-                user_level, _ = UserLevel.objects.get_or_create(user=request.user)
-                user_level.experience_points += 20
-                user_level.total_points_earned += 20
-                user_level.save()
-                PointsTransaction.objects.create(
-                    user=request.user,
-                    amount=20,
-                    source='vocabulary',
-                    context={'topicId': str(topic.id), 'questionId': str(question_id), 'type': 'answer'}
-                )
-                xp_awarded = 20
-            except Exception:
-                pass
+            # Award +5 XP for correct answer (Option A)
+            xp_awarded = _award_xp(
+                user=request.user,
+                amount=5,
+                source='vocabulary',
+                context={'topicId': str(topic.id), 'questionId': str(question_id), 'type': 'answer'}
+            )
 
         # Update session
         session.questions = questions
@@ -1333,19 +1368,18 @@ class CompleteVocabularyPracticeView(APIView):
             tp.completed_at = timezone.now()
         tp.save()
 
-        # Award +150 XP for completion of this practice
+        # Award +20 XP for completion of this practice (Option A)
+        xp_awarded += _award_xp(
+            user=request.user,
+            amount=20,
+            source='vocabulary',
+            context={'topicId': str(topic.id), 'type': 'complete', 'allAnswered': all_answered}
+        )
+
+        # If topic became completed due to this practice, award mastery once
         try:
-            user_level, _ = UserLevel.objects.get_or_create(user=request.user)
-            user_level.experience_points += 150
-            user_level.total_points_earned += 150
-            user_level.save()
-            PointsTransaction.objects.create(
-                user=request.user,
-                amount=150,
-                source='vocabulary',
-                context={'topicId': str(topic.id), 'type': 'complete', 'allAnswered': all_answered}
-            )
-            xp_awarded += 150
+            if tp.completed:
+                xp_awarded += _award_topic_mastery_once(request.user, topic)
         except Exception:
             pass
 

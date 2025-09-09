@@ -40,9 +40,12 @@ class UserLevelSerializer(serializers.ModelSerializer):
     
     def get_next_level_points(self, obj):
         """Calculate points needed for next level"""
-        # Simple progression: 100 * level^1.5
-        next_level = obj.current_level + 1
-        return int(100 * (next_level ** 1.5))
+        # Option A progression: xp required to go from L -> L+1 is 100 + 25*(L-1)
+        try:
+            level = int(getattr(obj, 'current_level', 1) or 1)
+        except Exception:
+            level = 1
+        return max(1, 100 + 25 * (level - 1))
 
 
 class BadgeSerializer(serializers.ModelSerializer):

@@ -400,14 +400,19 @@ class UserProfileSerializer(serializers.ModelSerializer):
         return obj.user.username or "User"
         
     def get_xpToNextLevel(self, obj):
-        """Calculate XP needed to reach next level"""
-        current_xp = getattr(obj.user, 'level_profile', None)
-        if current_xp:
-            current_level = current_xp.current_level or 1
-            # Simple formula: each level requires 100 * level XP
-            next_level_xp = 100 * (current_level + 1)
-            current_xp_val = current_xp.experience_points or 0
-            return max(0, next_level_xp - current_xp_val)
+        """Calculate XP needed to reach next level (Option A)."""
+        lvl = getattr(obj.user, 'level_profile', None)
+        if lvl:
+            try:
+                current_level = int(lvl.current_level or 1)
+            except Exception:
+                current_level = 1
+            try:
+                current_xp_val = int(lvl.experience_points or 0)
+            except Exception:
+                current_xp_val = 0
+            required = max(1, 100 + 25 * (current_level - 1))
+            return max(0, required - current_xp_val)
         return 100
         
     def get_longestStreak(self, obj):

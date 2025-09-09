@@ -86,11 +86,11 @@ class UserLevelViewSet(viewsets.ModelViewSet):
             profile.experience_points += points
             profile.total_points_earned += points
             
-            # Check for level up (100 * level^1.5 points per level)
+            # Check for level up using Option A: required = 100 + 25*(L-1)
             while True:
-                next_level_points = int(100 * ((profile.current_level + 1) ** 1.5))
-                if profile.experience_points >= next_level_points:
-                    profile.experience_points -= next_level_points
+                required = max(1, 100 + 25 * (profile.current_level - 1))
+                if profile.experience_points >= required:
+                    profile.experience_points -= required
                     profile.current_level += 1
                     
                     # Update Wayang character based on level
