@@ -51,6 +51,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
     stats = serializers.SerializerMethodField()
     badges = serializers.SerializerMethodField()
     preferences = serializers.SerializerMethodField()
+    # Computed proficiency based on Speaking Journey topics mastered
+    current_proficiency = serializers.SerializerMethodField()
     
     # Legacy fields for backward compatibility
     current_level = serializers.IntegerField(source='user.level_profile.current_level', read_only=True)
@@ -135,6 +137,39 @@ class UserProfileSerializer(serializers.ModelSerializer):
     def get_lessons_completed(self, obj):
         """Number of Speaking Journey topics completed."""
         return TopicProgress.objects.filter(user=obj.user, completed=True).count()
+
+    def get_current_proficiency(self, obj):
+        """
+        Map number of mastered Speaking Journey topics to a named proficiency tier.
+
+        Tiers:
+        0–10   -> Chaucerite 🌱
+        11–20  -> Shakespire 🎭
+        21–30  -> Miltonarch 🔥
+        31–40  -> Austennova 💫
+        41–50  -> Dickenlord 📚
+        51–60  -> Joycemancer 🌀
+        61+    -> The Bard Eternal 👑
+        """
+        try:
+            topics_mastered = int(self.get_lessons_completed(obj))
+        except Exception:
+            topics_mastered = 0
+
+        if topics_mastered <= 10:
+            return "Chaucerite 🌱"
+        elif topics_mastered <= 20:
+            return "Shakespire 🎭"
+        elif topics_mastered <= 30:
+            return "Miltonarch 🔥"
+        elif topics_mastered <= 40:
+            return "Austennova 💫"
+        elif topics_mastered <= 50:
+            return "Dickenlord 📚"
+        elif topics_mastered <= 60:
+            return "Joycemancer 🌀"
+        else:
+            return "The Bard Eternal 👑"
 
     def get_recordings_count(self, obj):
         """Total pronunciation recordings submitted in Speaking Journey."""

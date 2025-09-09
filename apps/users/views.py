@@ -9,6 +9,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
+from apps.speaking_journey.models import TopicProgress
 
 from apps.authentication.models import User
 from .models import UserProfile, LearningPreference, UserAchievement
@@ -113,10 +114,30 @@ class UserStatsView(generics.RetrieveAPIView):
             is_completed=True
         ).count()
 
+        # Compute proficiency from Speaking Journey topics mastered
+        try:
+            topics_mastered = TopicProgress.objects.filter(user=user, completed=True).count()
+        except Exception:
+            topics_mastered = 0
+        if topics_mastered <= 10:
+            proficiency = "Chaucerite 🌱"
+        elif topics_mastered <= 20:
+            proficiency = "Shakespire 🎭"
+        elif topics_mastered <= 30:
+            proficiency = "Miltonarch 🔥"
+        elif topics_mastered <= 40:
+            proficiency = "Austennova 💫"
+        elif topics_mastered <= 50:
+            proficiency = "Dickenlord 📚"
+        elif topics_mastered <= 60:
+            proficiency = "Joycemancer 🌀"
+        else:
+            proficiency = "The Bard Eternal 👑"
+
         return {
             'total_practice_time': profile.total_practice_time,
             'streak_days': profile.streak_days,
-            'current_proficiency': profile.current_proficiency,
+            'current_proficiency': proficiency,
             'completed_achievements': completed_achievements,
             'total_points': total_points,
             'last_practice_date': profile.last_practice_date,
