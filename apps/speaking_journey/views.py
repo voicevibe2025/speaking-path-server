@@ -399,8 +399,10 @@ def _sample_vocabulary_questions(topic: Topic, n: int) -> list[dict]:
 def _transcribe_audio_with_whisper(audio_file):
     """Transcribe audio using OpenAI Whisper tiny.en model"""
     try:
-        # Load Whisper model (tiny.en for faster processing on your MX350)
-        model = whisper.load_model("tiny.en")
+        # Load Whisper model once and reuse (tiny.en is ~75MB)
+        if not hasattr(_transcribe_audio_with_whisper, '_model'):
+            _transcribe_audio_with_whisper._model = whisper.load_model("tiny.en")
+        model = _transcribe_audio_with_whisper._model
 
         # Create temporary file for audio processing
         with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as temp_file:
@@ -420,7 +422,7 @@ def _transcribe_audio_with_whisper(audio_file):
                 os.unlink(temp_file_path)
 
     except Exception as e:
-        print(f"Whisper transcription error: {e}")
+        logger.error('Whisper transcription error: %s', e)
         return ""
 
 
@@ -430,11 +432,14 @@ def _transcribe_audio_with_speechbrain(audio_file):
     This function makes a temporary copy of the uploaded file, converts it to 16kHz mono WAV via ffmpeg,
     then performs ASR with a pre-trained SpeechBrain model.
     """
-    # On Windows, SpeechBrain's fetching uses symlinks which require special privileges.
-    # To avoid frequent failures like WinError 1314 (no symlink privilege), skip by default on Windows.
-    # You can override by setting ENABLE_SPEECHBRAIN=1 in the environment.
+    # Global feature flag guardrails
+    # - Windows: SpeechBrain fetching may require symlink privileges; keep opt-in on Windows.
+    # - Server: allow disabling via env to avoid cold-start latency.
     if os.name == 'nt' and not os.environ.get('ENABLE_SPEECHBRAIN'):
         logger.info('Skipping SpeechBrain ASR on Windows (set ENABLE_SPEECHBRAIN=1 to force enable).')
+        return ""
+    if os.environ.get('DISABLE_SPEECHBRAIN') in ('1', 'true', 'True', 'YES', 'yes') or os.environ.get('SB_DISABLE') in ('1', 'true', 'True', 'YES', 'yes'):
+        logger.info('SpeechBrain ASR disabled by environment flag (DISABLE_SPEECHBRAIN/SB_DISABLE).')
         return ""
     try:
         # Try to reset pointer in case it was read before
@@ -489,6 +494,10 @@ def _transcribe_audio_with_speechbrain(audio_file):
             msg = str(e)
             if 'WinError 1314' in msg or 'privilege' in msg.lower():
                 logger.warning('SpeechBrain ASR skipped due to Windows symlink privilege error: %s', e)
+            elif 'CoverageScorer' in msg or 'speechbrain.decoders.scorer.CoverageScorer' in msg:
+                # Version mismatch between model hyperparams and installed speechbrain.
+                # Downgrade to warning so request continues with Whisper fallback.
+                logger.warning('SpeechBrain ASR transcription failed due to CoverageScorer mismatch: %s', e)
             else:
                 logger.error('SpeechBrain ASR transcription failed: %s', e)
             return ""
