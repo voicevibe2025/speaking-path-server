@@ -56,7 +56,7 @@ def _option_a_required_xp(level: int) -> int:
     return max(1, 100 + 25 * (lvl - 1))
 
 
-def _award_xp(user, amount: int, source: str, context: dict | None = None) -> int:
+def _award_xp(user, amount: int, source: str, context: Optional[dict] = None) -> int:
     """Award XP using Option A level-ups and log a PointsTransaction.
 
     Returns the effective XP added (non-negative). Safe to call; failures are non-fatal.

@@ -57,6 +57,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
     # Legacy fields for backward compatibility
     current_level = serializers.IntegerField(source='user.level_profile.current_level', read_only=True)
     experience_points = serializers.IntegerField(source='user.level_profile.experience_points', read_only=True)
+    total_points_earned = serializers.IntegerField(source='user.level_profile.total_points_earned', read_only=True, default=0)
     streak_days = serializers.IntegerField(source='user.level_profile.streak_days', read_only=True)
 
     # Quick Stats now computed from Speaking Journey data
@@ -520,7 +521,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'masculinity_preference', 'uncertainty_avoidance_preference',
             'long_term_orientation_preference',
             'preferred_reward_type', 'enable_notifications', 'enable_reminders',
-            'total_practice_time', 'current_level', 'experience_points', 'streak_days',
+            'total_practice_time', 'current_level', 'experience_points', 'total_points_earned', 'streak_days',
             'total_practice_hours', 'lessons_completed', 'recordings_count', 'avg_score',
             'daily_practice_goal', 'learning_goal', 'target_language',
             'speaking_score', 'listening_score', 'grammar_score', 'vocabulary_score', 'pronunciation_score',
