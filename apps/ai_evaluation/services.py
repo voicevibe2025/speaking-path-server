@@ -8,6 +8,9 @@ import asyncio
 import aiohttp
 import openai
 from typing import Dict, List, Optional, Any
+import base64
+import tempfile
+import whisper
 from django.conf import settings
 import logging
 
@@ -20,10 +23,10 @@ class WhisperService:
     """
 
     def __init__(self):
+        # Keep API key detection for potential future hosted use, but local model doesn't need it
         self.api_key = os.getenv('WHISPER_API_KEY', os.getenv('OPENAI_API_KEY'))
-        if self.api_key:
-            openai.api_key = self.api_key
-        self.model = "whisper-1"
+        # Lazy-load local whisper model name (match existing implementation)
+        self.model_name = "tiny.en"
 
     async def transcribe_audio(self, audio_data: bytes, language: str = "en") -> Dict[str, Any]:
         """
@@ -37,18 +40,42 @@ class WhisperService:
             Transcription result with text and metadata
         """
         try:
-            # In production, this would call the actual Whisper API
-            # For now, return a placeholder response
-            result = {
-                "text": "[Transcribed audio content]",
-                "language": language,
-                "duration": 0,
-                "segments": [],
-                "confidence": 0.95
-            }
+            # Accept base64 string or raw bytes
+            if isinstance(audio_data, str):
+                try:
+                    audio_b64 = audio_data.split(",", 1)[-1]
+                except Exception:
+                    audio_b64 = audio_data
+                audio_bytes = base64.b64decode(audio_b64)
+            else:
+                audio_bytes = audio_data
 
-            logger.info(f"Audio transcribed successfully")
-            return result
+            # Persist to a temp file that Whisper (ffmpeg) can read
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".m4a") as tmp:
+                tmp.write(audio_bytes)
+                tmp.flush()
+                temp_path = tmp.name
+
+            # Local OpenAI Whisper (tiny.en) just like SpeakingJourney
+            try:
+                if not hasattr(self, "_model") or self._model is None:
+                    self._model = whisper.load_model(self.model_name)
+                result = self._model.transcribe(temp_path, language=language)
+                text = (result.get("text") or "").strip()
+                out = {
+                    "text": text,
+                    "language": language,
+                    "duration": 0,
+                    "segments": []
+                }
+                logger.info("Audio transcribed successfully via local whisper (%s)", self.model_name)
+                return out
+            finally:
+                try:
+                    if os.path.exists(temp_path):
+                        os.unlink(temp_path)
+                except Exception:
+                    pass
 
         except Exception as e:
             logger.error(f"Whisper transcription error: {str(e)}")
