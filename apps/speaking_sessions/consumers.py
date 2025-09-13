@@ -464,17 +464,24 @@ class GeminiLiveProxyConsumer(AsyncWebsocketConsumer):
                                 # Append ~300ms of silence to help VAD / end-of-turn on some backends
                                 payload = bytes(self._audio_buf) + (b"\x00" * int(0.3 * 16000 * 2))
                                 try:
-                                    if hasattr(types, "LiveClientRealtimeInput"):
-                                        logger.debug("live: flush via LiveClientRealtimeInput(media=Blob), end_of_turn=True")
-                                        await self.gemini_session.send(
-                                            input=types.LiveClientRealtimeInput(
-                                                media=types.Blob(data=payload, mime_type="audio/pcm;rate=16000")
-                                            ),
-                                            end_of_turn=True,
+                                    if hasattr(self.gemini_session, "send_client_content"):
+                                        logger.debug("live: flush via send_client_content(turns=[Content(inline_data=Blob)], turn_complete=True)")
+                                        await self.gemini_session.send_client_content(
+                                            turns=[
+                                                types.Content(
+                                                    role="user",
+                                                    parts=[
+                                                        types.Part(
+                                                            inline_data=types.Blob(data=payload, mime_type="audio/pcm;rate=16000")
+                                                        )
+                                                    ],
+                                                )
+                                            ],
+                                            turn_complete=True,
                                         )
                                         sent = True
                                 except Exception as e:
-                                    logger.warning("live: LCRI flush failed: %s", e)
+                                    logger.warning("live: send_client_content flush failed: %s", e)
                                     sent = False
                                 if not sent:
                                     logger.debug("live: flush via LiveClientContent(inline_data=Blob), end_of_turn=True")
@@ -518,17 +525,24 @@ class GeminiLiveProxyConsumer(AsyncWebsocketConsumer):
                                 sent = False
                                 payload = bytes(self._audio_buf) + (b"\x00" * int(0.3 * 16000 * 2))
                                 try:
-                                    if hasattr(types, "LiveClientRealtimeInput"):
-                                        logger.debug("live: barge_in flush via LiveClientRealtimeInput(media=Blob), end_of_turn=True")
-                                        await self.gemini_session.send(
-                                            input=types.LiveClientRealtimeInput(
-                                                media=types.Blob(data=payload, mime_type="audio/pcm;rate=16000")
-                                            ),
-                                            end_of_turn=True,
+                                    if hasattr(self.gemini_session, "send_client_content"):
+                                        logger.debug("live: barge_in flush via send_client_content(turns=[Content(inline_data=Blob)], turn_complete=True)")
+                                        await self.gemini_session.send_client_content(
+                                            turns=[
+                                                types.Content(
+                                                    role="user",
+                                                    parts=[
+                                                        types.Part(
+                                                            inline_data=types.Blob(data=payload, mime_type="audio/pcm;rate=16000")
+                                                        )
+                                                    ],
+                                                )
+                                            ],
+                                            turn_complete=True,
                                         )
                                         sent = True
                                 except Exception as e:
-                                    logger.warning("live: LCRI barge flush failed: %s", e)
+                                    logger.warning("live: send_client_content barge flush failed: %s", e)
                                     sent = False
                                 if not sent:
                                     logger.debug("live: barge_in flush via LiveClientContent(inline_data=Blob), end_of_turn=True")
