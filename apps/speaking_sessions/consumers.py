@@ -287,6 +287,9 @@ class GeminiLiveProxyConsumer(AsyncWebsocketConsumer):
         self._gemini_cm = None
         self.recv_task = None
         self.closed = False
+        # Fallback mode for SDKs without realtime_input: buffer mic until end_turn
+        self._use_buffered_content = False
+        self._audio_buf = bytearray()
 
     async def connect(self):
         self.user = self.scope.get('user')
@@ -318,7 +321,7 @@ class GeminiLiveProxyConsumer(AsyncWebsocketConsumer):
             except Exception:
                 gn_version = "unknown"
             config = {
-                "response_modalities": ["AUDIO"],
+                "response_modalities": ["AUDIO", "TEXT"],
                 "speech_config": {
                     "voice_config": {
                         "prebuilt_voice_config": {
@@ -349,6 +352,31 @@ class GeminiLiveProxyConsumer(AsyncWebsocketConsumer):
                 gn_version,
                 hasattr(self.gemini_session, "send_realtime_input"),
             )
+            self._use_buffered_content = not hasattr(self.gemini_session, "send_realtime_input")
+            logger.info("live: path selected = %s", "buffered_content" if self._use_buffered_content else "realtime_input")
+            # If SDK lacks realtime_input and we chose a native audio model, reconnect to half-cascade TEXT model
+            if self._use_buffered_content and "native-audio-dialog" in model:
+                try:
+                    await self._gemini_cm.__aexit__(None, None, None)
+                except Exception:
+                    pass
+                fallback_model = os.environ.get("GEMINI_LIVE_FALLBACK_MODEL", "gemini-live-2.5-flash-preview")
+                fallback_config = {
+                    "response_modalities": ["TEXT"],
+                    "system_instruction": {
+                        "role": "system",
+                        "parts": [
+                            {"text": (
+                                "You are Vivi, a friendly English tutor from Batam. "
+                                "Be warm, natural, youthfully energetic, and concise. "
+                                "Keep turns short to minimize latency."
+                            )}
+                        ]
+                    },
+                }
+                self._gemini_cm = self.gemini_client.aio.live.connect(model=fallback_model, config=fallback_config)
+                self.gemini_session = await self._gemini_cm.__aenter__()
+                logger.info("live: reconnected with fallback model=%s (TEXT only)", fallback_model)
         except Exception as e:
             logging.exception("Failed to connect to Gemini Live API")
             await self.close(code=4502)
@@ -380,42 +408,90 @@ class GeminiLiveProxyConsumer(AsyncWebsocketConsumer):
     async def receive(self, text_data=None, bytes_data=None):
         try:
             if bytes_data:
-                # Forward audio chunk to Gemini Live
-                await self._send_audio_to_gemini(bytes_data)
+                # Forward audio chunk to Gemini Live (or buffer when in fallback mode)
+                if self._use_buffered_content:
+                    self._audio_buf.extend(bytes_data)
+                else:
+                    await self._send_audio_to_gemini(bytes_data)
             elif text_data:
                 data = json.loads(text_data)
                 msg_type = data.get("type")
                 if msg_type == "end_stream":
                     # Prefer ending the realtime audio stream explicitly if supported.
                     try:
-                        if hasattr(self.gemini_session, "send_realtime_input"):
+                        if not self._use_buffered_content and hasattr(self.gemini_session, "send_realtime_input"):
                             logger.debug("live: end_stream via realtime_input(audio_stream_end=True)")
                             await self.gemini_session.send_realtime_input(audio_stream_end=True)
                         else:
-                            # Fallback: use deprecated send with LiveClientContent wrapper
-                            logger.debug("live: end_stream via send(LiveClientContent, end_of_turn=True)")
-                            await self.gemini_session.send(
-                                input=types.LiveClientContent(
-                                    turns=[types.Content(role="user", parts=[])]
-                                ),
-                                end_of_turn=True,
-                            )
+                            # Buffered fallback: send aggregated audio as one turn
+                            if self._audio_buf:
+                                logger.info("live: flushing buffered audio (%d bytes) with end_of_turn=True", len(self._audio_buf))
+                                await self.gemini_session.send(
+                                    input=types.LiveClientContent(
+                                        turns=[
+                                            types.Content(
+                                                role="user",
+                                                parts=[
+                                                    types.Part(
+                                                        inline_data=types.Blob(
+                                                            data=bytes(self._audio_buf),
+                                                            mime_type="audio/pcm;rate=16000",
+                                                        )
+                                                    )
+                                                ],
+                                            )
+                                        ]
+                                    ),
+                                    end_of_turn=True,
+                                )
+                                self._audio_buf.clear()
+                            else:
+                                # No audio buffered; still mark end_of_turn
+                                logger.debug("live: end_stream with empty buffer -> send minimal turn_complete")
+                                await self.gemini_session.send(
+                                    input=types.LiveClientContent(
+                                        turns=[types.Content(role="user", parts=[])]
+                                    ),
+                                    end_of_turn=True,
+                                )
                     except Exception:
                         pass
                 elif msg_type == "barge_in":
                     # For now, end the current turn to simulate interruption.
                     try:
-                        if hasattr(self.gemini_session, "send_realtime_input"):
+                        if not self._use_buffered_content and hasattr(self.gemini_session, "send_realtime_input"):
                             logger.debug("live: barge_in via realtime_input(audio_stream_end=True)")
                             await self.gemini_session.send_realtime_input(audio_stream_end=True)
                         else:
                             logger.debug("live: barge_in via send(LiveClientContent, end_of_turn=True)")
-                            await self.gemini_session.send(
-                                input=types.LiveClientContent(
-                                    turns=[types.Content(role="user", parts=[])]
-                                ),
-                                end_of_turn=True,
-                            )
+                            if self._audio_buf:
+                                logger.info("live: barge_in flush buffered audio (%d bytes)", len(self._audio_buf))
+                                await self.gemini_session.send(
+                                    input=types.LiveClientContent(
+                                        turns=[
+                                            types.Content(
+                                                role="user",
+                                                parts=[
+                                                    types.Part(
+                                                        inline_data=types.Blob(
+                                                            data=bytes(self._audio_buf),
+                                                            mime_type="audio/pcm;rate=16000",
+                                                        )
+                                                    )
+                                                ],
+                                            )
+                                        ]
+                                    ),
+                                    end_of_turn=True,
+                                )
+                                self._audio_buf.clear()
+                            else:
+                                await self.gemini_session.send(
+                                    input=types.LiveClientContent(
+                                        turns=[types.Content(role="user", parts=[])]
+                                    ),
+                                    end_of_turn=True,
+                                )
                     except Exception:
                         pass
                 # Add more control messages as needed
@@ -476,25 +552,63 @@ class GeminiLiveProxyConsumer(AsyncWebsocketConsumer):
     async def _gemini_to_client_loop(self):
         try:
             async for response in self.gemini_session.receive():
-                # Forward audio chunks (native audio output is 24kHz) as binary frames
+                # 1) Direct audio bytes (common on native audio models)
                 try:
                     data = getattr(response, "data", None)
                     if data:
+                        logger.debug("live: recv audio bytes=%d", len(data))
                         await self.send(bytes_data=data)
                         continue
                 except Exception:
                     pass
 
-                # Forward text responses as JSON
+                # 2) Older SDKs: response.audio.data
+                try:
+                    audio = getattr(response, "audio", None)
+                    adata = getattr(audio, "data", None) if audio else None
+                    if adata:
+                        logger.debug("live: recv legacy audio bytes=%d", len(adata))
+                        await self.send(bytes_data=adata)
+                        continue
+                except Exception:
+                    pass
+
+                # 3) Text convenience property
                 try:
                     text = getattr(response, "text", None)
                     if text:
+                        logger.debug("live: recv text len=%d", len(text))
                         await self._send_json({"type": "text", "text": text})
                         continue
                 except Exception:
                     pass
 
-                # Fallback: forward event metadata if available
+                # 4) Server content structure: model_turn.parts[*]
+                try:
+                    sc = getattr(response, "server_content", None)
+                    mt = getattr(sc, "model_turn", None) if sc else None
+                    parts = getattr(mt, "parts", None) if mt else None
+                    if parts:
+                        aggregated_text = []
+                        for p in parts:
+                            # text part
+                            ptext = getattr(p, "text", None)
+                            if ptext:
+                                aggregated_text.append(ptext)
+                            # inline_data bytes (audio)
+                            inline = getattr(p, "inline_data", None)
+                            idata = getattr(inline, "data", None) if inline else None
+                            if idata:
+                                logger.debug("live: recv inline_data audio bytes=%d", len(idata))
+                                await self.send(bytes_data=idata)
+                        if aggregated_text:
+                            out = "".join(aggregated_text)
+                            await self._send_json({"type": "text", "text": out})
+                            continue
+                except Exception:
+                    pass
+
+                # 5) Fallback: forward event metadata if available
                 try:
                     raw = getattr(response, "to_dict", None)
                     if callable(raw):
