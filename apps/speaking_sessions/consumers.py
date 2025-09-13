@@ -320,63 +320,67 @@ class GeminiLiveProxyConsumer(AsyncWebsocketConsumer):
                 gn_version = metadata.version("google-genai")
             except Exception:
                 gn_version = "unknown"
-            config = {
-                "response_modalities": ["AUDIO", "TEXT"],
-                "speech_config": {
+            # Select modalities by model: native-audio models should prefer AUDIO
+            modalities = ["AUDIO"] if "native-audio" in model else ["TEXT"]
+
+            # Build a sequence of connection attempts from most to least featured.
+            attempts: list[tuple[str, dict]] = []
+
+            # Attempt 1: primary config (include speech_config only if AUDIO)
+            cfg1 = {
+                "response_modalities": modalities,
+                "system_instruction": {
+                    "role": "system",
+                    "parts": [{
+                        "text": (
+                            "You are Vivi, a friendly English tutor from Batam. "
+                            "Be warm, natural, youthfully energetic, and concise. "
+                            "Keep turns short to minimize latency."
+                        )
+                    }],
+                },
+            }
+            if "AUDIO" in modalities:
+                cfg1["speech_config"] = {
                     "voice_config": {
                         "prebuilt_voice_config": {
                             "voice_name": os.environ.get("GEMINI_LIVE_VOICE", "Leda")
                         }
                     }
-                },
-                # Some versions of google-genai expect a Content-like object here
-                # rather than a raw string.
-                "system_instruction": {
-                    "role": "system",
-                    "parts": [
-                        {"text": (
-                            "You are Vivi, a friendly English tutor from Batam. "
-                            "Be warm, natural, youthfully energetic, and concise. "
-                            "Keep turns short to minimize latency."
-                        )}
-                    ]
-                },
-            }
+                }
+            attempts.append((model, cfg1))
 
-            # Establish Live session (async context manager)
-            self._gemini_cm = self.gemini_client.aio.live.connect(model=model, config=config)
-            self.gemini_session = await self._gemini_cm.__aenter__()
-            logger.info(
-                "Gemini Live session established (model=%s, google-genai=%s, has_send_realtime_input=%s)",
-                model,
-                gn_version,
-                hasattr(self.gemini_session, "send_realtime_input"),
-            )
+            # Attempt 2: same model, minimal config (only response_modalities)
+            attempts.append((model, {"response_modalities": modalities}))
+
+            # Attempt 3: fallback to text-only live model, minimal
+            fallback_model = os.environ.get("GEMINI_LIVE_FALLBACK_MODEL", "gemini-live-2.5-flash-preview")
+            attempts.append((fallback_model, {"response_modalities": ["TEXT"]}))
+
+            last_error: Exception | None = None
+            for idx, (mdl, cfg) in enumerate(attempts, start=1):
+                try:
+                    logger.info("live: connect attempt %d -> model=%s cfg_keys=%s", idx, mdl, list(cfg.keys()))
+                    cm = self.gemini_client.aio.live.connect(model=mdl, config=cfg)
+                    sess = await cm.__aenter__()
+                    self._gemini_cm = cm
+                    self.gemini_session = sess
+                    model = mdl  # track active
+                    logger.info(
+                        "Gemini Live connected (model=%s, google-genai=%s, has_send_realtime_input=%s)",
+                        mdl, gn_version, hasattr(sess, "send_realtime_input")
+                    )
+                    break
+                except Exception as exc:
+                    last_error = exc
+                    logger.warning("live: connect attempt %d failed: %s", idx, exc)
+                    continue
+
+            if not self.gemini_session:
+                raise RuntimeError(f"All Live connect attempts failed: {last_error}")
+
             self._use_buffered_content = not hasattr(self.gemini_session, "send_realtime_input")
             logger.info("live: path selected = %s", "buffered_content" if self._use_buffered_content else "realtime_input")
-            # If SDK lacks realtime_input and we chose a native audio model, reconnect to half-cascade TEXT model
-            if self._use_buffered_content and "native-audio-dialog" in model:
-                try:
-                    await self._gemini_cm.__aexit__(None, None, None)
-                except Exception:
-                    pass
-                fallback_model = os.environ.get("GEMINI_LIVE_FALLBACK_MODEL", "gemini-live-2.5-flash-preview")
-                fallback_config = {
-                    "response_modalities": ["TEXT"],
-                    "system_instruction": {
-                        "role": "system",
-                        "parts": [
-                            {"text": (
-                                "You are Vivi, a friendly English tutor from Batam. "
-                                "Be warm, natural, youthfully energetic, and concise. "
-                                "Keep turns short to minimize latency."
-                            )}
-                        ]
-                    },
-                }
-                self._gemini_cm = self.gemini_client.aio.live.connect(model=fallback_model, config=fallback_config)
-                self.gemini_session = await self._gemini_cm.__aenter__()
-                logger.info("live: reconnected with fallback model=%s (TEXT only)", fallback_model)
         except Exception as e:
             logging.exception("Failed to connect to Gemini Live API")
             await self.close(code=4502)

@@ -11,10 +11,10 @@ TOPICS = [
             "I'm doing well, thanks."
         ],
         "conversation": [
-            {"speaker": "A", "text": "Hey, I don't think we've met before. I'm Sarah."},
-            {"speaker": "B", "text": "Hi Sarah, nice to meet you. I'm David."},
-            {"speaker": "A", "text": "Nice to meet you too, David. Where are you from?"},
-            {"speaker": "B", "text": "I'm from Bandung. How about you?"},
+            {"speaker": "A", "text": "Hey, I don't think we've met before. I'm David."},
+            {"speaker": "B", "text": "Hi David, nice to meet you. I'm Sarah."},
+            {"speaker": "A", "text": "Nice to meet you too, Sarah. Where are you from?"},
+            {"speaker": "B", "text": "I'm from Batam. How about you?"},
             {"speaker": "A", "text": "I'm from Jakarta."},
             {"speaker": "B", "text": "Cool! So, how are you doing today?"},
             {"speaker": "A", "text": "I'm doing well, thanks. And you?"},
@@ -222,8 +222,8 @@ TOPICS = [
         "Thanks for calling. Goodbye."
     ],
     "conversation": [
-        {"speaker": "A", "text": "Hello, this is Jane."},
-        {"speaker": "B", "text": "Hi Jane, this is Tom. Is Mike there?"},
+        {"speaker": "A", "text": "Hello, this is John."},
+        {"speaker": "B", "text": "Hi John, this is Sarah. Is Mike there?"},
         {"speaker": "A", "text": "I'm sorry, he's not in right now. Can I take a message?"},
         {"speaker": "B", "text": "Yes, please. Could you ask him to call me back? My number is 555-1234."},
         {"speaker": "A", "text": "Sure, I'll let him know."},
