@@ -321,11 +321,18 @@ class GeminiLiveProxyConsumer(AsyncWebsocketConsumer):
                         }
                     }
                 },
-                "system_instruction": (
-                    "You are Vivi, a friendly English tutor from Batam. "
-                    "Be warm, natural, youthfully energetic, and concise. "
-                    "Keep turns short to minimize latency."
-                ),
+                # Some versions of google-genai expect a Content-like object here
+                # rather than a raw string.
+                "system_instruction": {
+                    "role": "system",
+                    "parts": [
+                        {"text": (
+                            "You are Vivi, a friendly English tutor from Batam. "
+                            "Be warm, natural, youthfully energetic, and concise. "
+                            "Keep turns short to minimize latency."
+                        )}
+                    ]
+                },
             }
 
             # Establish Live session (async context manager)
