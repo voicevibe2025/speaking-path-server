@@ -391,14 +391,23 @@ class GeminiLiveProxyConsumer(AsyncWebsocketConsumer):
                         if hasattr(self.gemini_session, "send_realtime_input"):
                             await self.gemini_session.send_realtime_input(audio_stream_end=True)
                         else:
-                            # Fallback: close turn using client content
-                            await self.gemini_session.send_client_content(turns=[], turn_complete=True)
+                            # Fallback: use deprecated send with minimal content and end_of_turn=True
+                            await self.gemini_session.send(
+                                input=types.Content(role="user", parts=[]),
+                                end_of_turn=True,
+                            )
                     except Exception:
                         pass
                 elif msg_type == "barge_in":
                     # For now, end the current turn to simulate interruption.
                     try:
-                        await self.gemini_session.send_client_content(turns=[], turn_complete=True)
+                        if hasattr(self.gemini_session, "send_realtime_input"):
+                            await self.gemini_session.send_realtime_input(audio_stream_end=True)
+                        else:
+                            await self.gemini_session.send(
+                                input=types.Content(role="user", parts=[]),
+                                end_of_turn=True,
+                            )
                     except Exception:
                         pass
                 # Add more control messages as needed
@@ -413,14 +422,23 @@ class GeminiLiveProxyConsumer(AsyncWebsocketConsumer):
                     audio=types.Blob(data=audio_bytes, mime_type="audio/pcm;rate=16000")
                 )
             else:
-                # Fallback: use client-content path with Part.from_bytes
-                await self.gemini_session.send_client_content(
-                    turns=types.Content(
-                        role="user",
-                        parts=[types.Part.from_bytes(data=audio_bytes, mime_type="audio/pcm;rate=16000")],
-                    ),
-                    turn_complete=False,
-                )
+                # Fallback: use deprecated send() with LiveClientRealtimeInput type
+                if hasattr(types, "LiveClientRealtimeInput"):
+                    await self.gemini_session.send(
+                        input=types.LiveClientRealtimeInput(
+                            audio=types.Blob(data=audio_bytes, mime_type="audio/pcm;rate=16000")
+                        ),
+                        end_of_turn=False,
+                    )
+                else:
+                    # Ultimate fallback: send minimal Content with bytes part
+                    await self.gemini_session.send(
+                        input=types.Content(
+                            role="user",
+                            parts=[types.Part(inline_data=types.Blob(data=audio_bytes, mime_type="audio/pcm;rate=16000"))],
+                        ),
+                        end_of_turn=False,
+                    )
         except Exception as e:
             # Avoid dumping large base64 payloads in error text
             msg = str(e)
