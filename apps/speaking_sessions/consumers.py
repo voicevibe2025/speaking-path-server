@@ -343,7 +343,12 @@ class GeminiLiveProxyConsumer(AsyncWebsocketConsumer):
             # Establish Live session (async context manager)
             self._gemini_cm = self.gemini_client.aio.live.connect(model=model, config=config)
             self.gemini_session = await self._gemini_cm.__aenter__()
-            logger.info("Gemini Live session established (model=%s, google-genai=%s)", model, gn_version)
+            logger.info(
+                "Gemini Live session established (model=%s, google-genai=%s, has_send_realtime_input=%s)",
+                model,
+                gn_version,
+                hasattr(self.gemini_session, "send_realtime_input"),
+            )
         except Exception as e:
             logging.exception("Failed to connect to Gemini Live API")
             await self.close(code=4502)
@@ -408,8 +413,14 @@ class GeminiLiveProxyConsumer(AsyncWebsocketConsumer):
                     audio=types.Blob(data=audio_bytes, mime_type="audio/pcm;rate=16000")
                 )
             else:
-                # No supported realtime API in this SDK version
-                raise RuntimeError("Realtime input not supported by installed google-genai version")
+                # Fallback: use client-content path with Part.from_bytes
+                await self.gemini_session.send_client_content(
+                    turns=types.Content(
+                        role="user",
+                        parts=[types.Part.from_bytes(data=audio_bytes, mime_type="audio/pcm;rate=16000")],
+                    ),
+                    turn_complete=False,
+                )
         except Exception as e:
             # Avoid dumping large base64 payloads in error text
             msg = str(e)
