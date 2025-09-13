@@ -417,21 +417,26 @@ class GeminiLiveProxyConsumer(AsyncWebsocketConsumer):
     async def _send_audio_to_gemini(self, audio_bytes: bytes):
         try:
             if hasattr(self.gemini_session, "send_realtime_input"):
-                # Preferred API (new SDKs). Use the explicit 'audio' parameter.
+                # Preferred API (newer SDKs). Use the generic 'media' parameter for compatibility.
                 await self.gemini_session.send_realtime_input(
-                    audio=types.Blob(data=audio_bytes, mime_type="audio/pcm;rate=16000")
+                    media=types.Blob(data=audio_bytes, mime_type="audio/pcm;rate=16000")
                 )
             else:
-                # Fallback: use deprecated send() with LiveClientRealtimeInput type
+                # Fallbacks when realtime_input API isn't available
+                sent = False
                 if hasattr(types, "LiveClientRealtimeInput"):
-                    await self.gemini_session.send(
-                        input=types.LiveClientRealtimeInput(
-                            audio=types.Blob(data=audio_bytes, mime_type="audio/pcm;rate=16000")
-                        ),
-                        end_of_turn=False,
-                    )
-                else:
-                    # Ultimate fallback: send minimal Content with bytes part
+                    try:
+                        await self.gemini_session.send(
+                            input=types.LiveClientRealtimeInput(
+                                media=types.Blob(data=audio_bytes, mime_type="audio/pcm;rate=16000")
+                            ),
+                            end_of_turn=False,
+                        )
+                        sent = True
+                    except Exception:
+                        sent = False
+                if not sent:
+                    # Ultimate fallback: send minimal Content with inline_data bytes part
                     await self.gemini_session.send(
                         input=types.Content(
                             role="user",
