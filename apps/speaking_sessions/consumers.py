@@ -393,9 +393,22 @@ class GeminiLiveProxyConsumer(AsyncWebsocketConsumer):
 
     async def _send_audio_to_gemini(self, audio_bytes: bytes):
         try:
-            await self.gemini_session.send_realtime_input(
-                audio=types.Blob(data=audio_bytes, mime_type="audio/pcm;rate=16000")
-            )
+            if hasattr(self.gemini_session, "send_realtime_input"):
+                # Preferred API (new SDKs)
+                await self.gemini_session.send_realtime_input(
+                    media=types.Blob(data=audio_bytes, mime_type="audio/pcm;rate=16000")
+                )
+            else:
+                # Fallback for older SDKs: use deprecated generic send() with realtime_input shape
+                b64 = base64.b64encode(audio_bytes).decode("ascii")
+                await self.gemini_session.send(
+                    input={
+                        "realtime_input": {
+                            "media": {"mime_type": "audio/pcm;rate=16000", "data": b64}
+                        }
+                    },
+                    end_of_turn=False,
+                )
         except Exception as e:
             await self._send_json({"type": "error", "message": f"upstream audio error: {e}"})
 
