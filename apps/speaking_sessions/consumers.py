@@ -283,6 +283,7 @@ class GeminiLiveProxyConsumer(AsyncWebsocketConsumer):
         self.session_id = None
         self.gemini_client = None
         self.gemini_session = None
+        self._gemini_cm = None
         self.recv_task = None
         self.closed = False
 
@@ -327,8 +328,9 @@ class GeminiLiveProxyConsumer(AsyncWebsocketConsumer):
                 ),
             }
 
-            # Establish Live session
-            self.gemini_session = await self.gemini_client.aio.live.connect(model=model, config=config)
+            # Establish Live session (async context manager)
+            self._gemini_cm = self.gemini_client.aio.live.connect(model=model, config=config)
+            self.gemini_session = await self._gemini_cm.__aenter__()
             logger.info("Gemini Live session established (model=%s)", model)
         except Exception as e:
             logging.exception("Failed to connect to Gemini Live API")
@@ -353,8 +355,8 @@ class GeminiLiveProxyConsumer(AsyncWebsocketConsumer):
         except Exception:
             pass
         try:
-            if self.gemini_session:
-                await self.gemini_session.close()
+            if getattr(self, "_gemini_cm", None):
+                await self._gemini_cm.__aexit__(None, None, None)
         except Exception:
             pass
 
