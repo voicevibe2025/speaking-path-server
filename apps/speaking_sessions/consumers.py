@@ -381,6 +381,26 @@ class GeminiLiveProxyConsumer(AsyncWebsocketConsumer):
 
             self._use_buffered_content = not hasattr(self.gemini_session, "send_realtime_input")
             logger.info("live: path selected = %s", "buffered_content" if self._use_buffered_content else "realtime_input")
+            # Reconnect to a TEXT-only Live model if we're on a native-audio model without realtime input
+            if self._use_buffered_content and "native-audio" in model:
+                logger.info("live: reconnecting to fallback TEXT model because runtime lacks realtime_input for native-audio")
+                try:
+                    await self._gemini_cm.__aexit__(None, None, None)
+                except Exception:
+                    pass
+                fallback_model = os.environ.get("GEMINI_LIVE_FALLBACK_MODEL", "gemini-live-2.5-flash-preview")
+                fallback_cfg = {"response_modalities": ["TEXT"], "system_instruction": {
+                    "role": "system",
+                    "parts": [{"text": (
+                        "You are Vivi, a friendly English tutor from Batam. "
+                        "Be warm, natural, youthfully energetic, and concise. "
+                        "Keep turns short to minimize latency."
+                    )}]}}
+                cm2 = self.gemini_client.aio.live.connect(model=fallback_model, config=fallback_cfg)
+                self.gemini_session = await cm2.__aenter__()
+                self._gemini_cm = cm2
+                model = fallback_model
+                logger.info("live: reconnected with fallback model=%s (TEXT only)", fallback_model)
         except Exception as e:
             logging.exception("Failed to connect to Gemini Live API")
             await self.close(code=4502)
@@ -392,15 +412,22 @@ class GeminiLiveProxyConsumer(AsyncWebsocketConsumer):
             "session_id": str(self.practice_session.session_id),
             "timestamp": datetime.now().isoformat(),
         })
-
         # Start forwarding Gemini -> client
         self.recv_task = asyncio.create_task(self._gemini_to_client_loop())
+
+        # Start forwarding Gemini -> client
 
     async def disconnect(self, close_code):
         self.closed = True
         try:
-            if self.recv_task and not self.recv_task.done():
+            if getattr(self, "recv_task", None):
                 self.recv_task.cancel()
+                try:
+                    await self.recv_task
+                except Exception:
+                    pass
+            if self.gemini_session:
+                await self.gemini_session.__aexit__(None, None, None)
         except Exception:
             pass
         try:
@@ -430,24 +457,39 @@ class GeminiLiveProxyConsumer(AsyncWebsocketConsumer):
                             # Buffered fallback: send aggregated audio as one turn
                             if self._audio_buf:
                                 logger.info("live: flushing buffered audio (%d bytes) with end_of_turn=True", len(self._audio_buf))
-                                await self.gemini_session.send(
-                                    input=types.LiveClientContent(
-                                        turns=[
-                                            types.Content(
-                                                role="user",
-                                                parts=[
-                                                    types.Part(
-                                                        inline_data=types.Blob(
-                                                            data=bytes(self._audio_buf),
-                                                            mime_type="audio/pcm;rate=16000",
+                                sent = False
+                                # Append ~300ms of silence to help VAD / end-of-turn on some backends
+                                payload = bytes(self._audio_buf) + (b"\x00" * int(0.3 * 16000 * 2))
+                                try:
+                                    if hasattr(types, "LiveClientRealtimeInput"):
+                                        logger.debug("live: flush via LiveClientRealtimeInput(media=Blob), end_of_turn=True")
+                                        await self.gemini_session.send(
+                                            input=types.LiveClientRealtimeInput(
+                                                media=types.Blob(data=payload, mime_type="audio/pcm;rate=16000")
+                                            ),
+                                            end_of_turn=True,
+                                        )
+                                        sent = True
+                                except Exception as e:
+                                    logger.warning("live: LCRI flush failed: %s", e)
+                                    sent = False
+                                if not sent:
+                                    logger.debug("live: flush via LiveClientContent(inline_data=Blob), end_of_turn=True")
+                                    await self.gemini_session.send(
+                                        input=types.LiveClientContent(
+                                            turns=[
+                                                types.Content(
+                                                    role="user",
+                                                    parts=[
+                                                        types.Part(
+                                                            inline_data=types.Blob(data=payload, mime_type="audio/pcm;rate=16000")
                                                         )
-                                                    )
-                                                ],
-                                            )
-                                        ]
-                                    ),
-                                    end_of_turn=True,
-                                )
+                                                    ],
+                                                )
+                                            ]
+                                        ),
+                                        end_of_turn=True,
+                                    )
                                 self._audio_buf.clear()
                             else:
                                 # No audio buffered; still mark end_of_turn
@@ -470,24 +512,38 @@ class GeminiLiveProxyConsumer(AsyncWebsocketConsumer):
                             logger.debug("live: barge_in via send(LiveClientContent, end_of_turn=True)")
                             if self._audio_buf:
                                 logger.info("live: barge_in flush buffered audio (%d bytes)", len(self._audio_buf))
-                                await self.gemini_session.send(
-                                    input=types.LiveClientContent(
-                                        turns=[
-                                            types.Content(
-                                                role="user",
-                                                parts=[
-                                                    types.Part(
-                                                        inline_data=types.Blob(
-                                                            data=bytes(self._audio_buf),
-                                                            mime_type="audio/pcm;rate=16000",
+                                sent = False
+                                payload = bytes(self._audio_buf) + (b"\x00" * int(0.3 * 16000 * 2))
+                                try:
+                                    if hasattr(types, "LiveClientRealtimeInput"):
+                                        logger.debug("live: barge_in flush via LiveClientRealtimeInput(media=Blob), end_of_turn=True")
+                                        await self.gemini_session.send(
+                                            input=types.LiveClientRealtimeInput(
+                                                media=types.Blob(data=payload, mime_type="audio/pcm;rate=16000")
+                                            ),
+                                            end_of_turn=True,
+                                        )
+                                        sent = True
+                                except Exception as e:
+                                    logger.warning("live: LCRI barge flush failed: %s", e)
+                                    sent = False
+                                if not sent:
+                                    logger.debug("live: barge_in flush via LiveClientContent(inline_data=Blob), end_of_turn=True")
+                                    await self.gemini_session.send(
+                                        input=types.LiveClientContent(
+                                            turns=[
+                                                types.Content(
+                                                    role="user",
+                                                    parts=[
+                                                        types.Part(
+                                                            inline_data=types.Blob(data=payload, mime_type="audio/pcm;rate=16000")
                                                         )
-                                                    )
-                                                ],
-                                            )
-                                        ]
-                                    ),
-                                    end_of_turn=True,
-                                )
+                                                    ],
+                                                )
+                                            ]
+                                        ),
+                                        end_of_turn=True,
+                                    )
                                 self._audio_buf.clear()
                             else:
                                 await self.gemini_session.send(
