@@ -287,6 +287,7 @@ class GeminiLiveProxyConsumer(AsyncWebsocketConsumer):
         self._gemini_cm = None
         self.recv_task = None
         self.closed = False
+        self.active_model = None
         # Fallback mode for SDKs without realtime_input: buffer mic until end_turn
         self._use_buffered_content = False
         self._audio_buf = bytearray()
@@ -370,6 +371,7 @@ class GeminiLiveProxyConsumer(AsyncWebsocketConsumer):
                         "Gemini Live connected (model=%s, google-genai=%s, has_send_realtime_input=%s)",
                         mdl, gn_version, hasattr(sess, "send_realtime_input")
                     )
+                    self.active_model = mdl
                     break
                 except Exception as exc:
                     last_error = exc
@@ -400,6 +402,7 @@ class GeminiLiveProxyConsumer(AsyncWebsocketConsumer):
                 self.gemini_session = await cm2.__aenter__()
                 self._gemini_cm = cm2
                 model = fallback_model
+                self.active_model = fallback_model
                 logger.info("live: reconnected with fallback model=%s (TEXT only)", fallback_model)
         except Exception as e:
             logging.exception("Failed to connect to Gemini Live API")
