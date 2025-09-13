@@ -13,9 +13,11 @@ import logging
 import os
 
 try:
-    import google.generativeai as genai
+    from google.genai.client import Client as GenAIClient
+    from google.genai import types
 except Exception:  # pragma: no cover - optional import in dev
-    genai = None
+    GenAIClient = None
+    types = None
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -297,24 +299,26 @@ class GeminiLiveProxyConsumer(AsyncWebsocketConsumer):
             return
 
         # Configure Gemini client
-        if genai is None:
+        if GenAIClient is None:
             await self.close(code=4500)
             return
-        api_key = os.environ.get('GEMINI_API_KEY') or os.environ.get('GOOGLE_API_KEY')
+        # Prefer GOOGLE_API_KEY; google-genai reads env automatically
+        api_key = os.environ.get('GOOGLE_API_KEY') or os.environ.get('GEMINI_API_KEY')
         if not api_key:
             await self.close(code=4501)
             return
         try:
-            genai.configure(api_key=api_key)
-            self.gemini_client = genai.Client()
+            self.gemini_client = GenAIClient()
 
+            model = os.environ.get("GEMINI_LIVE_MODEL", "gemini-2.5-flash-preview-native-audio-dialog")
             config = {
-                "model": os.environ.get("GEMINI_LIVE_MODEL", "gemini-live-2.5-flash-preview-native-audio"),
-                "response_modalities": ["AUDIO", "TEXT"],
-                # Voice and audio format; PCM 16k mono expected from client and returned
-                "audio_config": {
-                    "voice_name": os.environ.get("GEMINI_LIVE_VOICE", "Leda"),
-                    "mime_type": "audio/x-raw; rate=16000; encoding=pcm",
+                "response_modalities": ["AUDIO"],
+                "speech_config": {
+                    "voice_config": {
+                        "prebuilt_voice_config": {
+                            "voice_name": os.environ.get("GEMINI_LIVE_VOICE", "Leda")
+                        }
+                    }
                 },
                 "system_instruction": (
                     "You are Vivi, a friendly English tutor from Batam. "
@@ -324,7 +328,8 @@ class GeminiLiveProxyConsumer(AsyncWebsocketConsumer):
             }
 
             # Establish Live session
-            self.gemini_session = await self.gemini_client.aio.live.connect(config=config)
+            self.gemini_session = await self.gemini_client.aio.live.connect(model=model, config=config)
+            logger.info("Gemini Live session established (model=%s)", model)
         except Exception as e:
             logging.exception("Failed to connect to Gemini Live API")
             await self.close(code=4502)
@@ -362,17 +367,15 @@ class GeminiLiveProxyConsumer(AsyncWebsocketConsumer):
                 data = json.loads(text_data)
                 msg_type = data.get("type")
                 if msg_type == "end_stream":
-                    # Optionally signal input finished
+                    # Mark turn complete as per docs (text turns API). For audio, this helps close the turn.
                     try:
-                        await self.gemini_session.send_client_content(
-                            action="end_of_turn"
-                        )
+                        await self.gemini_session.send_client_content(turns=[], turn_complete=True)
                     except Exception:
                         pass
                 elif msg_type == "barge_in":
-                    # Client indicates user started speaking; interrupt model
+                    # For now, end the current turn to simulate interruption.
                     try:
-                        await self.gemini_session.send_client_content(action="interrupt")
+                        await self.gemini_session.send_client_content(turns=[], turn_complete=True)
                     except Exception:
                         pass
                 # Add more control messages as needed
@@ -381,39 +384,36 @@ class GeminiLiveProxyConsumer(AsyncWebsocketConsumer):
 
     async def _send_audio_to_gemini(self, audio_bytes: bytes):
         try:
-            await self.gemini_session.send_client_content(
-                audio={
-                    "data": audio_bytes,
-                    "mime_type": "audio/x-raw; rate=16000; encoding=pcm",
-                }
+            await self.gemini_session.send_realtime_input(
+                audio=types.Blob(data=audio_bytes, mime_type="audio/pcm;rate=16000")
             )
         except Exception as e:
             await self._send_json({"type": "error", "message": f"upstream audio error: {e}"})
 
     async def _gemini_to_client_loop(self):
         try:
-            async for event in self.gemini_session.receive():
-                # Forward audio chunks as binary frames
+            async for response in self.gemini_session.receive():
+                # Forward audio chunks (native audio output is 24kHz) as binary frames
                 try:
-                    audio = getattr(event, "audio", None)
-                    if audio and getattr(audio, "data", None):
-                        await self.send(bytes_data=audio.data)
+                    data = getattr(response, "data", None)
+                    if data:
+                        await self.send(bytes_data=data)
                         continue
                 except Exception:
                     pass
 
                 # Forward text responses as JSON
                 try:
-                    text = getattr(event, "text", None)
+                    text = getattr(response, "text", None)
                     if text:
                         await self._send_json({"type": "text", "text": text})
                         continue
                 except Exception:
                     pass
 
-                # Fallback: forward event metadata
+                # Fallback: forward event metadata if available
                 try:
-                    raw = getattr(event, "to_dict", None)
+                    raw = getattr(response, "to_dict", None)
                     if callable(raw):
                         await self._send_json({"type": "info", "event": raw()})
                 except Exception:
