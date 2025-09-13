@@ -7,6 +7,7 @@ from urllib.parse import parse_qs
 from django.contrib.auth.models import AnonymousUser
 from rest_framework_simplejwt.authentication import JWTAuthentication
 import logging
+from channels.db import database_sync_to_async
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +59,8 @@ class JwtAuthMiddleware:
 
             if raw:
                 validated = self.jwt_auth.get_validated_token(raw)
-                user = self.jwt_auth.get_user(validated)
+                # Wrap DB access in async-safe call
+                user = await database_sync_to_async(self.jwt_auth.get_user)(validated)
                 scope_user = user
                 logger.info("WS auth: validated user id=%s email=%s", getattr(user, "id", None), getattr(user, "email", None))
             else:

@@ -1095,31 +1095,11 @@ class GenerateTTSView(APIView):
             return Response({'detail': 'Missing or invalid "text"'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            # Deterministic cache key and path
+            # Configuration and deterministic cache
             sample_rate = 24000
-            model_name = 'gemini-2.5-flash-preview-tts'
             text_norm = ' '.join(text.split())
-            key_str = f"{model_name}|voice={voice_name}|rate={sample_rate}|text={text_norm}"
-            cache_hash = hashlib.sha256(key_str.encode('utf-8')).hexdigest()
-            relative_path = f"speaking_journey/tts/{cache_hash[:2]}/{cache_hash}.wav"
 
-            # If file already exists, return it immediately (no external API call)
-            if default_storage.exists(relative_path):
-                try:
-                    file_url = request.build_absolute_uri(default_storage.url(relative_path))
-                except Exception:
-                    base_url = request.build_absolute_uri(getattr(settings, 'MEDIA_URL', '/media/'))
-                    file_url = base_url.rstrip('/') + '/' + relative_path.lstrip('/')
-                return Response(
-                    {
-                        'audioUrl': file_url,
-                        'sampleRate': sample_rate,
-                        'voiceName': voice_name,
-                        'cached': True,
-                    },
-                    status=status.HTTP_200_OK
-                )
-
+            # API key
             api_key = (
                 getattr(settings, 'GEMINI_API_KEY', '') or
                 getattr(settings, 'GOOGLE_API_KEY', '') or
@@ -1130,77 +1110,153 @@ class GenerateTTSView(APIView):
                 logger.error('Server misconfiguration: GEMINI_API_KEY/GOOGLE_API_KEY not set')
                 return Response({'detail': 'Server misconfiguration: GEMINI_API_KEY/GOOGLE_API_KEY not set'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-            url = (
-                'https://generativelanguage.googleapis.com/v1beta/models/'
-                'gemini-2.5-flash-preview-tts:generateContent'
+            # Candidate models: prefer override, then stable TTS-capable models
+            preferred_model = (
+                getattr(settings, 'GEMINI_TTS_MODEL', '') or
+                os.environ.get('GEMINI_TTS_MODEL', '') or
+                'gemini-2.5-flash-tts'
             )
+            candidate_models = [
+                preferred_model,
+                'gemini-2.5-flash',
+                'gemini-2.5-flash-latest',
+                'gemini-1.5-flash',
+            ]
+            # de-duplicate while preserving order
+            seen = set()
+            models = []
+            for m in candidate_models:
+                if m and m not in seen:
+                    seen.add(m)
+                    models.append(m)
 
-            payload = {
-                'model': 'gemini-2.5-flash-preview-tts',
-                'contents': [{
-                    'parts': [{ 'text': text.strip() }]
-                }],
-                'generationConfig': {
-                    'responseModalities': ['AUDIO'],
-                    'speechConfig': {
-                        'voiceConfig': {
-                            'prebuiltVoiceConfig': { 'voiceName': voice_name }
+            # 1) Return from cache if any prior model variant already generated this text
+            for m in models:
+                key_str = f"{m}|voice={voice_name}|rate={sample_rate}|text={text_norm}"
+                cache_hash = hashlib.sha256(key_str.encode('utf-8')).hexdigest()
+                relative_path = f"speaking_journey/tts/{cache_hash[:2]}/{cache_hash}.wav"
+                if default_storage.exists(relative_path):
+                    try:
+                        file_url = request.build_absolute_uri(default_storage.url(relative_path))
+                    except Exception:
+                        base_url = request.build_absolute_uri(getattr(settings, 'MEDIA_URL', '/media/'))
+                        file_url = base_url.rstrip('/') + '/' + relative_path.lstrip('/')
+                    return Response(
+                        {
+                            'audioUrl': file_url,
+                            'sampleRate': sample_rate,
+                            'voiceName': voice_name,
+                            'cached': True,
+                        },
+                        status=status.HTTP_200_OK
+                    )
+
+            last_status = None
+            last_body = None
+
+            # 2) Try each candidate model until one succeeds
+            for m in models:
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent"
+                payload = {
+                    'model': m,
+                    'contents': [{
+                        'role': 'user',
+                        'parts': [{ 'text': text.strip() }]
+                    }],
+                    'generationConfig': {
+                        'responseModalities': ['AUDIO'],
+                        'responseMimeType': 'audio/pcm',
+                        'speechConfig': {
+                            'voiceConfig': {
+                                'prebuiltVoiceConfig': { 'voiceName': voice_name }
+                            }
                         }
                     }
                 }
-            }
-            headers = {
-                'x-goog-api-key': api_key,
-                'Content-Type': 'application/json'
-            }
+                headers = {
+                    'x-goog-api-key': api_key,
+                    'Content-Type': 'application/json'
+                }
 
-            resp = requests.post(url, json=payload, headers=headers, timeout=60)
-            if resp.status_code != 200:
-                detail = resp.text
-                logger.error('Gemini TTS request failed', extra={'status_code': resp.status_code, 'body': detail[:1000]})
+                resp = requests.post(url, json=payload, headers=headers, timeout=30)
+                if resp.status_code != 200:
+                    last_status = resp.status_code
+                    last_body = resp.text
+                    # Include status/body snippet in log message for easier Railway debugging
+                    snippet = (resp.text or '')[:300]
+                    try:
+                        logger.error('Gemini TTS request failed: status=%s model=%s body=%s', resp.status_code, m, snippet)
+                    except Exception:
+                        logger.error('Gemini TTS request failed for model=%s (status=%s)', m, resp.status_code)
+                    continue
+
+                data = resp.json()
+                # Extract audio inlineData from parts
+                b64 = None
+                try:
+                    parts = data['candidates'][0]['content']['parts']
+                    for p in parts:
+                        if isinstance(p, dict) and 'inlineData' in p and 'data' in p['inlineData']:
+                            b64 = p['inlineData']['data']
+                            break
+                except Exception:
+                    b64 = None
+                if not b64:
+                    # Legacy single-part shape fallback
+                    try:
+                        b64 = data['candidates'][0]['content']['parts'][0]['inlineData']['data']
+                    except Exception:
+                        try:
+                            snippet = json.dumps(data)[:300]
+                        except Exception:
+                            snippet = str(data)[:300]
+                        logger.error('Gemini TTS response missing inlineData for model=%s: %s', m, snippet)
+                        last_status = 502
+                        last_body = snippet
+                        continue
+
+                # Decode PCM (s16le, 24kHz, mono) to WAV
+                pcm_bytes = base64.b64decode(b64)
+                buf = io.BytesIO()
+                with wave.open(buf, 'wb') as wf:
+                    wf.setnchannels(1)
+                    wf.setsampwidth(2)  # 16-bit PCM
+                    wf.setframerate(sample_rate)
+                    wf.writeframes(pcm_bytes)
+                wav_bytes = buf.getvalue()
+
+                # Persist to media storage under deterministic cache path tied to the working model
+                key_str = f"{m}|voice={voice_name}|rate={sample_rate}|text={text_norm}"
+                cache_hash = hashlib.sha256(key_str.encode('utf-8')).hexdigest()
+                relative_path = f"speaking_journey/tts/{cache_hash[:2]}/{cache_hash}.wav"
+                saved_path = default_storage.save(relative_path, ContentFile(wav_bytes))
+                try:
+                    file_url = request.build_absolute_uri(default_storage.url(saved_path))
+                except Exception:
+                    # Fallback to constructing from MEDIA_URL
+                    base_url = request.build_absolute_uri(getattr(settings, 'MEDIA_URL', '/media/'))
+                    file_url = base_url.rstrip('/') + '/' + saved_path.lstrip('/')
+
                 return Response(
-                    {'detail': 'Gemini TTS request failed', 'status': resp.status_code, 'body': detail[:800]},
-                    status=status.HTTP_502_BAD_GATEWAY
+                    {
+                        'audioUrl': file_url,
+                        'sampleRate': sample_rate,
+                        'voiceName': voice_name,
+                        'cached': False,
+                    },
+                    status=status.HTTP_200_OK
                 )
 
-            data = resp.json()
-            try:
-                b64 = (
-                    data['candidates'][0]['content']['parts'][0]['inlineData']['data']
-                )
-            except Exception:
+            # All candidates failed
+            if last_status == 429:
+                # Rate limit: surface as 503 to encourage client retry/backoff
                 return Response(
-                    {'detail': 'Unexpected response format from Gemini', 'response': data},
-                    status=status.HTTP_502_BAD_GATEWAY
+                    {'detail': 'Gemini TTS rate limited', 'status': last_status, 'body': (last_body or '')[:800]},
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE
                 )
-
-            # Decode PCM (s16le, 24kHz, mono) to WAV
-            pcm_bytes = base64.b64decode(b64)
-            buf = io.BytesIO()
-            with wave.open(buf, 'wb') as wf:
-                wf.setnchannels(1)
-                wf.setsampwidth(2)  # 16-bit PCM
-                wf.setframerate(sample_rate)
-                wf.writeframes(pcm_bytes)
-            wav_bytes = buf.getvalue()
-
-            # Persist to media storage under deterministic cache path for HTTP streaming via GET
-            saved_path = default_storage.save(relative_path, ContentFile(wav_bytes))
-            try:
-                file_url = request.build_absolute_uri(default_storage.url(saved_path))
-            except Exception:
-                # Fallback to constructing from MEDIA_URL
-                base_url = request.build_absolute_uri(getattr(settings, 'MEDIA_URL', '/media/'))
-                file_url = base_url.rstrip('/') + '/' + saved_path.lstrip('/')
-
             return Response(
-                {
-                    'audioUrl': file_url,
-                    'sampleRate': sample_rate,
-                    'voiceName': voice_name,
-                    'cached': False,
-                },
-                status=status.HTTP_200_OK
+                {'detail': 'Gemini TTS request failed', 'status': last_status, 'body': (last_body or '')[:800]},
+                status=status.HTTP_502_BAD_GATEWAY
             )
 
         except Exception as e:
