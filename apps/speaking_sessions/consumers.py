@@ -11,6 +11,7 @@ from django.contrib.auth import get_user_model
 from .models import PracticeSession, AudioRecording, RealTimeTranscript
 import logging
 import os
+import importlib.metadata as metadata
 
 try:
     from google.genai.client import Client as GenAIClient
@@ -312,6 +313,10 @@ class GeminiLiveProxyConsumer(AsyncWebsocketConsumer):
             self.gemini_client = GenAIClient()
 
             model = os.environ.get("GEMINI_LIVE_MODEL", "gemini-2.5-flash-preview-native-audio-dialog")
+            try:
+                gn_version = metadata.version("google-genai")
+            except Exception:
+                gn_version = "unknown"
             config = {
                 "response_modalities": ["AUDIO"],
                 "speech_config": {
@@ -338,7 +343,7 @@ class GeminiLiveProxyConsumer(AsyncWebsocketConsumer):
             # Establish Live session (async context manager)
             self._gemini_cm = self.gemini_client.aio.live.connect(model=model, config=config)
             self.gemini_session = await self._gemini_cm.__aenter__()
-            logger.info("Gemini Live session established (model=%s)", model)
+            logger.info("Gemini Live session established (model=%s, google-genai=%s)", model, gn_version)
         except Exception as e:
             logging.exception("Failed to connect to Gemini Live API")
             await self.close(code=4502)
@@ -376,9 +381,13 @@ class GeminiLiveProxyConsumer(AsyncWebsocketConsumer):
                 data = json.loads(text_data)
                 msg_type = data.get("type")
                 if msg_type == "end_stream":
-                    # Mark turn complete as per docs (text turns API). For audio, this helps close the turn.
+                    # Prefer ending the realtime audio stream explicitly if supported.
                     try:
-                        await self.gemini_session.send_client_content(turns=[], turn_complete=True)
+                        if hasattr(self.gemini_session, "send_realtime_input"):
+                            await self.gemini_session.send_realtime_input(audio_stream_end=True)
+                        else:
+                            # Fallback: close turn using client content
+                            await self.gemini_session.send_client_content(turns=[], turn_complete=True)
                     except Exception:
                         pass
                 elif msg_type == "barge_in":
@@ -394,23 +403,19 @@ class GeminiLiveProxyConsumer(AsyncWebsocketConsumer):
     async def _send_audio_to_gemini(self, audio_bytes: bytes):
         try:
             if hasattr(self.gemini_session, "send_realtime_input"):
-                # Preferred API (new SDKs)
+                # Preferred API (new SDKs). Use the explicit 'audio' parameter.
                 await self.gemini_session.send_realtime_input(
-                    media=types.Blob(data=audio_bytes, mime_type="audio/pcm;rate=16000")
+                    audio=types.Blob(data=audio_bytes, mime_type="audio/pcm;rate=16000")
                 )
             else:
-                # Fallback for older SDKs: use deprecated generic send() with realtime_input shape
-                b64 = base64.b64encode(audio_bytes).decode("ascii")
-                await self.gemini_session.send(
-                    input={
-                        "realtime_input": {
-                            "media": {"mime_type": "audio/pcm;rate=16000", "data": b64}
-                        }
-                    },
-                    end_of_turn=False,
-                )
+                # No supported realtime API in this SDK version
+                raise RuntimeError("Realtime input not supported by installed google-genai version")
         except Exception as e:
-            await self._send_json({"type": "error", "message": f"upstream audio error: {e}"})
+            # Avoid dumping large base64 payloads in error text
+            msg = str(e)
+            if len(msg) > 240:
+                msg = msg[:240] + "…"
+            await self._send_json({"type": "error", "message": f"upstream audio error: {msg}"})
 
     async def _gemini_to_client_loop(self):
         try:
