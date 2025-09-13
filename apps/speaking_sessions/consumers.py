@@ -389,11 +389,15 @@ class GeminiLiveProxyConsumer(AsyncWebsocketConsumer):
                     # Prefer ending the realtime audio stream explicitly if supported.
                     try:
                         if hasattr(self.gemini_session, "send_realtime_input"):
+                            logger.debug("live: end_stream via realtime_input(audio_stream_end=True)")
                             await self.gemini_session.send_realtime_input(audio_stream_end=True)
                         else:
-                            # Fallback: use deprecated send with minimal content and end_of_turn=True
+                            # Fallback: use deprecated send with LiveClientContent wrapper
+                            logger.debug("live: end_stream via send(LiveClientContent, end_of_turn=True)")
                             await self.gemini_session.send(
-                                input=types.Content(role="user", parts=[]),
+                                input=types.LiveClientContent(
+                                    turns=[types.Content(role="user", parts=[])]
+                                ),
                                 end_of_turn=True,
                             )
                     except Exception:
@@ -402,10 +406,14 @@ class GeminiLiveProxyConsumer(AsyncWebsocketConsumer):
                     # For now, end the current turn to simulate interruption.
                     try:
                         if hasattr(self.gemini_session, "send_realtime_input"):
+                            logger.debug("live: barge_in via realtime_input(audio_stream_end=True)")
                             await self.gemini_session.send_realtime_input(audio_stream_end=True)
                         else:
+                            logger.debug("live: barge_in via send(LiveClientContent, end_of_turn=True)")
                             await self.gemini_session.send(
-                                input=types.Content(role="user", parts=[]),
+                                input=types.LiveClientContent(
+                                    turns=[types.Content(role="user", parts=[])]
+                                ),
                                 end_of_turn=True,
                             )
                     except Exception:
@@ -418,6 +426,7 @@ class GeminiLiveProxyConsumer(AsyncWebsocketConsumer):
         try:
             if hasattr(self.gemini_session, "send_realtime_input"):
                 # Preferred API (newer SDKs). Use the generic 'media' parameter for compatibility.
+                logger.debug("live: send chunk via send_realtime_input(media=Blob[pcm16k])")
                 await self.gemini_session.send_realtime_input(
                     media=types.Blob(data=audio_bytes, mime_type="audio/pcm;rate=16000")
                 )
@@ -426,6 +435,7 @@ class GeminiLiveProxyConsumer(AsyncWebsocketConsumer):
                 sent = False
                 if hasattr(types, "LiveClientRealtimeInput"):
                     try:
+                        logger.debug("live: send chunk via send(LiveClientRealtimeInput(media=Blob))")
                         await self.gemini_session.send(
                             input=types.LiveClientRealtimeInput(
                                 media=types.Blob(data=audio_bytes, mime_type="audio/pcm;rate=16000")
@@ -437,10 +447,22 @@ class GeminiLiveProxyConsumer(AsyncWebsocketConsumer):
                         sent = False
                 if not sent:
                     # Ultimate fallback: send minimal Content with inline_data bytes part
+                    logger.debug("live: send chunk via send(LiveClientContent(turns=[Content(parts=[inline_data=Blob])]))")
                     await self.gemini_session.send(
-                        input=types.Content(
-                            role="user",
-                            parts=[types.Part(inline_data=types.Blob(data=audio_bytes, mime_type="audio/pcm;rate=16000"))],
+                        input=types.LiveClientContent(
+                            turns=[
+                                types.Content(
+                                    role="user",
+                                    parts=[
+                                        types.Part(
+                                            inline_data=types.Blob(
+                                                data=audio_bytes,
+                                                mime_type="audio/pcm;rate=16000",
+                                            )
+                                        )
+                                    ],
+                                )
+                            ]
                         ),
                         end_of_turn=False,
                     )
