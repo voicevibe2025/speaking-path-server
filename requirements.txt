@@ -3,6 +3,7 @@ Django==4.2.5
 djangorestframework==3.14.0
 django-cors-headers==4.2.0
 
+## Non django dependencies
 # WebSocket Support
 channels==4.0.0
 channels-redis==4.1.0
