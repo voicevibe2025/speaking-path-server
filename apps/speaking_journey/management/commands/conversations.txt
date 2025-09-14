@@ -41,35 +41,38 @@ B: No problem. Enjoy your time in Batam!
 
 Topic: Hobbies and Interests
 
-A: So, what do you like to do in your free time?
-B: I'm really into photography. I love taking pictures of nature on the weekends.What about you? Do you have any hobbies?
-A: I enjoy cooking. I try to make a new recipe every Sunday.
-B: Oh, really? How long have you been doing that?
-A: For about a year now. It's a great way to relax.
+A: What do you usually do on weekends?
+B: I like photography. I often take nature photos.
+A: Oh nice! Do you go to the beach?
+B: Yes, sometimes Barelang Bridge area. What about you? Do you have any hobbies?.
+A: Sounds great! I usually cook when I’m free.
+B: Really? What dishes do you like making most?
+A: I try new recipes every Sunday. It’s fun.
+B: Cool! Cooking must be relaxing after school or work.
 
 ---
 
 Topic: Ordering Food
 
-Waiter: Good evening. Here's the menu. What would you like to order?
-A: Thanks. Could I get a chicken sandwich and a lemonade, please?
-Waiter: Of course. Would you like any sides with that?
-A: Yes, fries please. Do you have any vegetarian options?
-Waiter: Yes, we have a veggie burger and a salad.
-A: Great, I'll take the veggie burger for my friend.
+A: Good evening. Here’s the menu. What would you like to order?
+B: Thanks. Could I have Mie Tarempa and an iced cincau please?
+A: Of course. Would you like any side dishes with that?
+B: Yes, gonggong please. Do you have any vegetarian options?
+A: Yes, we can make Mie Lendir without meat or seafood, and we also have ulam.
+B: Great, I’ll take the Mie Lendir for my friend.
 
 ---
 
 Topic: Time and Dates
 
-A: Excuse me, what time is it?
-B: It's half past two.
-A: Thanks! Do you know what day it is today?
-B: Yes, it's Wednesday.
-A: Oh, right. What's the date today?
-B: It's March 15th. Why?
-A: Because tomorrow is my birthday!
-
+A: Hey Sarah, what time is it?
+B: It’s half past two. Are you going somewhere?
+A: Yeah, thanks. Wait… what day is it today?
+B: It’s Wednesday. Did you forget again?
+A: Maybe. And what’s today’s date?
+B: March 15th. Why are you asking?
+A: Tomorrow is my birthday, I just remembered!
+B: Oh wow! Happy early birthday then.
 ---
 
 Topic: Shopping and Prices
