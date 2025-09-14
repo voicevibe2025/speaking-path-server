@@ -1114,10 +1114,11 @@ class GenerateTTSView(APIView):
             preferred_model = (
                 getattr(settings, 'GEMINI_TTS_MODEL', '') or
                 os.environ.get('GEMINI_TTS_MODEL', '') or
-                'gemini-2.5-flash-tts'
+                'gemini-2.5-flash-preview-tts'
             )
             candidate_models = [
                 preferred_model,
+                'gemini-2.5-flash-tts',
                 'gemini-2.5-flash',
                 'gemini-2.5-flash-latest',
                 'gemini-1.5-flash',
@@ -1165,7 +1166,6 @@ class GenerateTTSView(APIView):
                     }],
                     'generationConfig': {
                         'responseModalities': ['AUDIO'],
-                        'responseMimeType': 'audio/pcm',
                         'speechConfig': {
                             'voiceConfig': {
                                 'prebuiltVoiceConfig': { 'voiceName': voice_name }

@@ -146,44 +146,53 @@ A: Okay, I'll take it.
 Topic: Running Errands
 
 A: What are you up to this afternoon?
-B: I have to run a few errands. I need to go to the post office and the grocery store.
-A: Oh, while you're at the grocery store, could you pick up some bread?
-B: Sure, no problem. Anything else?
-A: No, that's it. Thanks!
-B: You're welcome. I'll see you later.
+B: I need to run a few errands—first to the post office, then to Nagoya Hill for some groceries.
+A: Oh, if you’re going to Nagoya Hill, could you buy some bread?
+B: Sure. Do you want me to get Gardenia or the local bakery one?
+A: The local bakery one, please. It tastes fresher.
+B: Okay, noted. Do you need anything else while I’m there?
+A: Maybe some eggs if they’re not too expensive.
+B: No problem. I’ll bring them over later this evening.
 
 ---
 
 Topic: Catching Up After Class
 
-A: Hey, how did you find the class today?
-B: It was interesting, but a bit difficult. I'm not sure I understood everything about the last topic.
-A: Me neither. Do you want to review the notes together sometime?
-B: That's a great idea. Are you free tomorrow afternoon?
-A: Yeah, I am. Let's meet at the library around 2 PM.
-B: Sounds good. See you then!
+A: Hey, how was class?
+B: Not bad, but math was kinda tough today.
+A: Tell me about it. Did you get what the teacher explained?
+B: Honestly, not really. I was totally lost.
+A: Same here. Wanna go over it together later?
+B: Yeah, that’d help. Library after school?
+A: Sure, and if we’re still confused, we can ask the teacher tomorrow.
+B: Deal. See you later!
 
 ---
 
 Topic: Transportation
 
 A: Excuse me, what time is the next bus to downtown?
-B: The next one leaves in 10 minutes, from platform 5.
-A: Great, thank you. How much is the fare?
-B: It's 5,000 rupiah for a single trip.
-A: Can I buy a ticket on the bus?
+B: The next bus leaves in 10 minutes from platform 5.
+A: Oh, that’s soon. How much is the fare?
+B: It’s 5,000 rupiah for one trip.
+A: Okay, can I buy the ticket on the bus?
 B: Yes, you can pay the driver directly.
+A: Do I need the exact money, or can I give a bigger bill?
+B: Better to have small change. The driver may not have enough.
+A: Got it. Thanks a lot!
+B: You’re welcome. Have a safe trip!
 
 ---
 
 Topic: How Old Are You?
 
-A: If you don't mind me asking, how old are you?
-B: I'm 30. How about you?
-A: I'm 28. My birthday was last month.
-B: Oh, happy belated birthday! When were you born?
-A: I was born in 1996.
-B: I see. We're about the same age.
+A: Hey, how old are you?
+B: I’m 19. You?
+A: I’m 18, just turned last month.
+B: Oh nice, happy late birthday! When’s your birthday?
+A: August 5th.
+B: Cool, mine’s in November. So we’re only a year apart.
+A: Yeah, pretty much the same age.
 
 ---
 
