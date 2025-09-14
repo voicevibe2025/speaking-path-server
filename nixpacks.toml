@@ -9,7 +9,7 @@ nixPkgs = ["...", "ffmpeg"]
 [phases.install]
 # Install strictly from the Django requirements to avoid conflicting root requirements
 cmds = [
-  "python -m venv --copies /opt/venv && . /opt/venv/bin/activate && pip install --upgrade pip setuptools wheel && pip install -r /app/django/requirements.txt"
+  "python -m venv --copies /opt/venv && . /opt/venv/bin/activate && pip install --upgrade pip setuptools wheel && pip install -r requirements.txt"
 ]
 
 [start]
