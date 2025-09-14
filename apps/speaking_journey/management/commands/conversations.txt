@@ -28,14 +28,14 @@ B: I relax, study, and sometimes go to Barelang.
 
 Topic: Asking for Directions
 
-A: Excuse me, could you tell me how to get to the train station?
-B: Sure. Just go straight for about five minutes, then turn left at the traffic light.
+A: Excuse me, could you tell me how to get to Nagoya Hill Mall?
+B: Sure. Go straight for five minutes, then turn right at the traffic light.
 A: Is it walking distance, or should I take a bus?
-B: It's pretty close, you can walk. It's only a couple of blocks away.
-A: Okay, so straight ahead and then left at the light, right?
-B: That's right. You'll see the station on your right-hand side.
+B: It’s pretty close, you can walk. Only a few blocks away.
+A: Okay, so straight ahead and then right at the light, right?
+B: That’s right. You’ll see the mall on your left.
 A: Perfect, thanks a lot!
-B: No problem. Have a good day!
+B: No problem. Enjoy your time in Batam!
 
 ---
 
