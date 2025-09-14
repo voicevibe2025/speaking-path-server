@@ -9,9 +9,9 @@ nixPkgs = ["...", "ffmpeg"]
 [phases.install]
 # Install strictly from the Django requirements to avoid conflicting root requirements
 cmds = [
-  "python -m venv --copies /opt/venv && . /opt/venv/bin/activate && pip install --upgrade pip setuptools wheel && pip install -r /app/django/requirements.txt"
+  "python -m venv --copies /opt/venv && . /opt/venv/bin/activate && pip install --upgrade pip setuptools wheel && ( [ -f django/requirements.txt ] && pip install -r django/requirements.txt || pip install -r requirements.txt )"
 ]
 
 [start]
 # Ensure Python can import the Django project when started from /app
-cmd = "PYTHONPATH=/app/django daphne -b 0.0.0.0 -p ${PORT:-8000} core.asgi:application"
+cmd = "PYTHONPATH=django:. daphne -b 0.0.0.0 -p ${PORT:-8000} core.asgi:application"

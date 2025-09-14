@@ -120,19 +120,6 @@ A: Thanks for the heads up!
 
 ---
 
-Topic: Shopping
-
-A: Excuse me, how much is this T-shirt?
-B: It's 150,000 rupiah.
-A: Do you have it in a larger size?
-B: Yes, we have medium and large. Would you like to try it on?
-A: Yes, please.
-B: Here you go. The fitting room is over there.
-A: It fits well. I'll take it, please. Do you accept credit cards?
-B: Yes, we do. Please come to the cashier.
-
----
-
 Topic: Calling for Help
 
 A: Help! Somebody stole my wallet!
@@ -146,12 +133,12 @@ B: Of course, here you go.
 
 Topic: At the Post Office
 
-A: Hi, I'd like to send this package to Australia.
-Clerk: Okay, please put it on the scale. It's 500 grams.
+A: Hi, I'd like to send this package to Batam.
+B: Okay, please put it on the scale. It's 500 grams.
 A: How much will that be?
-Clerk: That will be 250,000 rupiah for standard shipping.
+B: That will be 250,000 rupiah for standard shipping.
 A: How long will it take to get there?
-Clerk: About 7 to 10 business days.
+B: About 7 to 10 business days.
 A: Okay, I'll take it.
 
 ---
