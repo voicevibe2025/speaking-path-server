@@ -6,7 +6,10 @@ import os
 import json
 import asyncio
 import aiohttp
-import openai
+try:
+    import openai  # Optional dependency; only used if OPENAI_API_KEY is set
+except Exception:  # pragma: no cover - optional dependency not installed
+    openai = None
 from typing import Dict, List, Optional, Any
 import base64
 import tempfile
@@ -92,8 +95,10 @@ class LLMEvaluationService:
         self.anthropic_api_key = os.getenv('ANTHROPIC_API_KEY')
         self.model = "gpt-4"
 
-        if self.openai_api_key:
+        if self.openai_api_key and openai is not None:
             openai.api_key = self.openai_api_key
+        elif self.openai_api_key and openai is None:
+            logger.info("OpenAI SDK not installed; skipping OpenAI init")
 
     async def evaluate_pronunciation(
         self,
