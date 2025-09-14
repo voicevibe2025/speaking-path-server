@@ -90,22 +90,33 @@ B: Yes, we do. Please come to the cashier.
 
 Topic: A Telephone Call
 
-A: Hello, this is John.
-B: Hi John, this is Sarah. Is Mike there?
-A: I'm sorry, he's not in right now. Can I take a message?
-B: Yes, please. Could you ask him to call me back? My number is 555-1234.
-A: Sure, I'll let him know.
-B: Thanks a lot. Goodbye.
+A: Hello? Ridwan here.
+B: Hi Ridwan, it’s Melia. Can I talk to Fajar?
+A: Sorry, you’re breaking up a bit. Who’s calling?
+B: It’s Melia. Is Fajar around?
+A: Hold on, let me check…
+B: Sure, I’ll wait.
+A: Thanks. He’s not home right now. Want to leave a message?
+B: Yeah, please ask him to call me back.
+A: Okey, I’ll tell him.
+B: Thanks a lot. Talk to you later.
+A: No problem. Bye.
 
 ---
 
 Topic: Weather Report
 
-A: What's the weather like today?
-B: It's sunny and warm, perfect for a walk.
-A: That's great! What's the forecast for tomorrow?
-B: It's supposed to be cloudy and a bit cooler.
-A: I see. I should probably bring a jacket then.
+A: What’s the weather like today?
+B: It’s sunny and pretty warm, perfect for a walk.
+A: That sounds nice. Is it windy at all?
+B: Not really, just a light breeze.
+A: Great, then I might go to the park this afternoon.
+B: Good idea. It’s a nice day to be outside.
+A: What about tomorrow’s forecast?
+B: It’s supposed to be cloudy and a bit cooler.
+A: Hmm, should I bring a jacket if I go out?
+B: Yeah, that would be smart. It might even rain later in the evening.
+A: Thanks for the heads up!
 
 ---
 
