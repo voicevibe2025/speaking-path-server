@@ -44,6 +44,29 @@ if _db_url_raw:
         DATABASES["default"]["OPTIONS"].setdefault("sslmode", "require")
 # else fall back to base.py DB_* variables
 
+# Connection persistence (helps reduce reconnect churn)
+if "default" in DATABASES:
+    DATABASES["default"]["CONN_MAX_AGE"] = env.int("CONN_MAX_AGE", default=60)
+
+# Optional: force IPv4 for DB connections when the platform lacks IPv6 egress
+# When FORCE_IPV4_DB=true, resolve the DB host to IPv4 and pass it via psycopg2's hostaddr.
+# This preserves HOST for clarity while ensuring IPv4 is used.
+FORCE_IPV4_DB = env.bool("FORCE_IPV4_DB", default=False)
+if FORCE_IPV4_DB and "default" in DATABASES:
+    try:
+        import socket
+        db_host = DATABASES["default"].get("HOST")
+        if db_host:
+            info = socket.getaddrinfo(db_host, None, family=socket.AF_INET, type=socket.SOCK_STREAM)
+            if info:
+                ipv4_addr = info[0][4][0]
+                DATABASES["default"].setdefault("OPTIONS", {})
+                # psycopg2/libpq will honor hostaddr when provided
+                DATABASES["default"]["OPTIONS"]["hostaddr"] = ipv4_addr
+    except Exception:
+        # Do not crash if resolution fails; just skip forcing IPv4
+        pass
+
 # --- CORS ---
 CORS_ALLOW_ALL_ORIGINS = env.bool("CORS_ALLOW_ALL_ORIGINS", default=False)
 if not CORS_ALLOW_ALL_ORIGINS:

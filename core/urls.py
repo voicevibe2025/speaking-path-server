@@ -7,6 +7,7 @@ from django.http import JsonResponse
 from django.conf import settings
 from django.conf.urls.static import static
 from django.views.static import serve as static_serve
+from django.db import connection
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
 
 # API version prefix
@@ -18,6 +19,9 @@ urlpatterns = [
 
     # Healthcheck
     path('health/', lambda request: JsonResponse({"status": "ok"})),
+    path('health/db/', lambda request: (lambda: (
+        (lambda: (connection.cursor().execute("SELECT 1"), JsonResponse({"status": "ok"}))[1])()
+    ))() if True else JsonResponse({"status": "ok"})),
 
     # Friendly index for root path
     path('', lambda request: JsonResponse({
