@@ -13,6 +13,14 @@ class PhraseProgressSerializer(serializers.Serializer):
     isAllPhrasesCompleted = serializers.BooleanField()
 
 
+class PracticeScoresSerializer(serializers.Serializer):
+    pronunciation = serializers.IntegerField()
+    fluency = serializers.IntegerField()
+    vocabulary = serializers.IntegerField()
+    average = serializers.FloatField()
+    meetsRequirement = serializers.BooleanField()
+
+
 class SpeakingTopicDtoSerializer(serializers.Serializer):
     id = serializers.CharField()
     title = serializers.CharField()
@@ -23,6 +31,7 @@ class SpeakingTopicDtoSerializer(serializers.Serializer):
     fluencyPracticePrompts = serializers.ListField(child=serializers.CharField(), required=False)
     fluencyProgress = serializers.DictField(child=serializers.JSONField(), required=False)
     phraseProgress = PhraseProgressSerializer(required=False)
+    practiceScores = PracticeScoresSerializer(required=False)
     unlocked = serializers.BooleanField()
     completed = serializers.BooleanField()
 

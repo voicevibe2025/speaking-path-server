@@ -138,22 +138,64 @@ def _cache_set(word: str, definition: str):
 
 def _compute_unlocks(user):
     topics = list(Topic.objects.filter(is_active=True).order_by('sequence'))
-    completed_sequences = set(
-        TopicProgress.objects.filter(user=user, completed=True, topic__is_active=True)
-        .values_list('topic__sequence', flat=True)
-    )
+    
+    # Get all topic progress for the user
+    topic_progress = {
+        tp.topic.sequence: tp 
+        for tp in TopicProgress.objects.filter(user=user, topic__is_active=True)
+        .select_related('topic')
+    }
+    
+    completed_sequences = set()
     unlocked_sequences = set()
+    
     if topics:
-        unlocked_sequences.add(topics[0].sequence)
+        unlocked_sequences.add(topics[0].sequence)  # First topic always unlocked
+    
     for t in topics:
-        if t.sequence in completed_sequences:
+        tp = topic_progress.get(t.sequence)
+        
+        # Check if this topic meets the new completion criteria
+        if tp and _meets_completion_criteria(tp):
+            completed_sequences.add(t.sequence)
             unlocked_sequences.add(t.sequence)
-        else:
-            # Unlock if previous is completed
-            prev_seq = t.sequence - 1
-            if prev_seq in completed_sequences:
-                unlocked_sequences.add(t.sequence)
+            
+            # Unlock next topic if it exists
+            next_topic = next((topic for topic in topics if topic.sequence == t.sequence + 1), None)
+            if next_topic:
+                unlocked_sequences.add(next_topic.sequence)
+        elif t.sequence in unlocked_sequences:
+            # Keep already unlocked topics unlocked
+            pass
+    
     return topics, completed_sequences, unlocked_sequences
+
+
+def _meets_completion_criteria(topic_progress):
+    """
+    Check if a topic meets the new completion criteria:
+    - All 3 main practices (pronunciation, fluency, vocabulary) must be completed
+    - Average score of the 3 practices must be >= 75
+    """
+    # Check if all 3 main practices are completed
+    if not (topic_progress.pronunciation_completed and 
+            topic_progress.fluency_completed and 
+            topic_progress.vocabulary_completed):
+        return False
+    
+    # Calculate average score of the 3 practices
+    scores = [
+        topic_progress.pronunciation_total_score or 0,
+        topic_progress.fluency_total_score or 0,
+        topic_progress.vocabulary_total_score or 0
+    ]
+    
+    # Ensure all practices have been attempted (score > 0)
+    if any(score <= 0 for score in scores):
+        return False
+    
+    average_score = sum(scores) / len(scores)
+    return average_score >= 75
 
 
 def _normalize_text(text):
@@ -637,6 +679,24 @@ class SpeakingTopicsView(APIView):
             fluency_completed = (len(fprompts) > 0) and (next_prompt_index is None)
             fluency_total_score = int(tp.fluency_total_score or 0)
 
+            # Build practice scores data
+            pronunciation_score = int(tp.pronunciation_total_score or 0)
+            vocabulary_score = int(tp.vocabulary_total_score or 0)
+            
+            # Calculate average and check if requirements are met
+            scores = [pronunciation_score, fluency_total_score, vocabulary_score]
+            has_all_scores = all(score > 0 for score in scores)
+            average_score = sum(scores) / len(scores) if has_all_scores else 0
+            meets_requirement = has_all_scores and average_score >= 75
+            
+            practice_scores_data = {
+                'pronunciation': pronunciation_score,
+                'fluency': fluency_total_score,
+                'vocabulary': vocabulary_score,
+                'average': round(average_score, 1),
+                'meetsRequirement': meets_requirement
+            }
+
             payload.append({
                 'id': str(t.id),
                 'title': t.title,
@@ -653,6 +713,7 @@ class SpeakingTopicsView(APIView):
                     'completed': fluency_completed,
                 },
                 'phraseProgress': phrase_progress_data,
+                'practiceScores': practice_scores_data,
                 'unlocked': t.sequence in unlocked_sequences,
                 'completed': t.sequence in completed_sequences,
             })
