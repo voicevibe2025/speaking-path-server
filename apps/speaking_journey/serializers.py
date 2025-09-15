@@ -19,6 +19,18 @@ class PracticeScoresSerializer(serializers.Serializer):
     vocabulary = serializers.IntegerField()
     average = serializers.FloatField()
     meetsRequirement = serializers.BooleanField()
+    # New fields for per-practice thresholds and combined progress bar
+    maxPronunciation = serializers.IntegerField()
+    maxFluency = serializers.IntegerField()
+    maxVocabulary = serializers.IntegerField()
+    pronunciationMet = serializers.BooleanField()
+    fluencyMet = serializers.BooleanField()
+    vocabularyMet = serializers.BooleanField()
+    totalScore = serializers.IntegerField()
+    totalMaxScore = serializers.IntegerField()
+    combinedThresholdScore = serializers.IntegerField()
+    combinedPercent = serializers.FloatField()
+    thresholdPercent = serializers.IntegerField()
 
 
 class SpeakingTopicDtoSerializer(serializers.Serializer):

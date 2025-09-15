@@ -10,11 +10,15 @@ class Command(BaseCommand):
     help = 'Seeds Speaking Journey topics with material, description, and conversation. Idempotent and ordered.'
 
     def add_arguments(self, parser):
-        parser.add_argument('--reset', action='store_true', help='Deactivate topics not present in TOPICS list')
+        parser.add_argument('--reset', action='store_true', help='Delete all existing topics before seeding')
 
     @transaction.atomic
     def handle(self, *args, **options):
         self.stdout.write(self.style.MIGRATE_HEADING('Seeding Speaking Journey topics...'))
+
+        if options['reset']:
+            self.stdout.write(self.style.WARNING('Deleting all existing topics...'))
+            Topic.objects.all().delete()
 
         seen_titles = set()
         for idx, item in enumerate(TOPICS, start=1):
@@ -41,10 +45,5 @@ class Command(BaseCommand):
             action = 'CREATED' if created else 'UPDATED'
             self.stdout.write(f" - {action}: {idx}. {title} ({len(defaults['material_lines'])} lines)")
 
-        if options.get('reset'):
-            deactivated = Topic.objects.exclude(title__in=seen_titles).update(is_active=False)
-            if deactivated:
-                self.stdout.write(self.style.WARNING(f'Deactivated {deactivated} topics not in TOPICS list'))
-
-        total = Topic.objects.filter(is_active=True).count()
-        self.stdout.write(self.style.SUCCESS(f'Done. Active topics: {total}'))
+        total = Topic.objects.count()
+        self.stdout.write(self.style.SUCCESS(f'Done. Total topics: {total}'))

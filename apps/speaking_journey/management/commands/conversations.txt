@@ -26,17 +26,16 @@ B: I relax, study, and sometimes go to Barelang.
 
 ---
 
-Topic: Asking for Directions
+Topic: Time and Dates
 
-A: Excuse me, could you tell me how to get to Nagoya Hill Mall?
-B: Sure. Go straight for five minutes, then turn right at the traffic light.
-A: Is it walking distance, or should I take a bus?
-B: It’s pretty close, you can walk. Only a few blocks away.
-A: Okay, so straight ahead and then right at the light, right?
-B: That’s right. You’ll see the mall on your left.
-A: Perfect, thanks a lot!
-B: No problem. Enjoy your time in Batam!
-
+A: Hey Sarah, what time is it?
+B: It’s half past two. Are you going somewhere?
+A: Yeah, thanks. Wait… what day is it today?
+B: It’s Wednesday. Did you forget again?
+A: Maybe. And what’s today’s date?
+B: March 15th. Why are you asking?
+A: Tomorrow is my birthday, I just remembered!
+B: Oh wow! Happy early birthday then.
 ---
 
 Topic: Hobbies and Interests
@@ -50,29 +49,6 @@ B: Really? What dishes do you like making most?
 A: I try new recipes every Sunday. It’s fun.
 B: Cool! Cooking must be relaxing after school or work.
 
----
-
-Topic: Ordering Food
-
-A: Good evening. Here’s the menu. What would you like to order?
-B: Thanks. Could I have Mie Tarempa and an iced cincau please?
-A: Of course. Would you like any side dishes with that?
-B: Yes, gonggong please. Do you have any vegetarian options?
-A: Yes, we can make Mie Lendir without meat or seafood, and we also have ulam.
-B: Great, I’ll take the Mie Lendir for my friend.
-
----
-
-Topic: Time and Dates
-
-A: Hey Sarah, what time is it?
-B: It’s half past two. Are you going somewhere?
-A: Yeah, thanks. Wait… what day is it today?
-B: It’s Wednesday. Did you forget again?
-A: Maybe. And what’s today’s date?
-B: March 15th. Why are you asking?
-A: Tomorrow is my birthday, I just remembered!
-B: Oh wow! Happy early birthday then.
 ---
 
 Topic: Shopping and Prices
@@ -104,6 +80,28 @@ A: No problem. Bye.
 
 ---
 
+Topic: Ordering Food
+
+A: Good evening. Here’s the menu. What would you like to order?
+B: Thanks. Could I have Mie Tarempa and an iced cincau please?
+A: Of course. Would you like any side dishes with that?
+B: Yes, gonggong please. Do you have any vegetarian options?
+A: Yes, we can make Mie Lendir without meat or seafood, and we also have ulam.
+B: Great, I’ll take the Mie Lendir for my friend.
+
+---
+
+Topic: Calling for Help
+
+A: Help! Somebody stole my wallet!
+B: Are you okay? Where did it happen?
+A: Just a minute ago, over there. He ran that way.
+B: Let's call the police. Do you have your phone?
+A: No, it was in my wallet. Can I use yours?
+B: Of course, here you go.
+
+---
+
 Topic: Weather Report
 
 A: What’s the weather like today?
@@ -120,14 +118,16 @@ A: Thanks for the heads up!
 
 ---
 
-Topic: Calling for Help
+Topic: Asking for Directions
 
-A: Help! Somebody stole my wallet!
-B: Are you okay? Where did it happen?
-A: Just a minute ago, over there. He ran that way.
-B: Let's call the police. Do you have your phone?
-A: No, it was in my wallet. Can I use yours?
-B: Of course, here you go.
+A: Excuse me, could you tell me how to get to Nagoya Hill Mall?
+B: Sure. Go straight for five minutes, then turn right at the traffic light.
+A: Is it walking distance, or should I take a bus?
+B: It’s pretty close, you can walk. Only a few blocks away.
+A: Okay, so straight ahead and then right at the light, right?
+B: That’s right. You’ll see the mall on your left.
+A: Perfect, thanks a lot!
+B: No problem. Enjoy your time in Batam!
 
 ---
 
@@ -184,7 +184,7 @@ B: You’re welcome. Have a safe trip!
 
 ---
 
-Topic: How Old Are You?
+Topic: How Old Are You
 
 A: Hey, how old are you?
 B: I’m 19. What about you?
@@ -210,7 +210,7 @@ A: Thanks!
 
 ---
 
-Topic: What Are You Good At?
+Topic: What Are You Good At
 
 A: I was struggling with my homework last night. I’m really bad at math.
 B: Same here. Numbers just don’t click with me.
@@ -223,7 +223,7 @@ B: No wonder you’re good at it. You get a lot of practice.
 
 ---
 
-Topic: What's Your Favorite Sport?
+Topic: What's Your Favorite Sport
 
 A: Do you follow any sports?
 B: Yeah, I'm a huge soccer fan. I watch the Premier League every weekend.

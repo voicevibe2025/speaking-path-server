@@ -10,6 +10,7 @@ import logging
 import hashlib
 import subprocess
 import json
+import math
 from difflib import SequenceMatcher
 import whisper
 from typing import Optional
@@ -173,29 +174,72 @@ def _compute_unlocks(user):
 
 def _meets_completion_criteria(topic_progress):
     """
-    Check if a topic meets the new completion criteria:
+    Check if a topic meets the completion criteria:
     - All 3 main practices (pronunciation, fluency, vocabulary) must be completed
-    - Average score of the 3 practices must be >= 75
+    - For EACH practice, user must reach at least 75% of that practice's maximum score for the topic
     """
     # Check if all 3 main practices are completed
     if not (topic_progress.pronunciation_completed and 
             topic_progress.fluency_completed and 
             topic_progress.vocabulary_completed):
         return False
-    
-    # Calculate average score of the 3 practices
-    scores = [
-        topic_progress.pronunciation_total_score or 0,
-        topic_progress.fluency_total_score or 0,
-        topic_progress.vocabulary_total_score or 0
-    ]
-    
-    # Ensure all practices have been attempted (score > 0)
-    if any(score <= 0 for score in scores):
+
+    topic = getattr(topic_progress, 'topic', None)
+    if not topic:
         return False
-    
-    average_score = sum(scores) / len(scores)
-    return average_score >= 75
+
+    # Compute per-practice maxima
+    pron_max = int(len(topic.material_lines or []) * 100)
+    flu_max = int(len(topic.fluency_practice_prompt or []) * 100)
+    # Match StartVocabularyPracticeView logic (~60% of vocab, at least 1 question when vocab exists)
+    vocab_words = len([w for w in (topic.vocabulary or []) if isinstance(w, str) and w.strip()])
+    vocab_q_count = max(1, int(round(0.6 * vocab_words))) if vocab_words > 0 else 0
+    vocab_max = int(vocab_q_count * 10)
+
+    # Effective (clamped) totals to avoid exceeding maxima
+    pron_total = int(topic_progress.pronunciation_total_score or 0)
+    # Fallback: if pronunciation is completed but total not populated (legacy sessions), recompute once from recordings
+    if pron_total <= 0 and getattr(topic_progress, 'pronunciation_completed', False):
+        try:
+            qs = UserPhraseRecording.objects.filter(user=topic_progress.user, topic=topic).order_by('phrase_index', '-created_at')
+            latest_by_phrase = {}
+            for r in qs:
+                if r.phrase_index not in latest_by_phrase:
+                    latest_by_phrase[r.phrase_index] = r
+            recomputed = 0
+            for r in latest_by_phrase.values():
+                try:
+                    recomputed += int(round(float(r.accuracy or 0.0)))
+                except Exception:
+                    pass
+            if recomputed > 0:
+                topic_progress.pronunciation_total_score = recomputed
+                topic_progress.save(update_fields=['pronunciation_total_score'])
+                pron_total = recomputed
+        except Exception:
+            pass
+
+    flu_total = int(topic_progress.fluency_total_score or 0)
+    vocab_total = int(topic_progress.vocabulary_total_score or 0)
+    if pron_max > 0:
+        pron_total = min(pron_total, pron_max)
+    if flu_max > 0:
+        flu_total = min(flu_total, flu_max)
+    if vocab_max > 0:
+        vocab_total = min(vocab_total, vocab_max)
+
+    # Require each practice to reach >= 75% of its max
+    def meets(score, mx):
+        if mx <= 0:
+            return False
+        threshold = 0.75 * mx
+        return float(score) >= threshold
+
+    return all([
+        meets(pron_total, pron_max),
+        meets(flu_total, flu_max),
+        meets(vocab_total, vocab_max),
+    ])
 
 
 def _normalize_text(text):
@@ -681,20 +725,77 @@ class SpeakingTopicsView(APIView):
 
             # Build practice scores data
             pronunciation_score = int(tp.pronunciation_total_score or 0)
+            # Fallback recompute for legacy sessions where pron_total was not persisted
+            if pronunciation_score <= 0:
+                try:
+                    qs = UserPhraseRecording.objects.filter(user=request.user, topic=t).order_by('phrase_index', '-created_at')
+                    latest_by_phrase = {}
+                    for r in qs:
+                        if r.phrase_index not in latest_by_phrase:
+                            latest_by_phrase[r.phrase_index] = r
+                    recomputed = 0
+                    for r in latest_by_phrase.values():
+                        try:
+                            recomputed += int(round(float(r.accuracy or 0.0)))
+                        except Exception:
+                            pass
+                    if recomputed > 0:
+                        tp.pronunciation_total_score = recomputed
+                        tp.save(update_fields=['pronunciation_total_score'])
+                        pronunciation_score = recomputed
+                except Exception:
+                    pass
             vocabulary_score = int(tp.vocabulary_total_score or 0)
-            
-            # Calculate average and check if requirements are met
-            scores = [pronunciation_score, fluency_total_score, vocabulary_score]
-            has_all_scores = all(score > 0 for score in scores)
-            average_score = sum(scores) / len(scores) if has_all_scores else 0
-            meets_requirement = has_all_scores and average_score >= 75
-            
+
+            # Compute per-practice maxima
+            pron_max = int(len(t.material_lines or []) * 100)
+            flu_max = int(len(fprompts) * 100)
+            vocab_words = len([w for w in (t.vocabulary or []) if isinstance(w, str) and w.strip()])
+            vocab_q_count = max(1, int(round(0.6 * vocab_words))) if vocab_words > 0 else 0
+            vocab_max = int(vocab_q_count * 10)
+
+            # Clamp totals to maxima for fair percentage/progress
+            eff_pron = min(pronunciation_score, pron_max) if pron_max > 0 else 0
+            eff_flu = min(fluency_total_score, flu_max) if flu_max > 0 else 0
+            eff_vocab = min(vocabulary_score, vocab_max) if vocab_max > 0 else 0
+
+            # Per-practice 75% thresholds
+            def met(score, mx):
+                if mx <= 0:
+                    return False
+                return float(score) >= 0.75 * mx
+
+            pron_met = met(eff_pron, pron_max)
+            flu_met = met(eff_flu, flu_max)
+            vocab_met = met(eff_vocab, vocab_max)
+
+            # Combined progress
+            total_max = int(pron_max + flu_max + vocab_max)
+            total_score = int(eff_pron + eff_flu + eff_vocab)
+            combined_percent = round((total_score / total_max) * 100.0, 1) if total_max > 0 else 0.0
+            combined_threshold_score = int(math.ceil(0.75 * total_max)) if total_max > 0 else 0
+
+            meets_requirement = bool(pron_met and flu_met and vocab_met)
+
             practice_scores_data = {
                 'pronunciation': pronunciation_score,
                 'fluency': fluency_total_score,
                 'vocabulary': vocabulary_score,
-                'average': round(average_score, 1),
-                'meetsRequirement': meets_requirement
+                # Keep average as a normalized combined percent for clearer UI
+                'average': combined_percent,
+                'meetsRequirement': meets_requirement,
+                # New fields for UI progress bar and clarity
+                'maxPronunciation': pron_max,
+                'maxFluency': flu_max,
+                'maxVocabulary': vocab_max,
+                'pronunciationMet': pron_met,
+                'fluencyMet': flu_met,
+                'vocabularyMet': vocab_met,
+                'totalScore': total_score,
+                'totalMaxScore': total_max,
+                'combinedThresholdScore': combined_threshold_score,
+                'combinedPercent': combined_percent,
+                'thresholdPercent': 75,
             }
 
             payload.append({
@@ -791,6 +892,11 @@ class SubmitPhraseRecordingView(APIView):
             topic=topic,
             defaults={'current_phrase_index': 0, 'completed_phrases': []}
         )
+        # Also ensure TopicProgress exists so we can persist running totals
+        topic_progress, _ = TopicProgress.objects.get_or_create(
+            user=request.user,
+            topic=topic
+        )
 
         # Transcribe with Whisper (existing) and SpeechBrain (optional)
         whisper_transcription = _transcribe_audio_with_whisper(audio_file)
@@ -850,48 +956,21 @@ class SubmitPhraseRecordingView(APIView):
         phrase_progress.mark_phrase_completed(phrase_index)
         next_phrase_index = phrase_progress.current_phrase_index
 
-        # Check if all phrases completed
+        # If all phrases completed, mark pronunciation as completed and auto-complete listening/grammar (test)
         if phrase_progress.is_all_phrases_completed:
-            # Mark pronunciation mode complete and, for testing, auto-complete other modes
-            topic_progress, _ = TopicProgress.objects.get_or_create(
-                user=request.user,
-                topic=topic
-            )
-            # Pronunciation mode done because all phrases are completed
             topic_progress.pronunciation_completed = True
-            # TESTING TEMP: Only auto-mark modes that are not yet implemented (listening, grammar)
-            # Fluency and Vocabulary now have dedicated practice flows.
             topic_progress.listening_completed = True
             topic_progress.grammar_completed = True
 
-            # Compute per-topic total score as the sum of latest accuracies per phrase
-            try:
-                qs = UserPhraseRecording.objects.filter(user=request.user, topic=topic).order_by('phrase_index', '-created_at')
-                latest_by_phrase = {}
-                for r in qs:
-                    if r.phrase_index not in latest_by_phrase:
-                        latest_by_phrase[r.phrase_index] = r
-                total_score = 0
-                for r in latest_by_phrase.values():
-                    try:
-                        total_score += int(round(float(r.accuracy or 0.0)))
-                    except Exception:
-                        total_score += 0
-                # Persist on TopicProgress
-                if hasattr(topic_progress, 'pronunciation_total_score'):
-                    topic_progress.pronunciation_total_score = total_score
-            except Exception as e:
-                logger.warning('Failed to compute total pronunciation score: %s', e)
-
-            # Complete the topic only if all modes are completed
-            if not topic_progress.completed and topic_progress.all_modes_completed:
-                topic_progress.completed = True
-                topic_progress.completed_at = timezone.now()
-            topic_progress.save()
-            topic_completed = topic_progress.completed
+        # If now all modes are completed, mark topic completed and award mastery later
+        if not topic_progress.completed and topic_progress.all_modes_completed:
+            topic_progress.completed = True
+            topic_progress.completed_at = timezone.now()
+        topic_progress.save()
+        topic_completed = topic_progress.completed
+        if topic_completed and phrase_progress.is_all_phrases_completed:
             # Award topic mastery bonus once (+50)
-            if topic_completed:
-                xp_awarded += _award_topic_mastery_once(request.user, topic)
+            xp_awarded += _award_topic_mastery_once(request.user, topic)
 
         # Get feedback from Gemini based on the best transcription and combined accuracy
         feedback = _get_gemini_feedback(expected_phrase, best_transcription, combined_accuracy)
@@ -936,6 +1015,31 @@ class SubmitPhraseRecordingView(APIView):
                     audio_url = request.build_absolute_uri(upr.audio_file.url)
             except Exception:
                 audio_url = ''
+
+            # Now that the latest recording is persisted, recompute pronunciation total (latest per phrase)
+            try:
+                qs = UserPhraseRecording.objects.filter(user=request.user, topic=topic).order_by('phrase_index', '-created_at')
+                latest_by_phrase = {}
+                for r in qs:
+                    if r.phrase_index not in latest_by_phrase:
+                        latest_by_phrase[r.phrase_index] = r
+                total_score = 0
+                for r in latest_by_phrase.values():
+                    try:
+                        total_score += int(round(float(r.accuracy or 0.0)))
+                    except Exception:
+                        total_score += 0
+                topic_progress.pronunciation_total_score = int(total_score)
+                # If all phrases done, ensure pronunciation_completed flag is set (idempotent)
+                if phrase_progress.is_all_phrases_completed and not topic_progress.pronunciation_completed:
+                    topic_progress.pronunciation_completed = True
+                # Topic completion check after total update
+                if not topic_progress.completed and topic_progress.all_modes_completed:
+                    topic_progress.completed = True
+                    topic_progress.completed_at = timezone.now()
+                topic_progress.save()
+            except Exception as e:
+                logger.warning('Failed to recompute pronunciation total after save: %s', e)
         except Exception:
             # Do not fail the request if persistence fails; continue without recording info
             recording_id = None
