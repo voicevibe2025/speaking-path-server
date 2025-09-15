@@ -113,6 +113,12 @@ DATABASES = {
         'PASSWORD': env('DB_PASSWORD', default='voicevibe_pass'),
         'HOST': env('DB_HOST', default='localhost'),
         'PORT': env('DB_PORT', default='5432'),
+        # Connection options: enforce SSL and disable channel binding for PgBouncer compatibility
+        'OPTIONS': {
+            'sslmode': env('DB_SSLMODE', default='require'),
+            'channel_binding': env('DB_CHANNEL_BINDING', default='disable'),
+            'connect_timeout': env.int('DB_CONNECT_TIMEOUT', default=10),
+        },
     }
 }
 
