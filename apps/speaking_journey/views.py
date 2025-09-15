@@ -1040,6 +1040,30 @@ class SubmitPhraseRecordingView(APIView):
         # Get feedback from Gemini based on the best transcription and combined accuracy
         feedback = _get_gemini_feedback(expected_phrase, best_transcription, combined_accuracy)
 
+        # Update running pronunciation_total_score regardless of audio file persistence
+        # We adjust by the delta between this attempt's accuracy and the previous latest accuracy for this phrase
+        try:
+            prev_rec = (
+                UserPhraseRecording.objects
+                .filter(user=request.user, topic=topic, phrase_index=phrase_index)
+                .order_by('-created_at')
+                .first()
+            )
+            prev_acc_int = int(round(float(prev_rec.accuracy or 0.0))) if (prev_rec and prev_rec.accuracy is not None) else 0
+        except Exception:
+            prev_acc_int = 0
+        try:
+            existing_total = int(topic_progress.pronunciation_total_score or 0)
+        except Exception:
+            existing_total = 0
+        new_acc_int = int(round(float(combined_accuracy or 0.0)))
+        delta = new_acc_int - prev_acc_int
+        try:
+            topic_progress.pronunciation_total_score = max(0, existing_total + delta)
+            topic_progress.save(update_fields=['pronunciation_total_score'])
+        except Exception as e:
+            logger.warning('Failed to update pronunciation_total_score pre-save: %s', e)
+
         # Persist user recording with audio and metadata
         recording_id = None
         audio_url = ''
@@ -1073,6 +1097,25 @@ class SubmitPhraseRecordingView(APIView):
                     content = b''
                 if content:
                     upr.audio_file.save('recording.m4a', ContentFile(content), save=False)
+                else:
+                    # Final fallback: save a short silent WAV so the record persists
+                    try:
+                        import struct
+                        duration_s = 0.2
+                        sr = 16000
+                        n_samples = int(sr * duration_s)
+                        buf = io.BytesIO()
+                        with wave.open(buf, 'wb') as wf:
+                            wf.setnchannels(1)
+                            wf.setsampwidth(2)  # 16-bit
+                            wf.setframerate(sr)
+                            # Write n_samples of silence
+                            silence = struct.pack('<' + 'h'*n_samples, *([0]*n_samples))
+                            wf.writeframes(silence)
+                        upr.audio_file.save('placeholder.wav', ContentFile(buf.getvalue()), save=False)
+                    except Exception:
+                        # If even this fails, allow outer handler to proceed without audio
+                        pass
             upr.save()
             recording_id = str(upr.id)
             try:
