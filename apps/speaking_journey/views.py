@@ -551,6 +551,9 @@ def _sample_vocabulary_questions(topic: Topic, n: int) -> list[dict]:
 def _transcribe_audio_with_whisper(audio_file):
     """Transcribe audio using OpenAI Whisper tiny.en model"""
     try:
+        # Allow disabling via environment to prefer faster-whisper on constrained hosts (e.g., Railway)
+        if os.environ.get('DISABLE_WHISPER'):
+            return ""
         # Load Whisper model once and reuse (tiny.en is ~75MB)
         if not hasattr(_transcribe_audio_with_whisper, '_model'):
             _transcribe_audio_with_whisper._model = whisper.load_model("tiny.en")
@@ -585,10 +588,8 @@ def _transcribe_audio_with_speechbrain(audio_file):
     then performs ASR with a pre-trained SpeechBrain model.
     """
     # Global feature flag guardrails
-    # - Windows: SpeechBrain fetching may require symlink privileges; keep opt-in on Windows.
-    # - Server: allow disabling via env to avoid cold-start latency.
-    if os.name == 'nt' and not os.environ.get('ENABLE_SPEECHBRAIN'):
-        logger.info('Skipping SpeechBrain ASR on Windows (set ENABLE_SPEECHBRAIN=1 to force enable).')
+    # - Disable by default unless ENABLE_SPEECHBRAIN is set, to avoid torchaudio dependency/cold-start on Railway.
+    if not os.environ.get('ENABLE_SPEECHBRAIN'):
         return ""
     if os.environ.get('DISABLE_SPEECHBRAIN') in ('1', 'true', 'True', 'YES', 'yes') or os.environ.get('SB_DISABLE') in ('1', 'true', 'True', 'YES', 'yes'):
         logger.info('SpeechBrain ASR disabled by environment flag (DISABLE_SPEECHBRAIN/SB_DISABLE).')
@@ -967,14 +968,8 @@ class SubmitPhraseRecordingView(APIView):
                     pass
             fw_transcription = _transcribe_audio_with_faster_whisper(audio_file)
 
-        # If all failed, return a graceful message
-        if not whisper_transcription and not sb_transcription and not fw_transcription:
-            return Response({
-                'success': False,
-                'accuracy': 0.0,
-                'transcription': '',
-                'feedback': 'Could not process audio. Please try recording again.',
-            }, status=status.HTTP_200_OK)
+        # If all failed, continue gracefully: persist attempt with zero accuracy so progress/state updates
+        all_failed = (not whisper_transcription and not sb_transcription and not fw_transcription)
 
         # Compute accuracies for available transcripts
         scores = []
