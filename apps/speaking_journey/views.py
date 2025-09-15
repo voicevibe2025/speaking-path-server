@@ -14,6 +14,10 @@ import math
 from difflib import SequenceMatcher
 import whisper
 from typing import Optional
+try:
+    from faster_whisper import WhisperModel as FasterWhisperModel
+except Exception:
+    FasterWhisperModel = None
 import google.generativeai as genai
 from django.conf import settings
 from django.core.files.storage import default_storage
@@ -665,6 +669,51 @@ def _transcribe_audio_with_speechbrain(audio_file):
         logger.error('SpeechBrain transcription error: %s', e)
         return ""
 
+def _transcribe_audio_with_faster_whisper(audio_file):
+    """Transcribe audio using faster-whisper tiny.en model (CPU, int8).
+
+    Returns empty string on failure or if the model is unavailable.
+    """
+    if FasterWhisperModel is None:
+        return ""
+    try:
+        # Lazily load model once
+        if not hasattr(_transcribe_audio_with_faster_whisper, '_model'):
+            _transcribe_audio_with_faster_whisper._model = FasterWhisperModel(
+                "tiny.en", device="cpu", compute_type="int8"
+            )
+        model = _transcribe_audio_with_faster_whisper._model
+
+        # Write uploaded audio to a temporary file; let ffmpeg decode container
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.m4a') as tmp:
+            for chunk in getattr(audio_file, 'chunks', lambda: [audio_file.read()])():
+                if chunk:
+                    tmp.write(chunk)
+            temp_path = tmp.name
+
+        try:
+            # Transcribe
+            segments, info = model.transcribe(temp_path, language="en", vad_filter=True)
+            # Join text from segments
+            texts = []
+            for seg in segments:
+                try:
+                    if seg and getattr(seg, 'text', None):
+                        texts.append(seg.text)
+                except Exception:
+                    continue
+            out = ' '.join([t.strip() for t in texts if t and t.strip()]).strip()
+            return out
+        finally:
+            try:
+                if os.path.exists(temp_path):
+                    os.unlink(temp_path)
+            except Exception:
+                pass
+    except Exception as e:
+        logger.error('faster-whisper transcription error: %s', e)
+        return ""
+
 
 class SpeakingTopicsView(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -898,7 +947,7 @@ class SubmitPhraseRecordingView(APIView):
             topic=topic
         )
 
-        # Transcribe with Whisper (existing) and SpeechBrain (optional)
+        # Transcribe with Whisper (existing), SpeechBrain (optional), then faster-whisper (fallback)
         whisper_transcription = _transcribe_audio_with_whisper(audio_file)
         # Reset pointer for a second read before SpeechBrain
         if hasattr(audio_file, 'seek'):
@@ -908,8 +957,18 @@ class SubmitPhraseRecordingView(APIView):
                 pass
         sb_transcription = _transcribe_audio_with_speechbrain(audio_file)
 
-        # If both failed, return a graceful message
+        # If both above failed, try faster-whisper as a final fallback on CPU
+        fw_transcription = ''
         if not whisper_transcription and not sb_transcription:
+            if hasattr(audio_file, 'seek'):
+                try:
+                    audio_file.seek(0)
+                except Exception:
+                    pass
+            fw_transcription = _transcribe_audio_with_faster_whisper(audio_file)
+
+        # If all failed, return a graceful message
+        if not whisper_transcription and not sb_transcription and not fw_transcription:
             return Response({
                 'success': False,
                 'accuracy': 0.0,
@@ -927,10 +986,21 @@ class SubmitPhraseRecordingView(APIView):
         if sb_transcription:
             sb_accuracy = _calculate_similarity(expected_phrase, sb_transcription)
             scores.append(sb_accuracy)
+        fw_accuracy = None
+        if fw_transcription:
+            fw_accuracy = _calculate_similarity(expected_phrase, fw_transcription)
+            scores.append(fw_accuracy)
 
         # Combine scores (average) and choose best transcription for feedback
         combined_accuracy = sum(scores) / len(scores) if scores else 0.0
-        best_transcription = whisper_transcription if (whisper_accuracy or 0.0) >= (sb_accuracy or 0.0) else sb_transcription
+        # Pick the best transcription among those available
+        best_transcription = whisper_transcription
+        best_score = whisper_accuracy or -1.0
+        if (sb_accuracy or -1.0) > best_score:
+            best_transcription = sb_transcription
+            best_score = sb_accuracy or best_score
+        if (fw_accuracy or -1.0) > best_score:
+            best_transcription = fw_transcription
 
         # New rule: Any accuracy passes and auto-unlocks the next phrase
         passed = True
