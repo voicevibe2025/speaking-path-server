@@ -11,7 +11,7 @@ B: Pretty good, thanks for asking.
 
 ---
 
-Topic: Daily Activities in Batam
+Topic: Daily Activities
 
 A: What time do you wake up?
 B: Around 6:00. I prepare for school.
@@ -187,10 +187,10 @@ B: You’re welcome. Have a safe trip!
 Topic: How Old Are You?
 
 A: Hey, how old are you?
-B: I’m 19. You?
+B: I’m 19. What about you?
 A: I’m 18, just turned last month.
 B: Oh nice, happy late birthday! When’s your birthday?
-A: August 5th.
+A: It was on August 5th, actually. I had a little celebration with my friends.
 B: Cool, mine’s in November. So we’re only a year apart.
 A: Yeah, pretty much the same age.
 
@@ -198,23 +198,28 @@ A: Yeah, pretty much the same age.
 
 Topic: At the Movies
 
-A: Hi, one ticket for 'The Action Hero', please.
-Cashier: For which showtime?
-A: The 8:30 PM show.
-Cashier: Certainly. Where would you like to sit?
-A: Somewhere in the back, please.
-Cashier: Okay, that will be 50,000 rupiah.
-A: Here you go. Thanks.
+A: Hi, can I get one ticket for The Action Hero, please?
+B: Sure. Which time?
+A: The 8:30 show.
+B: Okay. Do you have a seating preference?
+A: Somewhere near the back would be great.
+B: Got it. That’ll be fifty thousand rupiah.
+A: Here you go.
+B: Thank you. Enjoy the movie!
+A: Thanks!
 
 ---
 
 Topic: What Are You Good At?
 
-A: You're a great cook! What else are you good at?
-B: Thanks! I'm also pretty good at gardening. I have a small vegetable garden at home.
-A: That's so cool! I wish I had a green thumb. I'm not very good with plants.
-B: Everyone has their own talents. What are you good at?
-A: I'm good at writing. I enjoy writing short stories in my free time.
+A: I was struggling with my homework last night. I’m really bad at math.
+B: Same here. Numbers just don’t click with me.
+A: Yeah… so what are you good at then?
+B: I’d say drawing. I’ve been sketching since I was little.
+A: Oh, that’s cool. Do you draw often?
+B: Yeah, pretty often. What about you?
+A: Probably basketball. I play almost every weekend.
+B: No wonder you’re good at it. You get a lot of practice.
 
 ---
 
@@ -232,43 +237,53 @@ A: LeBron James, for sure. He's a legend.
 
 Topic: At the Theater
 
-A: Excuse me, we have tickets for 'The Phantom of the Opera'. Can you show us to our seats?
-Usher: Of course. May I see your tickets? You're in row G, seats 12 and 13. This way, please.
-A: Thank you. What time does the show begin?
-Usher: It starts in about 15 minutes. Enjoy the show!
-A: We will, thanks!
+A: Do you have the tickets, or should I pick them up at the box office?
+B: I’ve got them right here. Let’s find our seats before it gets too crowded.
+A: Good idea. Oh, should we grab a program on the way in?
+B: Yeah, they usually have the cast list and synopsis. I’ll grab two.
+A: Thanks. Which row are we in?
+B: Row G, seats 14 and 15. Wow, these seats have a great view of the stage.
+A: Perfect. The curtain’s going up—let’s be quiet.
 
 ---
 
 Topic: Taking a Vacation
 
-A: I'm so excited for our vacation next month!
-B: Me too! Have you booked the hotel yet?
-A: Yes, I booked a room with a sea view at a resort near the beach.
-B: That sounds amazing! What activities are you planning to do?
-A: I want to go snorkeling, visit some temples, and just relax on the beach.
-B: It's going to be the perfect getaway.
+A: Do you have any vacation plans coming up?
+B: Yeah, I’m going to Batam for a few days.
+A: Oh, nice. Are you flying there?
+B: No, I’m taking the ferry from Singapore. It’s only about an hour, and it’s way easier than going through the airport.
+A: True, the ferry is super convenient. What are you planning to do there?
+B: I’ll stay at a resort near Nongsa, relax on the beach, and maybe go snorkeling. I also want to see Barelang Bridge and do some shopping at Nagoya Hill.
+A: That sounds amazing. Don’t forget to try the seafood and the famous layer cake.
+B: For sure. I’m just really looking forward to a break from work.
 
 ---
 
 Topic: At the Pet Store
 
-A: Hi, I'm looking for a pet that's easy to take care of.
-Clerk: A hamster or a goldfish might be a good choice. They are low-maintenance.
-A: I think I'd prefer a hamster. What do I need to buy for it?
-Clerk: You'll need a cage, bedding, a water bottle, a food dish, and some hamster food.
-A: Okay, can you show me where everything is?
-Clerk: Certainly, right this way.
-
+A: Excuse me, do you sell cat food here?
+B: Yes, it’s in aisle three, right next to the litter.
+A: Great, thanks. Oh, do you also carry dog toys?
+B: Absolutely. We have chew toys, balls, and squeaky ones over there.
+A: Perfect. My dog destroys toys so fast—I need something durable.
+B: In that case, you might want to try these rubber ones. They last a lot longer.
+A: Sounds good. By the way, do you sell fish here too?
+B: Yes, we have a small aquarium section in the back.
+A: Awesome, I’ll take a look after I grab the food. Thanks for your help!
+B: No problem. Let me know if you need anything else.
 ---
 
 Topic: Giving Your Opinion
 
-A: What do you think of the new movie that just came out?
-B: I thought it was fantastic! The acting was superb and the story was very engaging.
-A: I agree. I especially liked the ending. It was so unexpected.
-B: Exactly! I would definitely recommend it to everyone.
-A: Me too. It's one of the best movies I've seen this year.
+A: Hey, what did you think of that new café we tried yesterday?
+B: Honestly, I liked the atmosphere, but I think the coffee was a bit too bitter.
+A: Yeah, I felt the same. In my opinion, the desserts were the best part.
+B: True. To be honest, I’d go back just for the cheesecake.
+A: Same here. Do you think it’s better than the café near the library?
+B: Hmm… I’d say the library one is still my favorite. Their cappuccino tastes better.
+A: I get that. Personally, I prefer the new place because it’s less crowded.
+B: Fair point. I guess it depends on what you’re looking for—coffee or comfort.
 
 ---
 
