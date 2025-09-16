@@ -58,6 +58,10 @@ class TopicProgress(models.Model):
     vocabulary_total_score = models.IntegerField(default=0)
     # Per-prompt scores recorded in order; length up to number of prompts (typically 3)
     fluency_prompt_scores = models.JSONField(default=list, blank=True)
+    # Conversation practice (bonus mode) aggregate score and completion flag
+    # Not required for topic unlocking; used for tracking and XP.
+    conversation_total_score = models.IntegerField(default=0)
+    conversation_completed = models.BooleanField(default=False)
 
     class Meta:
         db_table = 'speaking_journey_topic_progress'
@@ -237,3 +241,50 @@ class UserPhraseRecording(models.Model):
 
     def __str__(self):
         return f"Recording {self.id} - {self.user_id} - {self.topic_id} - phrase {self.phrase_index}"
+
+
+def user_conversation_audio_upload_to(instance, filename):
+    """Build a storage path for user conversation turn recordings.
+    Example: speaking_journey/<user_id>/<topic_id>/conversation_turn_<idx>/<uuid>.<ext>
+    """
+    ext = filename.split('.')[-1].lower() if '.' in filename else 'm4a'
+    return (
+        f"speaking_journey/{instance.user_id}/{instance.topic_id}/conversation_turn_"
+        f"{instance.turn_index}/{uuid.uuid4()}.{ext}"
+    )
+
+
+class UserConversationRecording(models.Model):
+    """Per-user stored recordings for Conversation Practice turns.
+    Stored separately from phrase recordings to keep histories distinct.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='journey_conversation_recordings')
+    topic = models.ForeignKey(Topic, on_delete=models.CASCADE, related_name='conversation_recordings')
+    turn_index = models.PositiveIntegerField()
+    # Optional: which side the user chose (e.g., "A" or "B"), not strictly required for scoring
+    role = models.CharField(max_length=8, blank=True, default="")
+
+    # Audio file persisted to storage
+    audio_file = models.FileField(upload_to=user_conversation_audio_upload_to)
+
+    # Metadata and results
+    transcription = models.TextField(blank=True)
+    accuracy = models.FloatField(null=True, blank=True)
+    feedback = models.TextField(blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'speaking_journey_user_conversation_recordings'
+        verbose_name = _('User Conversation Recording')
+        verbose_name_plural = _('User Conversation Recordings')
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', 'topic']),
+            models.Index(fields=['topic', 'turn_index']),
+            models.Index(fields=['user', 'topic', 'turn_index']),
+        ]
+
+    def __str__(self):
+        return f"ConversationRec {self.id} - {self.user_id} - {self.topic_id} - turn {self.turn_index}"

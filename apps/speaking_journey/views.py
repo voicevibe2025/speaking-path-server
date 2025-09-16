@@ -29,7 +29,7 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 import requests
-from .models import Topic, TopicProgress, UserProfile, PhraseProgress, UserPhraseRecording, VocabularyPracticeSession
+from .models import Topic, TopicProgress, UserProfile, PhraseProgress, UserPhraseRecording, VocabularyPracticeSession, UserConversationRecording
 from apps.gamification.models import UserLevel, PointsTransaction
 from .serializers import (
     SpeakingTopicsResponseSerializer,
@@ -38,6 +38,7 @@ from .serializers import (
     UserProfileSerializer,
     PhraseProgressSerializer,
     PhraseSubmissionResultSerializer,
+    ConversationSubmissionResultSerializer,
     UserPhraseRecordingSerializer,
     UserPhraseRecordingsResponseSerializer,
     SubmitFluencyPromptRequestSerializer,
@@ -865,6 +866,8 @@ class SpeakingTopicsView(APIView):
                 },
                 'phraseProgress': phrase_progress_data,
                 'practiceScores': practice_scores_data,
+                'conversationScore': int(getattr(tp, 'conversation_total_score', 0) or 0),
+                'conversationCompleted': bool(getattr(tp, 'conversation_completed', False)),
                 'unlocked': t.sequence in unlocked_sequences,
                 'completed': t.sequence in completed_sequences,
             })
@@ -1165,9 +1168,171 @@ class SubmitPhraseRecordingView(APIView):
             'recordingId': recording_id,
             'audioUrl': audio_url,
         }
-
         serializer = PhraseSubmissionResultSerializer(result)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class SubmitConversationTurnView(APIView):
+    """Submit a conversation turn recording for transcription and accuracy scoring."""
+    permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request, topic_id):
+        topic = get_object_or_404(Topic, id=topic_id, is_active=True)
+        turn_index = request.data.get('turnIndex')
+        role = (request.data.get('role') or '').strip()
+        audio_file = request.data.get('audio')
+
+        if turn_index is None:
+            return Response({'detail': 'Missing turnIndex'}, status=status.HTTP_400_BAD_REQUEST)
+        if not audio_file:
+            return Response({'detail': 'Missing audio file'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            turn_index = int(turn_index)
+        except (TypeError, ValueError):
+            return Response({'detail': 'Invalid turnIndex'}, status=status.HTTP_400_BAD_REQUEST)
+
+        conv = topic.conversation_example or []
+        if turn_index < 0 or turn_index >= len(conv):
+            return Response({'detail': 'Invalid turnIndex for this topic'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Expected text for this turn (handle dict or simple list)
+        try:
+            expected_text = ''
+            item = conv[turn_index]
+            if isinstance(item, dict):
+                expected_text = (item.get('text') or '').strip()
+            elif isinstance(item, (list, tuple)) and len(item) >= 2:
+                expected_text = str(item[1]).strip()
+            else:
+                expected_text = str(item).strip()
+        except Exception:
+            expected_text = ''
+
+        tp, _ = TopicProgress.objects.get_or_create(user=request.user, topic=topic)
+
+        # Transcribe
+        whisper_tx = _transcribe_audio_with_whisper(audio_file)
+        if hasattr(audio_file, 'seek'):
+            try:
+                audio_file.seek(0)
+            except Exception:
+                pass
+        sb_tx = _transcribe_audio_with_speechbrain(audio_file)
+        fw_tx = ''
+        if not whisper_tx and not sb_tx:
+            if hasattr(audio_file, 'seek'):
+                try:
+                    audio_file.seek(0)
+                except Exception:
+                    pass
+            fw_tx = _transcribe_audio_with_faster_whisper(audio_file)
+
+        # Scores and best transcript
+        scores = []
+        wa = _calculate_similarity(expected_text, whisper_tx) if whisper_tx else None
+        if wa is not None:
+            scores.append(wa)
+        sa = _calculate_similarity(expected_text, sb_tx) if sb_tx else None
+        if sa is not None:
+            scores.append(sa)
+        fa = _calculate_similarity(expected_text, fw_tx) if fw_tx else None
+        if fa is not None:
+            scores.append(fa)
+        combined_accuracy = sum(scores) / len(scores) if scores else 0.0
+
+        best_tx = whisper_tx
+        best_score = wa if wa is not None else -1.0
+        if sa is not None and sa > best_score:
+            best_tx = sb_tx
+            best_score = sa
+        if fa is not None and fa > best_score:
+            best_tx = fw_tx
+
+        xp_awarded = 0
+        if combined_accuracy >= 80.0:
+            xp_awarded += _award_xp(
+                user=request.user,
+                amount=20,
+                source='conversation',
+                context={'topicId': str(topic.id), 'turnIndex': turn_index, 'accuracy': round(float(combined_accuracy or 0.0), 1)}
+            )
+
+        feedback = _get_gemini_feedback(expected_text, best_tx or '', combined_accuracy)
+
+        # Persist conversation recording
+        rec_id = None
+        audio_url = ''
+        try:
+            if hasattr(audio_file, 'seek'):
+                try:
+                    audio_file.seek(0)
+                except Exception:
+                    pass
+            ucr = UserConversationRecording(
+                user=request.user,
+                topic=topic,
+                turn_index=turn_index,
+                role=role,
+                transcription=best_tx or '',
+                accuracy=round(float(combined_accuracy or 0.0), 1),
+                feedback=feedback or '',
+            )
+            try:
+                filename = getattr(audio_file, 'name', 'conversation.m4a')
+                ucr.audio_file.save(filename, audio_file, save=False)
+            except Exception:
+                try:
+                    if hasattr(audio_file, 'seek'):
+                        audio_file.seek(0)
+                    content = audio_file.read()
+                except Exception:
+                    content = b''
+                if content:
+                    ucr.audio_file.save('conversation.m4a', ContentFile(content), save=False)
+            ucr.save()
+            rec_id = str(ucr.id)
+            try:
+                if ucr.audio_file:
+                    audio_url = request.build_absolute_uri(ucr.audio_file.url)
+            except Exception:
+                audio_url = ''
+        except Exception as e:
+            logger.warning('Failed to persist conversation recording: %s', e)
+
+        # Update totals: latest per turn
+        try:
+            qs = UserConversationRecording.objects.filter(user=request.user, topic=topic).order_by('turn_index', '-created_at')
+            latest_by_turn = {}
+            for r in qs:
+                if r.turn_index not in latest_by_turn:
+                    latest_by_turn[r.turn_index] = r
+            total = 0
+            for r in latest_by_turn.values():
+                try:
+                    total += int(round(float(r.accuracy or 0.0)))
+                except Exception:
+                    total += 0
+            tp.conversation_total_score = int(total)
+            tp.conversation_completed = (len(latest_by_turn) >= len(conv) and len(conv) > 0)
+            tp.save(update_fields=['conversation_total_score', 'conversation_completed'])
+        except Exception as e:
+            logger.warning('Failed updating conversation totals: %s', e)
+
+        next_turn_index = turn_index + 1 if (turn_index + 1) < len(conv) else None
+        payload = {
+            'success': True,
+            'accuracy': round(float(combined_accuracy or 0.0), 1),
+            'transcription': best_tx or '',
+            'feedback': feedback or '',
+            'nextTurnIndex': next_turn_index,
+            'topicCompleted': bool(tp.completed),
+            'xpAwarded': int(xp_awarded or 0),
+            'recordingId': rec_id,
+            'audioUrl': audio_url,
+        }
+        out = ConversationSubmissionResultSerializer(payload)
+        return Response(out.data, status=status.HTTP_200_OK)
 
 
 class CompleteTopicView(APIView):

@@ -44,6 +44,9 @@ class SpeakingTopicDtoSerializer(serializers.Serializer):
     fluencyProgress = serializers.DictField(child=serializers.JSONField(), required=False)
     phraseProgress = PhraseProgressSerializer(required=False)
     practiceScores = PracticeScoresSerializer(required=False)
+    # Conversation practice progress (bonus mode)
+    conversationScore = serializers.IntegerField(required=False)
+    conversationCompleted = serializers.BooleanField(required=False)
     unlocked = serializers.BooleanField()
     completed = serializers.BooleanField()
 
@@ -72,6 +75,18 @@ class PhraseSubmissionResultSerializer(serializers.Serializer):
     transcription = serializers.CharField()
     feedback = serializers.CharField(allow_blank=True, required=False)
     nextPhraseIndex = serializers.IntegerField(allow_null=True, required=False)
+    topicCompleted = serializers.BooleanField(default=False)
+    xpAwarded = serializers.IntegerField(default=0)
+    recordingId = serializers.CharField(allow_null=True, required=False)
+    audioUrl = serializers.CharField(allow_blank=True, required=False)
+
+
+class ConversationSubmissionResultSerializer(serializers.Serializer):
+    success = serializers.BooleanField()
+    accuracy = serializers.FloatField()
+    transcription = serializers.CharField()
+    feedback = serializers.CharField(allow_blank=True, required=False)
+    nextTurnIndex = serializers.IntegerField(allow_null=True, required=False)
     topicCompleted = serializers.BooleanField(default=False)
     xpAwarded = serializers.IntegerField(default=0)
     recordingId = serializers.CharField(allow_null=True, required=False)
