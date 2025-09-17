@@ -27,6 +27,7 @@ from rest_framework.response import Response
 from rest_framework import status, permissions
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.shortcuts import get_object_or_404
+from django.contrib.auth import get_user_model
 from django.utils import timezone
 import requests
 from .models import Topic, TopicProgress, UserProfile, PhraseProgress, UserPhraseRecording, VocabularyPracticeSession, UserConversationRecording
@@ -49,6 +50,7 @@ from .serializers import (
     SubmitVocabularyAnswerResponseSerializer,
     CompleteVocabularyPracticeRequestSerializer,
     CompleteVocabularyPracticeResponseSerializer,
+    JourneyActivitySerializer,
 )
 
 logger = logging.getLogger(__name__)
@@ -1891,3 +1893,124 @@ class CompleteVocabularyPracticeView(APIView):
         }
         out = CompleteVocabularyPracticeResponseSerializer(payload)
         return Response(out.data, status=status.HTTP_200_OK)
+
+
+class SpeakingActivitiesView(APIView):
+    """Return a consolidated list of speaking journey activities for the current user.
+
+    Includes:
+    - Topic completions (TopicProgress.completed_at)
+    - Vocabulary sessions (VocabularyPracticeSession updated_at; completed vs in-progress)
+    - Conversation practice recordings (UserConversationRecording created_at)
+    - Pronunciation recordings (UserPhraseRecording created_at)
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        try:
+            limit = int(request.query_params.get('limit') or 50)
+        except Exception:
+            limit = 50
+
+        user = request.user
+
+        events: list[dict] = []
+
+        # Topic completions
+        try:
+            tps = (
+                TopicProgress.objects.select_related('topic')
+                .filter(user=user, completed=True, completed_at__isnull=False)
+            )
+            for tp in tps:
+                try:
+                    events.append({
+                        'id': f"topic_completed:{tp.topic_id}:{int(tp.completed_at.timestamp())}",
+                        'type': 'LESSON_COMPLETED',
+                        'title': f"Completed '{tp.topic.title}' topic",
+                        'description': 'All required practice modes completed',
+                        'timestamp': tp.completed_at,
+                        'xpEarned': None,
+                    })
+                except Exception:
+                    continue
+        except Exception:
+            pass
+
+        # Vocabulary practice sessions (use updated_at; label based on completed)
+        try:
+            vs = (
+                VocabularyPracticeSession.objects.select_related('topic')
+                .filter(user=user)
+                .order_by('-updated_at')[: max(50, limit)]
+            )
+            for s in vs:
+                try:
+                    title = f"Vocabulary Practice - {s.topic.title}"
+                    desc = 'Completed session' if s.completed else 'Practiced vocabulary'
+                    events.append({
+                        'id': f"vocab:{s.session_id}:{int(s.updated_at.timestamp())}",
+                        'type': 'PRACTICE_SESSION',
+                        'title': title,
+                        'description': desc,
+                        'timestamp': s.updated_at,
+                        'xpEarned': None,
+                    })
+                except Exception:
+                    continue
+        except Exception:
+            pass
+
+        # Conversation recordings
+        try:
+            cr = (
+                UserConversationRecording.objects.select_related('topic')
+                .filter(user=user)
+                .order_by('-created_at')[: max(50, limit)]
+            )
+            for r in cr:
+                try:
+                    events.append({
+                        'id': f"conversation:{r.id}",
+                        'type': 'PRACTICE_SESSION',
+                        'title': f"Conversation Practice - {r.topic.title}",
+                        'description': 'Practiced conversation',
+                        'timestamp': r.created_at,
+                        'xpEarned': None,
+                    })
+                except Exception:
+                    continue
+        except Exception:
+            pass
+
+        # Pronunciation recordings
+        try:
+            pr = (
+                UserPhraseRecording.objects.select_related('topic')
+                .filter(user=user)
+                .order_by('-created_at')[: max(50, limit)]
+            )
+            for r in pr:
+                try:
+                    events.append({
+                        'id': f"pronunciation:{r.id}",
+                        'type': 'PRACTICE_SESSION',
+                        'title': f"Pronunciation Practice - {r.topic.title}",
+                        'description': 'Practiced pronunciation',
+                        'timestamp': r.created_at,
+                        'xpEarned': None,
+                    })
+                except Exception:
+                    continue
+        except Exception:
+            pass
+
+        # Sort and limit
+        try:
+            events.sort(key=lambda x: x.get('timestamp') or timezone.now(), reverse=True)
+        except Exception:
+            pass
+        events = events[:limit]
+
+        ser = JourneyActivitySerializer(events, many=True)
+        return Response(ser.data, status=status.HTTP_200_OK)

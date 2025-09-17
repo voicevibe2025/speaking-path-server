@@ -179,3 +179,12 @@ class CompleteVocabularyPracticeResponseSerializer(serializers.Serializer):
     xpAwarded = serializers.IntegerField()
     vocabularyTotalScore = serializers.IntegerField()
     topicCompleted = serializers.BooleanField()
+
+
+class JourneyActivitySerializer(serializers.Serializer):
+    id = serializers.CharField()
+    type = serializers.CharField()
+    title = serializers.CharField()
+    description = serializers.CharField(allow_blank=True, required=False)
+    timestamp = serializers.DateTimeField()
+    xpEarned = serializers.IntegerField(required=False)

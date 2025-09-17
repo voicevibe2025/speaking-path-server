@@ -10,6 +10,7 @@ from .views import (
     SubmitVocabularyAnswerView,
     CompleteVocabularyPracticeView,
     SubmitConversationTurnView,
+    SpeakingActivitiesView,
 )
 
 app_name = 'speaking_journey'
@@ -25,5 +26,6 @@ urlpatterns = [
     path('topics/<uuid:topic_id>/vocabulary/answer', SubmitVocabularyAnswerView.as_view(), name='submit_vocabulary_answer'),
     path('topics/<uuid:topic_id>/vocabulary/complete', CompleteVocabularyPracticeView.as_view(), name='complete_vocabulary'),
     path('topics/<uuid:topic_id>/recordings', UserPhraseRecordingsView.as_view(), name='topic_recordings'),
+    path('activities', SpeakingActivitiesView.as_view(), name='activities'),
     path('tts/generate', GenerateTTSView.as_view(), name='tts_generate'),
 ]

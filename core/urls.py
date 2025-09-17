@@ -49,6 +49,7 @@ urlpatterns = [
     path(f'{API_V1_PREFIX}analytics/', include('apps.analytics.urls')),
     path(f'{API_V1_PREFIX}speaking/', include('apps.speaking_journey.urls')),
     path(f'{API_V1_PREFIX}practice/', include('apps.practice.urls')),
+    path(f'{API_V1_PREFIX}social/', include('apps.social.urls')),
 ]
 
 # Serve media files in development

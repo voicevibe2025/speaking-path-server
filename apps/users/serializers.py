@@ -76,12 +76,12 @@ class UserProfileSerializer(serializers.ModelSerializer):
     learning_goal = serializers.CharField(read_only=True)
     target_language = serializers.CharField(read_only=True)
 
-    # Skill Progress from UserAnalytics model
-    speaking_score = serializers.FloatField(source='user.analytics.fluency_score', read_only=True)
-    listening_score = serializers.FloatField(source='user.analytics.coherence_score', read_only=True)
-    grammar_score = serializers.FloatField(source='user.analytics.grammar_score', read_only=True)
-    vocabulary_score = serializers.FloatField(source='user.analytics.vocabulary_score', read_only=True)
-    pronunciation_score = serializers.FloatField(source='user.analytics.pronunciation_score', read_only=True)
+    # Skill Progress computed from Speaking Journey models (not analytics)
+    speaking_score = serializers.SerializerMethodField()
+    listening_score = serializers.SerializerMethodField()
+    grammar_score = serializers.SerializerMethodField()
+    vocabulary_score = serializers.SerializerMethodField()
+    pronunciation_score = serializers.SerializerMethodField()
 
     # Monthly Progress
     monthly_days_active = serializers.SerializerMethodField()
@@ -235,6 +235,68 @@ class UserProfileSerializer(serializers.ModelSerializer):
         # Round to 1 decimal to match UI formatting
         return round(overall, 1)
 
+    def get_speaking_score(self, obj):
+        """Speaking score from TopicProgress.conversation_total_score (0-100), averaged across topics."""
+        user = obj.user
+        try:
+            tp_scores = list(
+                TopicProgress.objects.filter(user=user).values_list('conversation_total_score', flat=True)
+            )
+            vals = [float(s or 0.0) for s in tp_scores]
+            # Consider only topics with non-zero score; if none, return 0
+            nonzero = [v for v in vals if v > 0.0]
+            if nonzero:
+                avg = sum(nonzero) / len(nonzero)
+                return round(max(0.0, min(100.0, avg)), 1)
+        except Exception:
+            pass
+        return 0.0
+
+    def get_pronunciation_score(self, obj):
+        """Pronunciation score from TopicProgress.pronunciation_total_score normalized by phrase count across topics (0-100)."""
+        user = obj.user
+        try:
+            total_sum = 0.0
+            total_count = 0
+            for tp in TopicProgress.objects.filter(user=user).select_related('topic').only('pronunciation_total_score', 'topic__material_lines'):
+                try:
+                    phrase_count = len(tp.topic.material_lines or [])
+                except Exception:
+                    phrase_count = 0
+                if phrase_count > 0 and (tp.pronunciation_total_score or 0) > 0:
+                    total_sum += float(tp.pronunciation_total_score or 0.0)
+                    total_count += phrase_count
+            if total_count > 0:
+                avg = total_sum / total_count  # 0..100
+                return round(max(0.0, min(100.0, avg)), 1)
+        except Exception:
+            pass
+        return 0.0
+
+    def get_vocabulary_score(self, obj):
+        """Vocabulary score from TopicProgress.vocabulary_total_score (0-100), averaged across topics with non-zero values."""
+        user = obj.user
+        try:
+            tp_scores = list(
+                TopicProgress.objects.filter(user=user).values_list('vocabulary_total_score', flat=True)
+            )
+            vals = [float(s or 0.0) for s in tp_scores]
+            nonzero = [v for v in vals if v > 0.0]
+            if nonzero:
+                avg = sum(nonzero) / len(nonzero)
+                return round(max(0.0, min(100.0, avg)), 1)
+        except Exception:
+            pass
+        return 0.0
+
+    def get_listening_score(self, obj):
+        """Listening not implemented yet; return 0."""
+        return 0.0
+
+    def get_grammar_score(self, obj):
+        """Grammar not implemented yet; return 0."""
+        return 0.0
+
     def get_recent_achievements(self, obj):
         """Get the 3 most recent achievements earned by the user"""
         recent_badges = obj.user.earned_badges.select_related('badge').order_by('-earned_at')[:3]
@@ -283,16 +345,16 @@ class UserProfileSerializer(serializers.ModelSerializer):
         return total_xp
 
     def get_monthly_lessons_completed(self, obj):
-        """Get the number of lessons completed by the user in the current month"""
+        """Number of Speaking Journey topics completed in the current month."""
         today = timezone.now()
         start_of_month = today.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         _, last_day = monthrange(today.year, today.month)
         end_of_month = today.replace(day=last_day, hour=23, minute=59, second=59, microsecond=999999)
 
-        # Count completed learning activities
-        return UserProgress.objects.filter(
+        # Count Speaking Journey TopicProgress completed within current month
+        return TopicProgress.objects.filter(
             user=obj.user,
-            status='completed',
+            completed=True,
             completed_at__gte=start_of_month,
             completed_at__lte=end_of_month
         ).count()
