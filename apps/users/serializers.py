@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from calendar import monthrange
 
 from apps.authentication.models import User
-from .models import UserProfile, LearningPreference, UserAchievement
+from .models import UserProfile, LearningPreference, UserAchievement, UserFollow
 from apps.gamification.serializers import UserBadgeSerializer
 from apps.speaking_sessions.models import PracticeSession
 from apps.learning_paths.models import UserProgress
@@ -45,9 +45,11 @@ class UserProfileSerializer(serializers.ModelSerializer):
     isVerified = serializers.BooleanField(default=False)
     isPremium = serializers.BooleanField(default=False)
     isOnline = serializers.BooleanField(default=False)
-    isFollowing = serializers.BooleanField(default=False)
-    isFollower = serializers.BooleanField(default=False)
+    isFollowing = serializers.SerializerMethodField()
+    isFollower = serializers.SerializerMethodField()
     isBlocked = serializers.BooleanField(default=False)
+    followersCount = serializers.SerializerMethodField()
+    followingCount = serializers.SerializerMethodField()
     stats = serializers.SerializerMethodField()
     badges = serializers.SerializerMethodField()
     preferences = serializers.SerializerMethodField()
@@ -424,6 +426,15 @@ class UserProfileSerializer(serializers.ModelSerializer):
         
     def get_stats(self, obj):
         """Generate UserStats object"""
+        try:
+            followers_count = UserFollow.objects.filter(following=obj.user).count()
+        except Exception:
+            followers_count = 0
+        try:
+            following_count = UserFollow.objects.filter(follower=obj.user).count()
+        except Exception:
+            following_count = 0
+
         return {
             'totalPracticeSessions': getattr(obj.user, 'analytics', None) and obj.user.analytics.total_sessions_completed or 0,
             'totalPracticeMinutes': getattr(obj.user, 'analytics', None) and obj.user.analytics.total_practice_time_minutes or 0,
@@ -431,14 +442,38 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'averageFluency': getattr(obj.user, 'analytics', None) and obj.user.analytics.fluency_score or 0.0,
             'completedLessons': getattr(obj.user, 'analytics', None) and obj.user.analytics.scenarios_completed or 0,
             'achievementsUnlocked': obj.user.earned_badges.count(),
-            'followersCount': 0,
-            'followingCount': 0,
+            'followersCount': followers_count,
+            'followingCount': following_count,
             'globalRank': None,
             'weeklyXp': 0,
             'monthlyXp': 0,
             'totalWords': 0,
             'improvementRate': 0.0
         }
+
+    def get_isFollowing(self, obj):
+        """Return True if the requesting user follows the profile's user."""
+        request = self.context.get('request')
+        try:
+            if request is None or not request.user.is_authenticated:
+                return False
+            if request.user == obj.user:
+                return False
+            return UserFollow.objects.filter(follower=request.user, following=obj.user).exists()
+        except Exception:
+            return False
+
+    def get_isFollower(self, obj):
+        """Return True if the profile's user follows the requesting user."""
+        request = self.context.get('request')
+        try:
+            if request is None or not request.user.is_authenticated:
+                return False
+            if request.user == obj.user:
+                return False
+            return UserFollow.objects.filter(follower=obj.user, following=request.user).exists()
+        except Exception:
+            return False
         
     def get_badges(self, obj):
         """Get user badges"""
@@ -513,6 +548,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'id', 'user', 'user_email', 'username', 'email', 'displayName', 'first_name', 'last_name',
             'level', 'xp', 'xpToNextLevel', 'streakDays', 'longestStreak', 'joinedDate', 'lastActiveDate',
             'language', 'isVerified', 'isPremium', 'isOnline', 'isFollowing', 'isFollower', 'isBlocked',
+            'followersCount', 'followingCount',
             'stats', 'badges', 'preferences',
             'date_of_birth', 'phone_number', 'avatar', 'avatar_url', 'bio',
             'native_language', 'target_language', 'current_proficiency',
@@ -531,6 +567,18 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at', 'recent_achievements'
         ]
         read_only_fields = ['id', 'user', 'total_practice_time', 'created_at', 'updated_at']
+
+    def get_followersCount(self, obj):
+        try:
+            return UserFollow.objects.filter(following=obj.user).count()
+        except Exception:
+            return 0
+
+    def get_followingCount(self, obj):
+        try:
+            return UserFollow.objects.filter(follower=obj.user).count()
+        except Exception:
+            return 0
 
 
 class LearningPreferenceSerializer(serializers.ModelSerializer):

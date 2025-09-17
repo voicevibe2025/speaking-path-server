@@ -12,7 +12,7 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from apps.speaking_journey.models import TopicProgress
 
 from apps.authentication.models import User
-from .models import UserProfile, LearningPreference, UserAchievement
+from .models import UserProfile, LearningPreference, UserAchievement, UserFollow
 from .serializers import (
     UserProfileSerializer,
     LearningPreferenceSerializer,
@@ -184,6 +184,65 @@ def update_streak(request):
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
+
+@api_view(['POST', 'DELETE'])
+@permission_classes([IsAuthenticated])
+def follow_toggle(request, user_id):
+    """
+    POST -> Follow the user with id=user_id
+    DELETE -> Unfollow the user with id=user_id
+    Returns JSON with success flag, isFollowing state, and follower/following counts for the target user.
+    """
+    if request.user.id == int(user_id):
+        return Response({'error': "You can't follow yourself"}, status=status.HTTP_400_BAD_REQUEST)
+
+    target_user = get_object_or_404(User, id=user_id)
+
+    try:
+        if request.method == 'POST':
+            UserFollow.objects.get_or_create(follower=request.user, following=target_user)
+            is_following = True
+        else:  # DELETE
+            UserFollow.objects.filter(follower=request.user, following=target_user).delete()
+            is_following = False
+
+        followers_count = UserFollow.objects.filter(following=target_user).count()
+        following_count = UserFollow.objects.filter(follower=target_user).count()
+
+        return Response({
+            'success': True,
+            'isFollowing': is_following,
+            'followersCount': followers_count,
+            'followingCount': following_count,
+        })
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def list_followers(request, user_id=None):
+    """
+    List followers for a given user_id, or current user if user_id is None.
+    """
+    target_user = request.user if user_id is None else get_object_or_404(User, id=user_id)
+    follower_ids = UserFollow.objects.filter(following=target_user).values_list('follower_id', flat=True)
+    profiles = UserProfile.objects.filter(user_id__in=follower_ids).select_related('user')
+    serializer = UserProfileSerializer(profiles, many=True, context={'request': request})
+    return Response(serializer.data)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def list_following(request, user_id=None):
+    """
+    List accounts the given user_id is following, or current user if user_id is None.
+    """
+    target_user = request.user if user_id is None else get_object_or_404(User, id=user_id)
+    following_ids = UserFollow.objects.filter(follower=target_user).values_list('following_id', flat=True)
+    profiles = UserProfile.objects.filter(user_id__in=following_ids).select_related('user')
+    serializer = UserProfileSerializer(profiles, many=True, context={'request': request})
+    return Response(serializer.data)
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])

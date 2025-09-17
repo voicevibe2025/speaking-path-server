@@ -416,7 +416,7 @@ TOPICS = [
         ]
     },
     {
-        "title": "How Old Are You?",
+        "title": "How Old Are You",
         "description": "Learn how to ask and answer questions about age politely.",
         "material": [
             "How old are you?",
@@ -472,7 +472,7 @@ TOPICS = [
         ]
     },
     {
-        "title": "What Are You Good At?",
+        "title": "What Are You Good At",
         "description": "Learn to talk about your skills, talents, and abilities.",
         "material": [
             "What are you good at?",
@@ -500,7 +500,7 @@ TOPICS = [
         ]
     },
     {
-        "title": "What's Your Favorite Sport?",
+        "title": "What's Your Favorite Sport",
         "description": "Learn to talk about your favorite sports, teams, and athletes.",
         "material": [
             "What's your favorite sport?",

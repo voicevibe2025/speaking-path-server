@@ -7,43 +7,31 @@ TOPICS = TOPICS
 
 
 class Command(BaseCommand):
-    help = 'Seeds Speaking Journey topics with material, description, and conversation. Idempotent and ordered.'
-
-    def add_arguments(self, parser):
-        parser.add_argument('--reset', action='store_true', help='Delete all existing topics before seeding')
+    help = 'Replaces all Speaking Journey topics with a fresh seed from the topics list.'
 
     @transaction.atomic
     def handle(self, *args, **options):
-        self.stdout.write(self.style.MIGRATE_HEADING('Seeding Speaking Journey topics...'))
+        self.stdout.write(self.style.MIGRATE_HEADING('Re-seeding Speaking Journey topics...'))
 
-        if options['reset']:
-            self.stdout.write(self.style.WARNING('Deleting all existing topics...'))
-            Topic.objects.all().delete()
+        # Delete all existing topics to ensure a clean slate
+        self.stdout.write(self.style.WARNING('Deleting all existing topics...'))
+        Topic.objects.all().delete()
 
-        seen_titles = set()
+        # Create new topics from the source list
+        self.stdout.write('Creating new topics...')
         for idx, item in enumerate(TOPICS, start=1):
             title = item['title'].strip()
-            seen_titles.add(title)
-            defaults = {
-                'description': item.get('description', ''),
-                'material_lines': item.get('material', []),
-                'conversation_example': item.get('conversation', []),
-                'vocabulary': item.get('vocabulary', []),
-                'fluency_practice_prompt': item.get('fluency_practice_prompt', []),
-                'sequence': idx,
-                'is_active': True,
-            }
-            topic, created = Topic.objects.update_or_create(
+            Topic.objects.create(
+                sequence=idx,
                 title=title,
-                defaults=defaults
+                description=item.get('description', ''),
+                material_lines=item.get('material', []),
+                conversation_example=item.get('conversation', []),
+                vocabulary=item.get('vocabulary', []),
+                fluency_practice_prompt=item.get('fluency_practice_prompt', []),
+                is_active=True,
             )
-            # Ensure unique sequence ordering if sequence changed
-            if topic.sequence != idx:
-                topic.sequence = idx
-                topic.save(update_fields=['sequence'])
-
-            action = 'CREATED' if created else 'UPDATED'
-            self.stdout.write(f" - {action}: {idx}. {title} ({len(defaults['material_lines'])} lines)")
+            self.stdout.write(f" - CREATED: {idx}. {title}")
 
         total = Topic.objects.count()
-        self.stdout.write(self.style.SUCCESS(f'Done. Total topics: {total}'))
+        self.stdout.write(self.style.SUCCESS(f'Successfully seeded {total} topics.'))
