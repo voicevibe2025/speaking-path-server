@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from apps.users.models import UserFollow, UserProfile
-from .models import Post, PostLike, PostComment
+from .models import Post, PostLike, PostComment, PostCommentLike
 
 User = get_user_model()
 
@@ -111,15 +111,28 @@ class CreatePostRequest(serializers.Serializer):
 class CommentSerializer(serializers.ModelSerializer):
     author = serializers.SerializerMethodField()
     createdAt = serializers.DateTimeField(source='created_at')
+    parent = serializers.IntegerField(source='parent_id', required=False, allow_null=True)
+    likesCount = serializers.SerializerMethodField()
+    isLikedByMe = serializers.SerializerMethodField()
 
     class Meta:
         model = PostComment
-        fields = ['id', 'post', 'author', 'text', 'createdAt']
-        read_only_fields = ['id', 'post', 'author', 'createdAt']
+        fields = ['id', 'post', 'author', 'text', 'parent', 'createdAt', 'likesCount', 'isLikedByMe']
+        read_only_fields = ['id', 'post', 'author', 'createdAt', 'likesCount', 'isLikedByMe']
 
     def get_author(self, obj: PostComment):
         return AuthorSerializer(obj.user, context=self.context).data
 
+    def get_likesCount(self, obj: PostComment):
+        return obj.likes.count()
+
+    def get_isLikedByMe(self, obj: PostComment):
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return False
+        return PostCommentLike.objects.filter(comment=obj, user=request.user).exists()
+
 
 class CreateCommentRequest(serializers.Serializer):
     text = serializers.CharField(required=True, allow_blank=False)
+    parent = serializers.IntegerField(required=False, allow_null=True)

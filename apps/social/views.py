@@ -6,7 +6,7 @@ from django.shortcuts import get_object_or_404
 from django.db import transaction
 
 from apps.users.models import UserFollow
-from .models import Post, PostLike, PostComment
+from .models import Post, PostLike, PostComment, PostCommentLike
 from .serializers import PostSerializer, CreatePostRequest, CommentSerializer, CreateCommentRequest
 
 
@@ -91,7 +91,8 @@ class PostCommentListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         post_id = self.kwargs['post_id']
-        return PostComment.objects.select_related('user', 'post').filter(post_id=post_id).order_by('created_at')
+        # Newest first
+        return PostComment.objects.select_related('user', 'post').filter(post_id=post_id).order_by('-created_at')
 
     def get_serializer_context(self):
         ctx = super().get_serializer_context()
@@ -111,6 +112,31 @@ class PostCommentListCreateView(generics.ListCreateAPIView):
             return Response({'detail': 'Only friends can comment.'}, status=status.HTTP_403_FORBIDDEN)
         req = CreateCommentRequest(data=request.data)
         req.is_valid(raise_exception=True)
-        comment = PostComment.objects.create(post=post, user=request.user, text=req.validated_data['text'])
+        parent_id = req.validated_data.get('parent')
+        parent = None
+        if parent_id is not None:
+            parent = get_object_or_404(PostComment, id=parent_id)
+            if parent.post_id != post.id:
+                return Response({'detail': 'Parent comment does not belong to this post.'}, status=status.HTTP_400_BAD_REQUEST)
+        comment = PostComment.objects.create(post=post, user=request.user, text=req.validated_data['text'], parent=parent)
         serializer = self.get_serializer(comment)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class PostCommentLikeView(generics.GenericAPIView):
+    queryset = PostComment.objects.all()
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, comment_id: int):
+        comment = get_object_or_404(PostComment, id=comment_id)
+        if not are_friends(request.user, comment.post.user):
+            return Response({'detail': 'Only friends can like.'}, status=status.HTTP_403_FORBIDDEN)
+        PostCommentLike.objects.get_or_create(comment=comment, user=request.user)
+        return Response({'status': 'liked'})
+
+    def delete(self, request, comment_id: int):
+        comment = get_object_or_404(PostComment, id=comment_id)
+        if not are_friends(request.user, comment.post.user):
+            return Response({'detail': 'Only friends can unlike.'}, status=status.HTTP_403_FORBIDDEN)
+        PostCommentLike.objects.filter(comment=comment, user=request.user).delete()
+        return Response({'status': 'unliked'})

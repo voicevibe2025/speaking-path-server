@@ -48,13 +48,31 @@ class PostComment(models.Model):
     post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='comments')
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='post_comments')
     text = models.TextField()
+    parent = models.ForeignKey('self', null=True, blank=True, on_delete=models.CASCADE, related_name='replies')
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         indexes = [
             models.Index(fields=['post', 'created_at']),
+            models.Index(fields=['post', 'parent', 'created_at']),
             models.Index(fields=['user', 'created_at']),
         ]
 
     def __str__(self):
         return f"Comment({self.id}) on Post({self.post_id}) by {self.user_id}"
+
+
+class PostCommentLike(models.Model):
+    comment = models.ForeignKey(PostComment, on_delete=models.CASCADE, related_name='likes')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='comment_likes')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [('comment', 'user')]
+        indexes = [
+            models.Index(fields=['comment']),
+            models.Index(fields=['user']),
+        ]
+
+    def __str__(self):
+        return f"CommentLike({self.user_id} -> {self.comment_id})"
