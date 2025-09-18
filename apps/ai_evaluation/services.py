@@ -13,6 +13,7 @@ except Exception:  # pragma: no cover - optional dependency not installed
 from typing import Dict, List, Optional, Any
 import base64
 import tempfile
+import time
 import whisper
 from django.conf import settings
 import logging
@@ -59,19 +60,75 @@ class WhisperService:
                 tmp.flush()
                 temp_path = tmp.name
 
-            # Local OpenAI Whisper (tiny.en) just like SpeakingJourney
+            # Choose engine preference via env flags
+            # - ENABLE_FASTER_WHISPER: prefer faster-whisper first
+            # - DISABLE_WHISPER: skip openai-whisper entirely (use faster-whisper only)
+            prefer_fw = (os.environ.get("ENABLE_FASTER_WHISPER", "").strip().lower() in {"1", "true", "yes"})
+            disable_whisper = (os.environ.get("DISABLE_WHISPER", "").strip().lower() in {"1", "true", "yes"})
+
+            def _transcribe_with_fw(path: str, lang: str) -> Optional[str]:
+                """Best-effort faster-whisper transcription on CPU. Returns text or None on failure."""
+                try:
+                    # Ensure CPU to avoid missing GPU drivers on Railway
+                    os.environ.setdefault("CT2_FORCE_CPU", "1")
+                    import faster_whisper  # type: ignore
+                except Exception:
+                    return None
+                try:
+                    # Share a single model instance across calls
+                    if not hasattr(self, "_fw_model") or self._fw_model is None:
+                        model_size = os.environ.get("WHISPER_MODEL_SIZE", "tiny")
+                        try:
+                            self._fw_model = faster_whisper.WhisperModel(model_size, device="cpu", compute_type="int8")
+                        except Exception:
+                            # Fallback to tiny if tiny.en not found
+                            self._fw_model = faster_whisper.WhisperModel("tiny", device="cpu", compute_type="int8")
+                    segments, _info = self._fw_model.transcribe(path, language=lang or None, word_timestamps=False)
+                    parts: List[str] = []
+                    for seg in segments:
+                        parts.append(getattr(seg, "text", ""))
+                    return (" ".join(p.strip() for p in parts if p).strip()) or ""
+                except Exception as e:
+                    logger.warning("faster-whisper transcription failed: %s", e)
+                    return None
+
+            def _transcribe_with_openai_whisper(path: str, lang: str) -> Optional[str]:
+                try:
+                    if not hasattr(self, "_model") or self._model is None:
+                        self._model = whisper.load_model(self.model_name)
+                    result = self._model.transcribe(path, language=lang)
+                    return (result.get("text") or "").strip()
+                except Exception as e:
+                    logger.warning("openai-whisper transcription failed: %s", e)
+                    return None
+
+            started = time.perf_counter()
+            text: Optional[str] = None
+            engine_used = None
+
             try:
-                if not hasattr(self, "_model") or self._model is None:
-                    self._model = whisper.load_model(self.model_name)
-                result = self._model.transcribe(temp_path, language=language)
-                text = (result.get("text") or "").strip()
+                if prefer_fw or disable_whisper:
+                    text = _transcribe_with_fw(temp_path, language)
+                    engine_used = "faster-whisper" if text is not None else None
+                    if not disable_whisper and (text is None or text == ""):
+                        text = _transcribe_with_openai_whisper(temp_path, language)
+                        engine_used = engine_used or ("openai-whisper" if text is not None else None)
+                else:
+                    text = _transcribe_with_openai_whisper(temp_path, language)
+                    engine_used = "openai-whisper" if text is not None else None
+                    if text is None or text == "":
+                        text = _transcribe_with_fw(temp_path, language)
+                        engine_used = engine_used or ("faster-whisper" if text is not None else None)
+
+                duration = round(time.perf_counter() - started, 3)
+                final_text = (text or "").strip()
                 out = {
-                    "text": text,
+                    "text": final_text,
                     "language": language,
-                    "duration": 0,
+                    "duration": duration,
                     "segments": []
                 }
-                logger.info("Audio transcribed successfully via local whisper (%s)", self.model_name)
+                logger.info("Audio transcribed via %s in %.2fs (len=%d)", engine_used or "unknown", duration, len(final_text))
                 return out
             finally:
                 try:
