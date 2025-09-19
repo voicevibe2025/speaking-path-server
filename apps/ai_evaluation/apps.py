@@ -47,6 +47,26 @@ class AiEvaluationConfig(AppConfig):
                     _T = object  # type: ignore
                 setattr(_cov_types, 'TShouldTraceFn', _T)
                 setattr(_cov_types, 'ShouldTraceFn', _T)
+            # Map ShouldStartContextFn <-> TShouldStartContextFn
+            if not hasattr(_cov_types, 'TShouldStartContextFn') and hasattr(_cov_types, 'ShouldStartContextFn'):
+                setattr(_cov_types, 'TShouldStartContextFn', getattr(_cov_types, 'ShouldStartContextFn'))
+            if not hasattr(_cov_types, 'ShouldStartContextFn') and hasattr(_cov_types, 'TShouldStartContextFn'):
+                setattr(_cov_types, 'ShouldStartContextFn', getattr(_cov_types, 'TShouldStartContextFn'))
+            # Fallback for ShouldStartContextFn when neither exists
+            if not hasattr(_cov_types, 'TShouldStartContextFn') and not hasattr(_cov_types, 'ShouldStartContextFn'):
+                try:
+                    _S = _cov_types.Callable[[_cov_types.FrameType], _cov_types.Optional[str]]  # type: ignore[attr-defined]
+                except Exception:
+                    _S = object  # type: ignore
+                setattr(_cov_types, 'TShouldStartContextFn', _S)
+                setattr(_cov_types, 'ShouldStartContextFn', _S)
+            # Ensure TCheckIncludeFn exists (Callable[[str, FrameType], bool])
+            if not hasattr(_cov_types, 'TCheckIncludeFn'):
+                try:
+                    _C = _cov_types.Callable[[str, _cov_types.FrameType], bool]  # type: ignore[attr-defined]
+                except Exception:
+                    _C = object  # type: ignore
+                setattr(_cov_types, 'TCheckIncludeFn', _C)
         except Exception:
             pass
 
@@ -135,6 +155,26 @@ class AiEvaluationConfig(AppConfig):
                                     _T = object  # type: ignore
                                 setattr(_cov_types, 'TShouldTraceFn', _T)
                                 setattr(_cov_types, 'ShouldTraceFn', _T)
+                            # Map ShouldStartContextFn <-> TShouldStartContextFn
+                            if not hasattr(_cov_types, 'TShouldStartContextFn') and hasattr(_cov_types, 'ShouldStartContextFn'):
+                                setattr(_cov_types, 'TShouldStartContextFn', getattr(_cov_types, 'ShouldStartContextFn'))
+                            if not hasattr(_cov_types, 'ShouldStartContextFn') and hasattr(_cov_types, 'TShouldStartContextFn'):
+                                setattr(_cov_types, 'ShouldStartContextFn', getattr(_cov_types, 'TShouldStartContextFn'))
+                            # Fallback for ShouldStartContextFn when neither exists
+                            if not hasattr(_cov_types, 'TShouldStartContextFn') and not hasattr(_cov_types, 'ShouldStartContextFn'):
+                                try:
+                                    _S = _cov_types.Callable[[_cov_types.FrameType], _cov_types.Optional[str]]  # type: ignore[attr-defined]
+                                except Exception:
+                                    _S = object  # type: ignore
+                                setattr(_cov_types, 'TShouldStartContextFn', _S)
+                                setattr(_cov_types, 'ShouldStartContextFn', _S)
+                            # Ensure TCheckIncludeFn exists (Callable[[str, FrameType], bool])
+                            if not hasattr(_cov_types, 'TCheckIncludeFn'):
+                                try:
+                                    _C = _cov_types.Callable[[str, _cov_types.FrameType], bool]  # type: ignore[attr-defined]
+                                except Exception:
+                                    _C = object  # type: ignore
+                                setattr(_cov_types, 'TCheckIncludeFn', _C)
                         except Exception:
                             pass
                         import whisper as openai_whisper  # type: ignore
