@@ -696,8 +696,19 @@ def _transcribe_audio_with_faster_whisper(audio_file):
             temp_path = tmp.name
 
         try:
-            # Transcribe
-            segments, info = model.transcribe(temp_path, language="en", vad_filter=True)
+            # Transcribe with speed-optimized params (no VAD for short clips, greedy decode)
+            # Notes:
+            # - beam_size=1 and best_of=1 avoids beam search overhead
+            # - vad_filter=False removes pyannote-like pre-VAD which can add latency
+            # - temperature=0 for deterministic greedy
+            segments, info = model.transcribe(
+                temp_path,
+                language="en",
+                vad_filter=False,
+                beam_size=1,
+                best_of=1,
+                temperature=0.0,
+            )
             # Join text from segments
             texts = []
             for seg in segments:
@@ -953,25 +964,42 @@ class SubmitPhraseRecordingView(APIView):
             topic=topic
         )
 
-        # Transcribe with Whisper (existing), SpeechBrain (optional), then faster-whisper (fallback)
-        whisper_transcription = _transcribe_audio_with_whisper(audio_file)
-        # Reset pointer for a second read before SpeechBrain
-        if hasattr(audio_file, 'seek'):
-            try:
-                audio_file.seek(0)
-            except Exception:
-                pass
-        sb_transcription = _transcribe_audio_with_speechbrain(audio_file)
-
-        # If both above failed, try faster-whisper as a final fallback on CPU
+        # Transcribe engines. Optionally prefer faster-whisper first via env flag.
+        prefer_fw = str(os.environ.get('PREFER_FASTER_WHISPER', '')).strip().lower() in {"1", "true", "yes"}
+        whisper_transcription = ''
+        sb_transcription = ''
         fw_transcription = ''
-        if not whisper_transcription and not sb_transcription:
+
+        if prefer_fw:
+            fw_transcription = _transcribe_audio_with_faster_whisper(audio_file)
             if hasattr(audio_file, 'seek'):
                 try:
                     audio_file.seek(0)
                 except Exception:
                     pass
-            fw_transcription = _transcribe_audio_with_faster_whisper(audio_file)
+            whisper_transcription = _transcribe_audio_with_whisper(audio_file)
+            if hasattr(audio_file, 'seek'):
+                try:
+                    audio_file.seek(0)
+                except Exception:
+                    pass
+            sb_transcription = _transcribe_audio_with_speechbrain(audio_file)
+        else:
+            # Original order: Whisper, SpeechBrain, then faster-whisper fallback
+            whisper_transcription = _transcribe_audio_with_whisper(audio_file)
+            if hasattr(audio_file, 'seek'):
+                try:
+                    audio_file.seek(0)
+                except Exception:
+                    pass
+            sb_transcription = _transcribe_audio_with_speechbrain(audio_file)
+            if not whisper_transcription and not sb_transcription:
+                if hasattr(audio_file, 'seek'):
+                    try:
+                        audio_file.seek(0)
+                    except Exception:
+                        pass
+                fw_transcription = _transcribe_audio_with_faster_whisper(audio_file)
 
         # If all failed, continue gracefully: persist attempt with zero accuracy so progress/state updates
         all_failed = (not whisper_transcription and not sb_transcription and not fw_transcription)
@@ -1213,22 +1241,40 @@ class SubmitConversationTurnView(APIView):
 
         tp, _ = TopicProgress.objects.get_or_create(user=request.user, topic=topic)
 
-        # Transcribe
-        whisper_tx = _transcribe_audio_with_whisper(audio_file)
-        if hasattr(audio_file, 'seek'):
-            try:
-                audio_file.seek(0)
-            except Exception:
-                pass
-        sb_tx = _transcribe_audio_with_speechbrain(audio_file)
+        # Transcribe (optionally prefer faster-whisper first)
+        prefer_fw = str(os.environ.get('PREFER_FASTER_WHISPER', '')).strip().lower() in {"1", "true", "yes"}
+        whisper_tx = ''
+        sb_tx = ''
         fw_tx = ''
-        if not whisper_tx and not sb_tx:
+        if prefer_fw:
+            fw_tx = _transcribe_audio_with_faster_whisper(audio_file)
             if hasattr(audio_file, 'seek'):
                 try:
                     audio_file.seek(0)
                 except Exception:
                     pass
-            fw_tx = _transcribe_audio_with_faster_whisper(audio_file)
+            whisper_tx = _transcribe_audio_with_whisper(audio_file)
+            if hasattr(audio_file, 'seek'):
+                try:
+                    audio_file.seek(0)
+                except Exception:
+                    pass
+            sb_tx = _transcribe_audio_with_speechbrain(audio_file)
+        else:
+            whisper_tx = _transcribe_audio_with_whisper(audio_file)
+            if hasattr(audio_file, 'seek'):
+                try:
+                    audio_file.seek(0)
+                except Exception:
+                    pass
+            sb_tx = _transcribe_audio_with_speechbrain(audio_file)
+            if not whisper_tx and not sb_tx:
+                if hasattr(audio_file, 'seek'):
+                    try:
+                        audio_file.seek(0)
+                    except Exception:
+                        pass
+                fw_tx = _transcribe_audio_with_faster_whisper(audio_file)
 
         # Scores and best transcript
         scores = []
