@@ -642,7 +642,7 @@ def _transcribe_audio_with_whisper(audio_file):
     """Transcribe audio using OpenAI Whisper tiny.en model"""
     try:
         # Allow disabling via environment to prefer faster-whisper on constrained hosts (e.g., Railway)
-        if os.environ.get('DISABLE_WHISPER'):
+        if str(os.environ.get('DISABLE_WHISPER', '')).strip().lower() in {"1", "true", "yes"}:
             return ""
         # Import lazily to avoid import-time issues
         global _openai_whisper
