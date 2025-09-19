@@ -71,6 +71,7 @@ class WhisperService:
             )
             disable_whisper = (os.environ.get("DISABLE_WHISPER", "").strip().lower() in {"1", "true", "yes"})
             strict_dedup = (os.environ.get("WHISPER_STRICT_DEDUP", "").strip().lower() in {"1", "true", "yes"})
+            disable_fw = (os.environ.get("DISABLE_FASTER_WHISPER", "").strip().lower() in {"1", "true", "yes"})
 
             def _transcribe_with_fw(path: str, lang: str) -> Optional[str]:
                 """Best-effort faster-whisper transcription on CPU. Returns text or None on failure."""
@@ -270,7 +271,7 @@ class WhisperService:
             engine_used = None
 
             try:
-                if prefer_fw or disable_whisper:
+                if (prefer_fw or disable_whisper) and not disable_fw:
                     text = _transcribe_with_fw(temp_path, language)
                     engine_used = "faster-whisper" if text is not None else None
                     if not disable_whisper and (text is None or text == ""):
@@ -279,7 +280,7 @@ class WhisperService:
                 else:
                     text = _transcribe_with_openai_whisper(temp_path, language)
                     engine_used = "openai-whisper" if text is not None else None
-                    if text is None or text == "":
+                    if (text is None or text == "") and not disable_fw:
                         text = _transcribe_with_fw(temp_path, language)
                         engine_used = engine_used or ("faster-whisper" if text is not None else None)
 
@@ -353,7 +354,7 @@ class WhisperService:
 
                 # If repetition seems present and we can try VAD, do a second pass
                 try:
-                    if _repetition_score(final_text) >= 1 and prefer_fw:
+                    if _repetition_score(final_text) >= 1 and prefer_fw and not disable_fw:
                         alt = _transcribe_with_fw_vad(temp_path, language)
                         if alt:
                             # Prefer the alternative if it reduces repetition noticeably

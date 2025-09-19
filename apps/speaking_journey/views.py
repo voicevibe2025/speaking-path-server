@@ -788,6 +788,9 @@ def _transcribe_audio_with_faster_whisper(audio_file):
 
     Returns empty string on failure or if the model is unavailable.
     """
+    # Allow disabling faster-whisper completely via environment flag
+    if str(os.environ.get('DISABLE_FASTER_WHISPER', '')).strip().lower() in {"1", "true", "yes"}:
+        return ""
     if FasterWhisperModel is None:
         return ""
     try:
@@ -1224,8 +1227,11 @@ class SubmitPhraseRecordingView(APIView):
             topic=topic
         )
 
-        # Transcribe engines. Optionally prefer faster-whisper first via env flag.
-        prefer_fw = str(os.environ.get('PREFER_FASTER_WHISPER', '')).strip().lower() in {"1", "true", "yes"}
+        # Transcribe engines. Optionally prefer faster-whisper first via env flag, unless disabled.
+        prefer_fw = (
+            str(os.environ.get('PREFER_FASTER_WHISPER', '')).strip().lower() in {"1", "true", "yes"}
+            and str(os.environ.get('DISABLE_FASTER_WHISPER', '')).strip().lower() not in {"1", "true", "yes"}
+        )
         whisper_transcription = ''
         sb_transcription = ''
         fw_transcription = ''
@@ -1253,7 +1259,7 @@ class SubmitPhraseRecordingView(APIView):
                 except Exception:
                     pass
             sb_transcription = _transcribe_audio_with_speechbrain(audio_file)
-            if not whisper_transcription and not sb_transcription:
+            if not whisper_transcription and not sb_transcription and str(os.environ.get('DISABLE_FASTER_WHISPER', '')).strip().lower() not in {"1", "true", "yes"}:
                 if hasattr(audio_file, 'seek'):
                     try:
                         audio_file.seek(0)
@@ -1509,8 +1515,11 @@ class SubmitConversationTurnView(APIView):
 
         tp, _ = TopicProgress.objects.get_or_create(user=request.user, topic=topic)
 
-        # Transcribe (optionally prefer faster-whisper first)
-        prefer_fw = str(os.environ.get('PREFER_FASTER_WHISPER', '')).strip().lower() in {"1", "true", "yes"}
+        # Transcribe (optionally prefer faster-whisper first), unless disabled
+        prefer_fw = (
+            str(os.environ.get('PREFER_FASTER_WHISPER', '')).strip().lower() in {"1", "true", "yes"}
+            and str(os.environ.get('DISABLE_FASTER_WHISPER', '')).strip().lower() not in {"1", "true", "yes"}
+        )
         whisper_tx = ''
         sb_tx = ''
         fw_tx = ''
@@ -1536,7 +1545,7 @@ class SubmitConversationTurnView(APIView):
                 except Exception:
                     pass
             sb_tx = _transcribe_audio_with_speechbrain(audio_file)
-            if not whisper_tx and not sb_tx:
+            if not whisper_tx and not sb_tx and str(os.environ.get('DISABLE_FASTER_WHISPER', '')).strip().lower() not in {"1", "true", "yes"}:
                 if hasattr(audio_file, 'seek'):
                     try:
                         audio_file.seek(0)

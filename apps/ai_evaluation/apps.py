@@ -54,35 +54,36 @@ class AiEvaluationConfig(AppConfig):
                 # Prepare a tiny sample file for a one-shot warm transcription
                 sample_path = _create_silence_wav()
 
-                # 1) Warm faster-whisper (ctranslate2)
-                try:
-                    from faster_whisper import WhisperModel as FWModel  # type: ignore
-                    model_size = os.environ.get("WHISPER_MODEL_SIZE", "tiny.en")
-                    fw_model = FWModel(model_size, device="cpu", compute_type="int8")
+                # 1) Warm faster-whisper (ctranslate2) unless disabled
+                if str(os.environ.get('DISABLE_FASTER_WHISPER', '')).strip().lower() not in {"1", "true", "yes"}:
                     try:
-                        # One-shot decode to prime kernels
-                        fw_model.transcribe(sample_path, language="en", beam_size=1, best_of=1, vad_filter=False)
-                    except Exception:
-                        # Even if the first decode fails, the weights are still loaded
-                        pass
+                        from faster_whisper import WhisperModel as FWModel  # type: ignore
+                        model_size = os.environ.get("WHISPER_MODEL_SIZE", "tiny.en")
+                        fw_model = FWModel(model_size, device="cpu", compute_type="int8")
+                        try:
+                            # One-shot decode to prime kernels
+                            fw_model.transcribe(sample_path, language="en", beam_size=1, best_of=1, vad_filter=False)
+                        except Exception:
+                            # Even if the first decode fails, the weights are still loaded
+                            pass
 
-                    # Share with services.WhisperService via class attribute
-                    try:
-                        from .services import WhisperService
-                        WhisperService._fw_model = fw_model  # type: ignore[attr-defined]
-                    except Exception:
-                        logger.debug("Could not attach fw_model to WhisperService class; will lazy-load per request")
+                        # Share with services.WhisperService via class attribute
+                        try:
+                            from .services import WhisperService
+                            WhisperService._fw_model = fw_model  # type: ignore[attr-defined]
+                        except Exception:
+                            logger.debug("Could not attach fw_model to WhisperService class; will lazy-load per request")
 
-                    # Also share with speaking_journey helper if present
-                    try:
-                        from apps.speaking_journey import views as sj_views
-                        setattr(sj_views._transcribe_audio_with_faster_whisper, '_model', fw_model)
-                    except Exception:
-                        logger.debug("Could not attach fw_model to speaking_journey view helper")
+                        # Also share with speaking_journey helper if present
+                        try:
+                            from apps.speaking_journey import views as sj_views
+                            setattr(sj_views._transcribe_audio_with_faster_whisper, '_model', fw_model)
+                        except Exception:
+                            logger.debug("Could not attach fw_model to speaking_journey view helper")
 
-                    logger.info("faster-whisper model preloaded for warm start (%s)", model_size)
-                except Exception as e:
-                    logger.warning("ASR warmup: faster-whisper preload failed: %s", e)
+                        logger.info("faster-whisper model preloaded for warm start (%s)", model_size)
+                    except Exception as e:
+                        logger.warning("ASR warmup: faster-whisper preload failed: %s", e)
 
                 # 2) Warm openai-whisper unless explicitly disabled
                 if str(os.environ.get('DISABLE_WHISPER', '')).strip().lower() not in {"1", "true", "yes"}:
