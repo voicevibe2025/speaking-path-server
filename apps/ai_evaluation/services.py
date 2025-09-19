@@ -63,10 +63,14 @@ class WhisperService:
                 temp_path = tmp.name
 
             # Choose engine preference via env flags
-            # - ENABLE_FASTER_WHISPER: prefer faster-whisper first
+            # - ENABLE_FASTER_WHISPER or PREFER_FASTER_WHISPER: prefer faster-whisper first
             # - DISABLE_WHISPER: skip openai-whisper entirely (use faster-whisper only)
-            prefer_fw = (os.environ.get("ENABLE_FASTER_WHISPER", "").strip().lower() in {"1", "true", "yes"})
+            prefer_fw = (
+                os.environ.get("ENABLE_FASTER_WHISPER", "").strip().lower() in {"1", "true", "yes"}
+                or os.environ.get("PREFER_FASTER_WHISPER", "").strip().lower() in {"1", "true", "yes"}
+            )
             disable_whisper = (os.environ.get("DISABLE_WHISPER", "").strip().lower() in {"1", "true", "yes"})
+            strict_dedup = (os.environ.get("WHISPER_STRICT_DEDUP", "").strip().lower() in {"1", "true", "yes"})
 
             def _transcribe_with_fw(path: str, lang: str) -> Optional[str]:
                 """Best-effort faster-whisper transcription on CPU. Returns text or None on failure."""
@@ -96,6 +100,11 @@ class WhisperService:
                         condition_on_previous_text=False,
                         compression_ratio_threshold=2.4,
                         no_speech_threshold=0.6,
+                        no_repeat_ngram_size=3,
+                        repetition_penalty=1.05,
+                        max_new_tokens=64,
+                        log_prob_threshold=-1.0,
+                        hallucination_silence_threshold=0.5,
                     )
                     parts: List[str] = []
                     for seg in segments:
@@ -106,7 +115,13 @@ class WhisperService:
                     def _collapse_repeats(s: str) -> str:
                         try:
                             import re as _re
+                            # Compare using normalized tokens but preserve original spacing
                             words = (_re.sub(r"\s+", " ", s or "").strip()).split(" ")
+                            norm = [
+                                _re.sub(r"[^A-Za-z0-9']+", "", w.replace("’", "'").replace("`", "'"))
+                                .lower()
+                                for w in words
+                            ]
                             n = len(words)
                             if n <= 3:
                                 return " ".join(words)
@@ -116,12 +131,18 @@ class WhisperService:
                                 max_w = min(5, n - i)
                                 collapsed = False
                                 for w in range(max_w, 1, -1):
-                                    chunk = words[i:i+w]
+                                    chunk_norm = norm[i:i+w]
+                                    if any(t == "" for t in chunk_norm):
+                                        continue
                                     repeats = 1
-                                    while i + (repeats * w) + w <= n and words[i + repeats*w:i + (repeats+1)*w] == chunk:
+                                    while (
+                                        i + (repeats * w) + w <= n
+                                        and norm[i + repeats*w:i + (repeats+1)*w] == chunk_norm
+                                    ):
                                         repeats += 1
                                     if repeats >= 2:
-                                        out_words.extend(chunk)
+                                        # Keep only the first occurrence
+                                        out_words.extend(words[i:i+w])
                                         i += repeats * w
                                         collapsed = True
                                         break
@@ -132,11 +153,92 @@ class WhisperService:
                         except Exception:
                             return s
 
-                    if len(out.split()) <= 30:
+                    if strict_dedup or len(out.split()) <= 30:
                         out = _collapse_repeats(out)
                     return out
                 except Exception as e:
                     logger.warning("faster-whisper transcription failed: %s", e)
+                    return None
+
+            def _transcribe_with_fw_vad(path: str, lang: str) -> Optional[str]:
+                """Secondary pass with VAD enabled to curb repetitions in short utterances."""
+                try:
+                    os.environ.setdefault("CT2_FORCE_CPU", "1")
+                    import faster_whisper  # type: ignore
+                except Exception:
+                    return None
+                try:
+                    if not hasattr(self, "_fw_model") or self._fw_model is None:
+                        model_size = os.environ.get("WHISPER_MODEL_SIZE", "tiny")
+                        try:
+                            self._fw_model = faster_whisper.WhisperModel(model_size, device="cpu", compute_type="int8")
+                        except Exception:
+                            self._fw_model = faster_whisper.WhisperModel("tiny", device="cpu", compute_type="int8")
+                    segments, _info = self._fw_model.transcribe(
+                        path,
+                        language=lang or None,
+                        word_timestamps=False,
+                        vad_filter=True,
+                        beam_size=1,
+                        best_of=1,
+                        temperature=0.0,
+                        condition_on_previous_text=False,
+                        compression_ratio_threshold=2.4,
+                        no_speech_threshold=0.6,
+                        no_repeat_ngram_size=3,
+                        repetition_penalty=1.05,
+                        max_new_tokens=64,
+                        log_prob_threshold=-1.0,
+                        hallucination_silence_threshold=0.5,
+                    )
+                    parts: List[str] = []
+                    for seg in segments:
+                        parts.append(getattr(seg, "text", ""))
+                    out = (" ".join(p.strip() for p in parts if p).strip()) or ""
+                    # Reuse collapser
+                    def _collapse_repeats(s: str) -> str:
+                        try:
+                            import re as _re
+                            words = (_re.sub(r"\s+", " ", s or "").strip()).split(" ")
+                            norm = [
+                                _re.sub(r"[^A-Za-z0-9']+", "", w.replace("’", "'").replace("`", "'"))
+                                .lower()
+                                for w in words
+                            ]
+                            n = len(words)
+                            if n <= 3:
+                                return " ".join(words)
+                            i = 0
+                            out_words: List[str] = []
+                            while i < n:
+                                max_w = min(5, n - i)
+                                collapsed = False
+                                for w in range(max_w, 1, -1):
+                                    chunk_norm = norm[i:i+w]
+                                    if any(t == "" for t in chunk_norm):
+                                        continue
+                                    repeats = 1
+                                    while (
+                                        i + (repeats * w) + w <= n
+                                        and norm[i + repeats*w:i + (repeats+1)*w] == chunk_norm
+                                    ):
+                                        repeats += 1
+                                    if repeats >= 2:
+                                        out_words.extend(words[i:i+w])
+                                        i += repeats * w
+                                        collapsed = True
+                                        break
+                                if not collapsed:
+                                    out_words.append(words[i])
+                                    i += 1
+                            return " ".join(out_words)
+                        except Exception:
+                            return s
+                    if len(out.split()) <= 30:
+                        out = _collapse_repeats(out)
+                    return out
+                except Exception as e:
+                    logger.warning("faster-whisper (VAD) transcription failed: %s", e)
                     return None
 
             def _transcribe_with_openai_whisper(path: str, lang: str) -> Optional[str]:
@@ -183,6 +285,91 @@ class WhisperService:
 
                 duration = round(time.perf_counter() - started, 3)
                 final_text = (text or "").strip()
+
+                # Repetition detector (generic for short utterances)
+                def _repetition_score(s: str) -> int:
+                    try:
+                        import re as _re
+                        toks = [t for t in _re.findall(r"[A-Za-z0-9']+", (s or '').lower())]
+                        n = len(toks)
+                        if n < 4:
+                            return 0
+                        score = 0
+                        i = 0
+                        while i < n - 3:
+                            matched = False
+                            for w in range(min(5, (n - i) // 2), 1, -1):
+                                a = toks[i:i+w]
+                                b = toks[i+w:i+2*w]
+                                if a and a == b:
+                                    score += 1
+                                    i += 2*w
+                                    matched = True
+                                    break
+                            if not matched:
+                                i += 1
+                        return score
+                    except Exception:
+                        return 0
+
+                def _collapse_repeats_text(s: str) -> str:
+                    try:
+                        import re as _re
+                        words = (_re.sub(r"\s+", " ", s or "").strip()).split(" ")
+                        norm = [
+                            _re.sub(r"[^A-Za-z0-9']+", "", w.replace("’", "'").replace("`", "'"))
+                            .lower()
+                            for w in words
+                        ]
+                        n = len(words)
+                        if n <= 3:
+                            return " ".join(words)
+                        i = 0
+                        out_words: List[str] = []
+                        while i < n:
+                            max_w = min(5, n - i)
+                            collapsed = False
+                            for w in range(max_w, 1, -1):
+                                chunk_norm = norm[i:i+w]
+                                if any(t == "" for t in chunk_norm):
+                                    continue
+                                repeats = 1
+                                while (
+                                    i + (repeats * w) + w <= n
+                                    and norm[i + repeats*w:i + (repeats+1)*w] == chunk_norm
+                                ):
+                                    repeats += 1
+                                if repeats >= 2:
+                                    out_words.extend(words[i:i+w])
+                                    i += repeats * w
+                                    collapsed = True
+                                    break
+                            if not collapsed:
+                                out_words.append(words[i])
+                                i += 1
+                        return " ".join(out_words)
+                    except Exception:
+                        return s
+
+                # If repetition seems present and we can try VAD, do a second pass
+                try:
+                    if _repetition_score(final_text) >= 1 and prefer_fw:
+                        alt = _transcribe_with_fw_vad(temp_path, language)
+                        if alt:
+                            # Prefer the alternative if it reduces repetition noticeably
+                            if _repetition_score(alt) < _repetition_score(final_text):
+                                final_text = alt.strip()
+                except Exception:
+                    pass
+
+                # Final sanitary collapse for short phrases
+                try:
+                    if final_text:
+                        if strict_dedup or len(final_text.split()) <= 30:
+                            final_text = _collapse_repeats_text(final_text)
+                except Exception:
+                    pass
+
                 out = {
                     "text": final_text,
                     "language": language,
