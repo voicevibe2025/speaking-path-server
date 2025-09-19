@@ -14,7 +14,9 @@ from typing import Dict, List, Optional, Any
 import base64
 import tempfile
 import time
-import whisper
+# Defer openai-whisper import to runtime to avoid import-time overhead and potential
+# coverage/numba incompatibility (coverage.types.Tracer vs TTracer)
+_openai_whisper = None
 from django.conf import settings
 import logging
 
@@ -93,9 +95,23 @@ class WhisperService:
                     return None
 
             def _transcribe_with_openai_whisper(path: str, lang: str) -> Optional[str]:
+                # Allow disabling to avoid PyTorch weight load and coverage/numba issues on CPU-only hosts
+                if os.environ.get("DISABLE_WHISPER", "").strip().lower() in {"1", "true", "yes"}:
+                    return None
                 try:
+                    global _openai_whisper
+                    if _openai_whisper is None:
+                        # Patch coverage types so numba's coverage_support import doesn't explode
+                        try:
+                            import coverage.types as _cov_types  # type: ignore
+                            if not hasattr(_cov_types, 'Tracer') and hasattr(_cov_types, 'TTracer'):
+                                setattr(_cov_types, 'Tracer', getattr(_cov_types, 'TTracer'))
+                        except Exception:
+                            pass
+                        import whisper as _w
+                        _openai_whisper = _w
                     if not hasattr(self, "_model") or self._model is None:
-                        self._model = whisper.load_model(self.model_name)
+                        self._model = _openai_whisper.load_model(self.model_name)
                     result = self._model.transcribe(path, language=lang)
                     return (result.get("text") or "").strip()
                 except Exception as e:

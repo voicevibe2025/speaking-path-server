@@ -87,6 +87,13 @@ class AiEvaluationConfig(AppConfig):
                 # 2) Warm openai-whisper unless explicitly disabled
                 if str(os.environ.get('DISABLE_WHISPER', '')).strip().lower() not in {"1", "true", "yes"}:
                     try:
+                        # Patch coverage.types for numba's coverage_support to handle coverage>=7 where TTracer exists
+                        try:
+                            import coverage.types as _cov_types  # type: ignore
+                            if not hasattr(_cov_types, 'Tracer') and hasattr(_cov_types, 'TTracer'):
+                                setattr(_cov_types, 'Tracer', getattr(_cov_types, 'TTracer'))
+                        except Exception:
+                            pass
                         import whisper as openai_whisper  # type: ignore
                         ow_model = openai_whisper.load_model("tiny.en")
                         try:

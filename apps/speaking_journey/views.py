@@ -12,7 +12,8 @@ import subprocess
 import json
 import math
 from difflib import SequenceMatcher
-import whisper
+# Defer openai-whisper import to runtime to avoid import-time overhead and potential coverage/numba issues
+_openai_whisper = None
 from typing import Optional
 try:
     from faster_whisper import WhisperModel as FasterWhisperModel
@@ -557,9 +558,24 @@ def _transcribe_audio_with_whisper(audio_file):
         # Allow disabling via environment to prefer faster-whisper on constrained hosts (e.g., Railway)
         if os.environ.get('DISABLE_WHISPER'):
             return ""
+        # Import lazily to avoid import-time issues
+        global _openai_whisper
+        if _openai_whisper is None:
+            try:
+                # Patch coverage types for numba if using newer coverage that exposes TTracer not Tracer
+                try:
+                    import coverage.types as _cov_types  # type: ignore
+                    if not hasattr(_cov_types, 'Tracer') and hasattr(_cov_types, 'TTracer'):
+                        setattr(_cov_types, 'Tracer', getattr(_cov_types, 'TTracer'))
+                except Exception:
+                    pass
+                import whisper as _w
+                _openai_whisper = _w
+            except Exception:
+                return ""
         # Load Whisper model once and reuse (tiny.en is ~75MB)
         if not hasattr(_transcribe_audio_with_whisper, '_model'):
-            _transcribe_audio_with_whisper._model = whisper.load_model("tiny.en")
+            _transcribe_audio_with_whisper._model = _openai_whisper.load_model("tiny.en")
         model = _transcribe_audio_with_whisper._model
 
         # Create temporary file for audio processing
