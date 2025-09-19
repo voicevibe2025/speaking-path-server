@@ -24,6 +24,22 @@ class AiEvaluationConfig(AppConfig):
         # Import signals here if needed for AI evaluation events
         logger = logging.getLogger(__name__)
 
+        # Early patch: ensure coverage.types has names expected by numba's coverage_support
+        try:
+            import coverage.types as _cov_types  # type: ignore
+            # Map Tracer <-> TTracer
+            if not hasattr(_cov_types, 'Tracer') and hasattr(_cov_types, 'TTracer'):
+                setattr(_cov_types, 'Tracer', getattr(_cov_types, 'TTracer'))
+            if not hasattr(_cov_types, 'TTracer') and hasattr(_cov_types, 'Tracer'):
+                setattr(_cov_types, 'TTracer', getattr(_cov_types, 'Tracer'))
+            # Map ShouldTraceFn <-> TShouldTraceFn
+            if not hasattr(_cov_types, 'TShouldTraceFn') and hasattr(_cov_types, 'ShouldTraceFn'):
+                setattr(_cov_types, 'TShouldTraceFn', getattr(_cov_types, 'ShouldTraceFn'))
+            if not hasattr(_cov_types, 'ShouldTraceFn') and hasattr(_cov_types, 'TShouldTraceFn'):
+                setattr(_cov_types, 'ShouldTraceFn', getattr(_cov_types, 'TShouldTraceFn'))
+        except Exception:
+            pass
+
         # Allow disabling warmup explicitly
         if str(os.environ.get('DISABLE_ASR_WARMUP', '')).strip().lower() in {"1", "true", "yes"}:
             logger.info("ASR warmup disabled by DISABLE_ASR_WARMUP env var")
@@ -88,11 +104,19 @@ class AiEvaluationConfig(AppConfig):
                 # 2) Warm openai-whisper unless explicitly disabled
                 if str(os.environ.get('DISABLE_WHISPER', '')).strip().lower() not in {"1", "true", "yes"}:
                     try:
-                        # Patch coverage.types for numba's coverage_support to handle coverage>=7 where TTracer exists
+                        # Patch coverage.types for numba's coverage_support to handle coverage cross-version
                         try:
                             import coverage.types as _cov_types  # type: ignore
+                            # Map Tracer <-> TTracer
                             if not hasattr(_cov_types, 'Tracer') and hasattr(_cov_types, 'TTracer'):
                                 setattr(_cov_types, 'Tracer', getattr(_cov_types, 'TTracer'))
+                            if not hasattr(_cov_types, 'TTracer') and hasattr(_cov_types, 'Tracer'):
+                                setattr(_cov_types, 'TTracer', getattr(_cov_types, 'Tracer'))
+                            # Map ShouldTraceFn <-> TShouldTraceFn
+                            if not hasattr(_cov_types, 'TShouldTraceFn') and hasattr(_cov_types, 'ShouldTraceFn'):
+                                setattr(_cov_types, 'TShouldTraceFn', getattr(_cov_types, 'ShouldTraceFn'))
+                            if not hasattr(_cov_types, 'ShouldTraceFn') and hasattr(_cov_types, 'TShouldTraceFn'):
+                                setattr(_cov_types, 'ShouldTraceFn', getattr(_cov_types, 'TShouldTraceFn'))
                         except Exception:
                             pass
                         import whisper as openai_whisper  # type: ignore
