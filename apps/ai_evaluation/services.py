@@ -262,6 +262,14 @@ class WhisperService:
                                 setattr(_cov_types, 'TShouldTraceFn', getattr(_cov_types, 'ShouldTraceFn'))
                             if not hasattr(_cov_types, 'ShouldTraceFn') and hasattr(_cov_types, 'TShouldTraceFn'):
                                 setattr(_cov_types, 'ShouldTraceFn', getattr(_cov_types, 'TShouldTraceFn'))
+                            # Define a minimal fallback when neither exists (older coverage.py versions)
+                            if not hasattr(_cov_types, 'TShouldTraceFn') and not hasattr(_cov_types, 'ShouldTraceFn'):
+                                try:
+                                    _T = _cov_types.Callable[[str, _cov_types.FrameType], _cov_types.TFileDisposition]  # type: ignore[attr-defined]
+                                except Exception:
+                                    _T = object  # type: ignore
+                                setattr(_cov_types, 'TShouldTraceFn', _T)
+                                setattr(_cov_types, 'ShouldTraceFn', _T)
                         except Exception:
                             pass
                         import whisper as _w
