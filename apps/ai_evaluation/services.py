@@ -85,11 +85,56 @@ class WhisperService:
                         except Exception:
                             # Fallback to tiny if tiny.en not found
                             self._fw_model = faster_whisper.WhisperModel("tiny", device="cpu", compute_type="int8")
-                    segments, _info = self._fw_model.transcribe(path, language=lang or None, word_timestamps=False)
+                    segments, _info = self._fw_model.transcribe(
+                        path,
+                        language=lang or None,
+                        word_timestamps=False,
+                        vad_filter=False,
+                        beam_size=1,
+                        best_of=1,
+                        temperature=0.0,
+                        condition_on_previous_text=False,
+                        compression_ratio_threshold=2.4,
+                        no_speech_threshold=0.6,
+                    )
                     parts: List[str] = []
                     for seg in segments:
                         parts.append(getattr(seg, "text", ""))
-                    return (" ".join(p.strip() for p in parts if p).strip()) or ""
+                    out = (" ".join(p.strip() for p in parts if p).strip()) or ""
+
+                    # Collapse simple repeated phrase patterns for short utterances
+                    def _collapse_repeats(s: str) -> str:
+                        try:
+                            import re as _re
+                            words = (_re.sub(r"\s+", " ", s or "").strip()).split(" ")
+                            n = len(words)
+                            if n <= 3:
+                                return " ".join(words)
+                            i = 0
+                            out_words: List[str] = []
+                            while i < n:
+                                max_w = min(5, n - i)
+                                collapsed = False
+                                for w in range(max_w, 1, -1):
+                                    chunk = words[i:i+w]
+                                    repeats = 1
+                                    while i + (repeats * w) + w <= n and words[i + repeats*w:i + (repeats+1)*w] == chunk:
+                                        repeats += 1
+                                    if repeats >= 2:
+                                        out_words.extend(chunk)
+                                        i += repeats * w
+                                        collapsed = True
+                                        break
+                                if not collapsed:
+                                    out_words.append(words[i])
+                                    i += 1
+                            return " ".join(out_words)
+                        except Exception:
+                            return s
+
+                    if len(out.split()) <= 30:
+                        out = _collapse_repeats(out)
+                    return out
                 except Exception as e:
                     logger.warning("faster-whisper transcription failed: %s", e)
                     return None

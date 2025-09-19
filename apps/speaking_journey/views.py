@@ -562,11 +562,19 @@ def _transcribe_audio_with_whisper(audio_file):
         global _openai_whisper
         if _openai_whisper is None:
             try:
-                # Patch coverage types for numba if using newer coverage that exposes TTracer not Tracer
+                # Patch coverage types for numba/coverage cross-version compatibility
                 try:
                     import coverage.types as _cov_types  # type: ignore
+                    # Map Tracer <-> TTracer
                     if not hasattr(_cov_types, 'Tracer') and hasattr(_cov_types, 'TTracer'):
                         setattr(_cov_types, 'Tracer', getattr(_cov_types, 'TTracer'))
+                    if not hasattr(_cov_types, 'TTracer') and hasattr(_cov_types, 'Tracer'):
+                        setattr(_cov_types, 'TTracer', getattr(_cov_types, 'Tracer'))
+                    # Map ShouldTraceFn <-> TShouldTraceFn
+                    if not hasattr(_cov_types, 'TShouldTraceFn') and hasattr(_cov_types, 'ShouldTraceFn'):
+                        setattr(_cov_types, 'TShouldTraceFn', getattr(_cov_types, 'ShouldTraceFn'))
+                    if not hasattr(_cov_types, 'ShouldTraceFn') and hasattr(_cov_types, 'TShouldTraceFn'):
+                        setattr(_cov_types, 'ShouldTraceFn', getattr(_cov_types, 'TShouldTraceFn'))
                 except Exception:
                     pass
                 import whisper as _w
@@ -724,6 +732,9 @@ def _transcribe_audio_with_faster_whisper(audio_file):
                 beam_size=1,
                 best_of=1,
                 temperature=0.0,
+                condition_on_previous_text=False,
+                compression_ratio_threshold=2.4,
+                no_speech_threshold=0.6,
             )
             # Join text from segments
             texts = []
@@ -734,6 +745,39 @@ def _transcribe_audio_with_faster_whisper(audio_file):
                 except Exception:
                     continue
             out = ' '.join([t.strip() for t in texts if t and t.strip()]).strip()
+
+            # Collapse simple repeated phrase patterns for short utterances
+            def _collapse_repeats(s: str) -> str:
+                try:
+                    import re as _re
+                    words = (_re.sub(r"\s+", " ", s or "").strip()).split(" ")
+                    n = len(words)
+                    if n <= 3:
+                        return " ".join(words)
+                    i = 0
+                    out_words: list[str] = []
+                    while i < n:
+                        max_w = min(5, n - i)
+                        collapsed = False
+                        for w in range(max_w, 1, -1):
+                            chunk = words[i:i+w]
+                            repeats = 1
+                            while i + (repeats * w) + w <= n and words[i + repeats*w:i + (repeats+1)*w] == chunk:
+                                repeats += 1
+                            if repeats >= 2:
+                                out_words.extend(chunk)
+                                i += repeats * w
+                                collapsed = True
+                                break
+                        if not collapsed:
+                            out_words.append(words[i])
+                            i += 1
+                    return " ".join(out_words)
+                except Exception:
+                    return s
+
+            if len(out.split()) <= 30:
+                out = _collapse_repeats(out)
             return out
         finally:
             try:
