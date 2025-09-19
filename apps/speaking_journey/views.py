@@ -316,6 +316,92 @@ def _word_diff_context(expected_phrase: str, transcribed_text: str):
     }
 
 
+def _repetition_score(text: str) -> int:
+    """Heuristic score: counts contiguous repeated 2- to 5-gram runs."""
+    try:
+        toks = _tokenize_words(text)
+        n = len(toks)
+        if n < 4:
+            return 0
+        score = 0
+        i = 0
+        while i < n - 3:
+            matched = False
+            for w in range(min(5, (n - i) // 2), 1, -1):
+                a = toks[i:i+w]
+                b = toks[i+w:i+2*w]
+                if a and a == b:
+                    score += 1
+                    i += 2*w
+                    matched = True
+                    break
+            if not matched:
+                i += 1
+        return score
+    except Exception:
+        return 0
+
+
+def _is_repetition_issue(expected: str, actual: str) -> bool:
+    """Return True if actual likely contains repeated phrase artifacts.
+
+    Uses expected length when available and a generic repeated n-gram check.
+    """
+    try:
+        got = _tokenize_words(actual)
+        if not got:
+            return False
+        exp = _tokenize_words(expected or '')
+        # If we know the expected phrase, flag if output is much longer and has repeats
+        if exp and len(got) >= max(20, 2 * len(exp)) and _repetition_score(actual) >= 1:
+            return True
+        # Generic: any repeated n-grams for very short utterances
+        return _repetition_score(actual) >= 2
+    except Exception:
+        return False
+
+
+def _collapse_repeats_text(s: str) -> str:
+    """Generic repeated n-gram collapser for any text (keeps first occurrence)."""
+    try:
+        import re as _re
+        words = (_re.sub(r"\s+", " ", s or "").strip()).split(" ")
+        norm = [
+            _re.sub(r"[^A-Za-z0-9']+", "", w.replace("’", "'").replace("`", "'"))
+            .lower()
+            for w in words
+        ]
+        n = len(words)
+        if n <= 3:
+            return " ".join(words)
+        i = 0
+        out_words: list[str] = []
+        while i < n:
+            max_w = min(5, n - i)
+            collapsed = False
+            for w in range(max_w, 1, -1):
+                chunk_norm = norm[i:i+w]
+                if any(t == "" for t in chunk_norm):
+                    continue
+                repeats = 1
+                while (
+                    i + (repeats * w) + w <= n
+                    and norm[i + repeats*w:i + (repeats+1)*w] == chunk_norm
+                ):
+                    repeats += 1
+                if repeats >= 2:
+                    out_words.extend(words[i:i+w])
+                    i += repeats * w
+                    collapsed = True
+                    break
+            if not collapsed:
+                out_words.append(words[i])
+                i += 1
+        return " ".join(out_words)
+    except Exception:
+        return s
+
+
 def _get_gemini_feedback(expected_phrase: str, transcribed_text: str, accuracy: float) -> str:
     """Get pronunciation feedback using Gemini 2.5 (pro/flash), transcript-aware.
 
@@ -735,6 +821,11 @@ def _transcribe_audio_with_faster_whisper(audio_file):
                 condition_on_previous_text=False,
                 compression_ratio_threshold=2.4,
                 no_speech_threshold=0.6,
+                no_repeat_ngram_size=3,
+                repetition_penalty=1.05,
+                max_new_tokens=64,
+                log_prob_threshold=-1.0,
+                hallucination_silence_threshold=0.5,
             )
             # Join text from segments
             texts = []
@@ -750,7 +841,13 @@ def _transcribe_audio_with_faster_whisper(audio_file):
             def _collapse_repeats(s: str) -> str:
                 try:
                     import re as _re
+                    # Keep original words for output, but compare using normalized tokens
                     words = (_re.sub(r"\s+", " ", s or "").strip()).split(" ")
+                    norm = [
+                        _re.sub(r"[^A-Za-z0-9']+", "", w.replace("’", "'").replace("`", "'"))
+                        .lower()
+                        for w in words
+                    ]
                     n = len(words)
                     if n <= 3:
                         return " ".join(words)
@@ -760,12 +857,18 @@ def _transcribe_audio_with_faster_whisper(audio_file):
                         max_w = min(5, n - i)
                         collapsed = False
                         for w in range(max_w, 1, -1):
-                            chunk = words[i:i+w]
+                            chunk_norm = norm[i:i+w]
+                            if any(t == "" for t in chunk_norm):
+                                continue
                             repeats = 1
-                            while i + (repeats * w) + w <= n and words[i + repeats*w:i + (repeats+1)*w] == chunk:
+                            while (
+                                i + (repeats * w) + w <= n
+                                and norm[i + repeats*w:i + (repeats+1)*w] == chunk_norm
+                            ):
                                 repeats += 1
                             if repeats >= 2:
-                                out_words.extend(chunk)
+                                # Keep only the first occurrence in original formatting
+                                out_words.extend(words[i:i+w])
                                 i += repeats * w
                                 collapsed = True
                                 break
@@ -787,6 +890,103 @@ def _transcribe_audio_with_faster_whisper(audio_file):
                 pass
     except Exception as e:
         logger.error('faster-whisper transcription error: %s', e)
+        return ""
+
+
+def _transcribe_audio_with_faster_whisper_vad(audio_file):
+    """Transcribe using faster-whisper with VAD enabled; shares the same model instance."""
+    if FasterWhisperModel is None:
+        return ""
+    try:
+        # Reuse or create model
+        if not hasattr(_transcribe_audio_with_faster_whisper, '_model'):
+            _transcribe_audio_with_faster_whisper._model = FasterWhisperModel(
+                "tiny.en", device="cpu", compute_type="int8"
+            )
+        model = _transcribe_audio_with_faster_whisper._model
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.m4a') as tmp:
+            for chunk in getattr(audio_file, 'chunks', lambda: [audio_file.read()])():
+                if chunk:
+                    tmp.write(chunk)
+            temp_path = tmp.name
+
+        try:
+            segments, info = model.transcribe(
+                temp_path,
+                language="en",
+                vad_filter=True,
+                beam_size=1,
+                best_of=1,
+                temperature=0.0,
+                condition_on_previous_text=False,
+                compression_ratio_threshold=2.4,
+                no_speech_threshold=0.6,
+                no_repeat_ngram_size=3,
+                repetition_penalty=1.05,
+                max_new_tokens=64,
+                log_prob_threshold=-1.0,
+                hallucination_silence_threshold=0.5,
+            )
+            texts = []
+            for seg in segments:
+                try:
+                    if seg and getattr(seg, 'text', None):
+                        texts.append(seg.text)
+                except Exception:
+                    continue
+            out = ' '.join([t.strip() for t in texts if t and t.strip()]).strip()
+            # Reuse the same collapser as above
+            def _collapse_repeats(s: str) -> str:
+                try:
+                    import re as _re
+                    words = (_re.sub(r"\s+", " ", s or "").strip()).split(" ")
+                    norm = [
+                        _re.sub(r"[^A-Za-z0-9']+", "", w.replace("’", "'").replace("`", "'"))
+                        .lower()
+                        for w in words
+                    ]
+                    n = len(words)
+                    if n <= 3:
+                        return " ".join(words)
+                    i = 0
+                    out_words: list[str] = []
+                    while i < n:
+                        max_w = min(5, n - i)
+                        collapsed = False
+                        for w in range(max_w, 1, -1):
+                            chunk_norm = norm[i:i+w]
+                            if any(t == "" for t in chunk_norm):
+                                continue
+                            repeats = 1
+                            while (
+                                i + (repeats * w) + w <= n
+                                and norm[i + repeats*w:i + (repeats+1)*w] == chunk_norm
+                            ):
+                                repeats += 1
+                            if repeats >= 2:
+                                out_words.extend(words[i:i+w])
+                                i += repeats * w
+                                collapsed = True
+                                break
+                        if not collapsed:
+                            out_words.append(words[i])
+                            i += 1
+                    return " ".join(out_words)
+                except Exception:
+                    return s
+
+            if len(out.split()) <= 30:
+                out = _collapse_repeats(out)
+            return out
+        finally:
+            try:
+                if os.path.exists(temp_path):
+                    os.unlink(temp_path)
+            except Exception:
+                pass
+    except Exception as e:
+        logger.error('faster-whisper (VAD) transcription error: %s', e)
         return ""
 
 
@@ -1090,6 +1290,14 @@ class SubmitPhraseRecordingView(APIView):
         if (fw_accuracy or -1.0) > best_score:
             best_transcription = fw_transcription
 
+        # Final sanitary collapse for short utterances to remove accidental repetitions
+        try:
+            if (best_transcription or '').strip():
+                if len((best_transcription or '').split()) <= 30:
+                    best_transcription = _collapse_repeats_text(best_transcription)
+        except Exception:
+            pass
+
         # New rule: Any accuracy passes and auto-unlocks the next phrase
         passed = True
         next_phrase_index = None
@@ -1356,6 +1564,55 @@ class SubmitConversationTurnView(APIView):
             best_score = sa
         if fa is not None and fa > best_score:
             best_tx = fw_tx
+
+        # Repetition-aware tie-breaker: if top choices are close, prefer the one without repetition
+        try:
+            cand = []
+            if whisper_tx:
+                cand.append((whisper_tx, wa or 0.0, _is_repetition_issue(expected_text, whisper_tx)))
+            if sb_tx:
+                cand.append((sb_tx, sa or 0.0, _is_repetition_issue(expected_text, sb_tx)))
+            if fw_tx:
+                cand.append((fw_tx, fa or 0.0, _is_repetition_issue(expected_text, fw_tx)))
+            if cand:
+                # sort by score desc first
+                cand.sort(key=lambda x: x[1], reverse=True)
+                top_score = cand[0][1]
+                # among near-top (within 5 pts), pick the one with no repetition if available
+                near = [c for c in cand if (top_score - c[1]) <= 5.0]
+                if any(not c[2] for c in near):
+                    chosen = next(c for c in near if not c[2])
+                    best_tx, best_score, _ = chosen
+        except Exception:
+            pass
+
+        # If still looks repetitive, try a quick VAD-enabled faster-whisper pass and adopt if better
+        try:
+            if _is_repetition_issue(expected_text, best_tx or ''):
+                if hasattr(audio_file, 'seek'):
+                    try:
+                        audio_file.seek(0)
+                    except Exception:
+                        pass
+                fw_vad_tx = _transcribe_audio_with_faster_whisper_vad(audio_file)
+                if fw_vad_tx:
+                    new_score = _calculate_similarity(expected_text, fw_vad_tx)
+                    # Accept if better score, or if similar (within 3 pts) but fixes repetition
+                    if (new_score > (best_score or -1.0)) or (
+                        abs(new_score - (best_score or 0.0)) <= 3.0 and not _is_repetition_issue(expected_text, fw_vad_tx)
+                    ):
+                        best_tx = fw_vad_tx
+                        best_score = new_score
+        except Exception:
+            pass
+
+        # Final sanitary collapse for short utterances
+        try:
+            if (best_tx or '').strip():
+                if len((best_tx or '').split()) <= 30:
+                    best_tx = _collapse_repeats_text(best_tx)
+        except Exception:
+            pass
 
         xp_awarded = 0
         if combined_accuracy >= 80.0:
