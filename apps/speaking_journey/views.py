@@ -202,13 +202,10 @@ def _meets_completion_criteria(topic_progress):
     if not topic:
         return False
 
-    # Compute per-practice maxima
-    pron_max = int(len(topic.material_lines or []) * 100)
-    flu_max = int(len(topic.fluency_practice_prompt or []) * 100)
-    # Match StartVocabularyPracticeView logic (~60% of vocab, at least 1 question when vocab exists)
-    vocab_words = len([w for w in (topic.vocabulary or []) if isinstance(w, str) and w.strip()])
-    vocab_q_count = max(1, int(round(0.6 * vocab_words))) if vocab_words > 0 else 0
-    vocab_max = int(vocab_q_count * 10)
+    # Compute per-practice maxima (normalized 0–100 scale per practice)
+    pron_max = 100
+    flu_max = 100
+    vocab_max = 100
 
     # Effective (clamped) totals to avoid exceeding maxima
     pron_total = int(topic_progress.pronunciation_total_score or 0)
@@ -220,16 +217,19 @@ def _meets_completion_criteria(topic_progress):
             for r in qs:
                 if r.phrase_index not in latest_by_phrase:
                     latest_by_phrase[r.phrase_index] = r
-            recomputed = 0
+            recomputed_sum = 0
+            count = 0
             for r in latest_by_phrase.values():
                 try:
-                    recomputed += int(round(float(r.accuracy or 0.0)))
+                    recomputed_sum += int(round(float(r.accuracy or 0.0)))
+                    count += 1
                 except Exception:
                     pass
-            if recomputed > 0:
-                topic_progress.pronunciation_total_score = recomputed
+            recomputed_avg = int(round(recomputed_sum / count)) if count > 0 else 0
+            if recomputed_avg > 0:
+                topic_progress.pronunciation_total_score = recomputed_avg
                 topic_progress.save(update_fields=['pronunciation_total_score'])
-                pron_total = recomputed
+                pron_total = recomputed_avg
         except Exception:
             pass
 
@@ -1346,7 +1346,7 @@ class SpeakingTopicsView(APIView):
 
             # Build practice scores data
             pronunciation_score = int(tp.pronunciation_total_score or 0)
-            # Fallback recompute for legacy sessions where pron_total was not persisted
+            # Fallback recompute for legacy sessions where pron_total was not persisted (use average 0–100)
             if pronunciation_score <= 0:
                 try:
                     qs = UserPhraseRecording.objects.filter(user=request.user, topic=t).order_by('phrase_index', '-created_at')
@@ -1354,26 +1354,27 @@ class SpeakingTopicsView(APIView):
                     for r in qs:
                         if r.phrase_index not in latest_by_phrase:
                             latest_by_phrase[r.phrase_index] = r
-                    recomputed = 0
+                    total_acc = 0
+                    cnt = 0
                     for r in latest_by_phrase.values():
                         try:
-                            recomputed += int(round(float(r.accuracy or 0.0)))
+                            total_acc += int(round(float(r.accuracy or 0.0)))
+                            cnt += 1
                         except Exception:
                             pass
-                    if recomputed > 0:
-                        tp.pronunciation_total_score = recomputed
+                    recomputed_avg = int(round(total_acc / cnt)) if cnt > 0 else 0
+                    if recomputed_avg > 0:
+                        tp.pronunciation_total_score = recomputed_avg
                         tp.save(update_fields=['pronunciation_total_score'])
-                        pronunciation_score = recomputed
+                        pronunciation_score = recomputed_avg
                 except Exception:
                     pass
             vocabulary_score = int(tp.vocabulary_total_score or 0)
 
-            # Compute per-practice maxima
-            pron_max = int(len(t.material_lines or []) * 100)
-            flu_max = int(len(fprompts) * 100)
-            vocab_words = len([w for w in (t.vocabulary or []) if isinstance(w, str) and w.strip()])
-            vocab_q_count = max(1, int(round(0.6 * vocab_words))) if vocab_words > 0 else 0
-            vocab_max = int(vocab_q_count * 10)
+            # Compute per-practice maxima (normalized 0–100)
+            pron_max = 100
+            flu_max = 100
+            vocab_max = 100
 
             # Clamp totals to maxima for fair percentage/progress
             eff_pron = min(pronunciation_score, pron_max) if pron_max > 0 else 0
@@ -1729,34 +1730,34 @@ class SubmitPhraseRecordingView(APIView):
             except Exception:
                 audio_url = ''
 
-            # Now that the latest recording is persisted, recompute pronunciation total (latest per phrase)
-            try:
-                qs = UserPhraseRecording.objects.filter(user=request.user, topic=topic).order_by('phrase_index', '-created_at')
-                latest_by_phrase = {}
-                for r in qs:
-                    if r.phrase_index not in latest_by_phrase:
-                        latest_by_phrase[r.phrase_index] = r
-                total_score = 0
-                for r in latest_by_phrase.values():
-                    try:
-                        total_score += int(round(float(r.accuracy or 0.0)))
-                    except Exception:
-                        total_score += 0
-                topic_progress.pronunciation_total_score = int(total_score)
-                # If all phrases done, ensure pronunciation_completed flag is set (idempotent)
-                if phrase_progress.is_all_phrases_completed and not topic_progress.pronunciation_completed:
-                    topic_progress.pronunciation_completed = True
-                # Topic completion check after total update
-                if not topic_progress.completed and topic_progress.all_modes_completed:
-                    topic_progress.completed = True
-                    topic_progress.completed_at = timezone.now()
-                topic_progress.save()
-            except Exception as e:
-                logger.warning('Failed to recompute pronunciation total after save: %s', e)
-        except Exception:
-            # Do not fail the request if persistence fails; continue without recording info
-            recording_id = None
-            audio_url = ''
+        except Exception as e:
+            # Ensure outer try is closed to avoid SyntaxError, and continue with safe defaults
+            logger.warning('Failed to persist user phrase recording or build audio URL: %s', e)
+
+        # Normalize pronunciation_total_score to 0–100 average across latest per-phrase recordings
+        try:
+            qs = (
+                UserPhraseRecording.objects
+                .filter(user=request.user, topic=topic)
+                .order_by('phrase_index', '-created_at')
+            )
+            latest_by_phrase = {}
+            for r in qs:
+                if r.phrase_index not in latest_by_phrase:
+                    latest_by_phrase[r.phrase_index] = r
+            total_acc = 0
+            cnt = 0
+            for r in latest_by_phrase.values():
+                try:
+                    total_acc += int(round(float(r.accuracy or 0.0)))
+                    cnt += 1
+                except Exception:
+                    pass
+            avg_acc = int(round(total_acc / cnt)) if cnt > 0 else 0
+            topic_progress.pronunciation_total_score = avg_acc
+            topic_progress.save(update_fields=['pronunciation_total_score'])
+        except Exception as e:
+            logger.warning('Failed updating pronunciation totals (avg): %s', e)
 
         # Build response
         result = {
@@ -1972,7 +1973,7 @@ class SubmitConversationTurnView(APIView):
         except Exception as e:
             logger.warning('Failed to persist conversation recording: %s', e)
 
-        # Update totals: latest per turn
+        # Update totals: latest per turn (store 0–100 average)
         try:
             qs = UserConversationRecording.objects.filter(user=request.user, topic=topic).order_by('turn_index', '-created_at')
             latest_by_turn = {}
@@ -1980,12 +1981,15 @@ class SubmitConversationTurnView(APIView):
                 if r.turn_index not in latest_by_turn:
                     latest_by_turn[r.turn_index] = r
             total = 0
+            cnt = 0
             for r in latest_by_turn.values():
                 try:
                     total += int(round(float(r.accuracy or 0.0)))
+                    cnt += 1
                 except Exception:
                     total += 0
-            tp.conversation_total_score = int(total)
+            avg = int(round(total / cnt)) if cnt > 0 else 0
+            tp.conversation_total_score = int(avg)
             tp.conversation_completed = (len(latest_by_turn) >= len(conv) and len(conv) > 0)
             tp.save(update_fields=['conversation_total_score', 'conversation_completed'])
         except Exception as e:
@@ -2115,10 +2119,11 @@ class SubmitFluencyPromptView(APIView):
             scores.extend([None] * (len(prompts) - len(scores)))
         scores[prompt_index] = int(score)
 
-        # Recompute totals and completion
-        total = sum(int(s) for s in scores if isinstance(s, int))
+        # Recompute totals and completion (normalize to 0–100 average)
+        non_null_scores = [int(s) for s in scores if isinstance(s, int)]
+        avg_score = int(round(sum(non_null_scores) / len(non_null_scores))) if non_null_scores else 0
         tp.fluency_prompt_scores = scores
-        tp.fluency_total_score = int(total)
+        tp.fluency_total_score = int(avg_score)
         tp.fluency_completed = all(isinstance(s, int) for s in scores[:len(prompts)])
         # If all modes completed, mark topic completed
         if tp.all_modes_completed and not tp.completed:
@@ -2472,7 +2477,6 @@ class SubmitVocabularyAnswerView(APIView):
         xp_awarded = 0
         if is_correct:
             session.correct_count = int(session.correct_count or 0) + 1
-            session.total_score = int(session.total_score or 0) + 10
             # Award +5 XP for correct answer (Option A)
             xp_awarded = _award_xp(
                 user=request.user,
@@ -2492,6 +2496,13 @@ class SubmitVocabularyAnswerView(APIView):
         session.current_index = next_index if next_index is not None else len(questions)
         # Mark completed if no more
         session.completed = next_index is None
+        # Recompute total score as percentage (0–100)
+        try:
+            total = int(session.total_questions or 0)
+            corr = int(session.correct_count or 0)
+            session.total_score = int(round((corr / total) * 100.0)) if total > 0 else 0
+        except Exception:
+            pass
         session.save(update_fields=['questions', 'correct_count', 'total_score', 'current_index', 'completed', 'updated_at'])
 
         resp = {
