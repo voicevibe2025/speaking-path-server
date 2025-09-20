@@ -31,7 +31,7 @@ from django.shortcuts import get_object_or_404
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 import requests
-from .models import Topic, TopicProgress, UserProfile, PhraseProgress, UserPhraseRecording, VocabularyPracticeSession, UserConversationRecording
+from .models import Topic, TopicProgress, UserProfile, PhraseProgress, UserPhraseRecording, VocabularyPracticeSession, ListeningPracticeSession, UserConversationRecording
 from apps.gamification.models import UserLevel, PointsTransaction
 from .serializers import (
     SpeakingTopicsResponseSerializer,
@@ -51,6 +51,12 @@ from .serializers import (
     SubmitVocabularyAnswerResponseSerializer,
     CompleteVocabularyPracticeRequestSerializer,
     CompleteVocabularyPracticeResponseSerializer,
+    # Listening practice
+    StartListeningPracticeResponseSerializer,
+    SubmitListeningAnswerRequestSerializer,
+    SubmitListeningAnswerResponseSerializer,
+    CompleteListeningPracticeRequestSerializer,
+    CompleteListeningPracticeResponseSerializer,
     JourneyActivitySerializer,
 )
 
@@ -471,9 +477,10 @@ def _get_gemini_definition(word: str) -> str:
         "You are an English tutor writing a playful single-line clue for a TARGET word.\n"
         "Use styles like: situational, personification, exaggeration/humor, or action/sound.\n"
         "Rules:\n"
-        "- Exactly one sentence, 12–24 words.\n"
+        "- Exactly one sentence, 12-24 words.\n"
         "- Do NOT include or hint the word itself.\n"
         "- No quotes, no markdown, no lists, no colons.\n"
+        "- Use only very simple English (CEFR A2–B1 level words).\n"
         f"TARGET: {safe_word}"
     )
     try:
@@ -534,7 +541,7 @@ def _get_gemini_definitions_batch(words: list[str]) -> dict:
         "You are an English tutor. For each TARGET word, return a JSON object mapping the word\n"
         "to exactly one playful clue sentence.\n"
         "Styles: situational/roleplay, personification, exaggeration/humor, action/sound.\n"
-        "Rules: one sentence only; 12–24 words; avoid the word itself; no quotes; no markdown.\n"
+        "Rules: one sentence only; 12-24 words; avoid the word itself; no quotes; no markdown. Use only very simple English (CEFR A2–B1 level words)\n"
         "Output JSON only, keys must be the input words, values are the clue sentences.\n"
         "WORDS: " + json.dumps(words, ensure_ascii=False)
     )
@@ -593,6 +600,285 @@ def _get_gemini_definitions_batch(words: list[str]) -> dict:
             logger.warning('Gemini batch via %s failed: %s', name, e)
             continue
     return {}
+
+
+def _build_listening_questions(topic: Topic) -> list[dict]:
+    """Generate listening comprehension MCQs based on the topic's conversation_example using Gemini.
+
+    Returns a list of dicts:
+      [{ 'id': '<uuid>', 'question': '...', 'options': ['a','b','c','d'], 'answer': 'a' }]
+    Fallback creates simple 'Who said this line?' questions if API fails.
+    """
+    conv = topic.conversation_example or []
+    lines = [f"{t.get('speaker', '')}: {t.get('text', '').strip()}" for t in conv if isinstance(t, dict) and t.get('text')]
+    # If no conversation, return empty
+    if not lines:
+        return []
+
+    transcript = "\n".join(lines)
+    api_key = (
+        getattr(settings, 'GEMINI_API_KEY', '') or os.environ.get('GEMINI_API_KEY', '') or os.environ.get('GOOGLE_API_KEY', '')
+    )
+    if api_key:
+        try:
+            genai.configure(api_key=api_key)
+            candidates = [
+                getattr(settings, 'GEMINI_TEXT_MODEL', None) or os.environ.get('GEMINI_MODEL') or 'gemini-2.5-flash',
+                'gemini-2.5-pro',
+                'gemini-1.5-flash',
+                'gemini-1.5-pro',
+                'gemini-pro',
+            ]
+            prompt = (
+                "You are an English tutor. Read the DIALOGUE below and create 3 to 8 multiple-choice LISTENING questions.\n"
+                "Rules: very short, CEFR A2–B1 vocabulary; each question must have exactly 4 distinct options;\n"
+                "Return STRICT JSON array, no prose, in the shape:\n"
+                "[ {\"question\": <string>, \"options\": [<opt1>,<opt2>,<opt3>,<opt4>], \"answer\": <one of options> }, ... ]\n"
+                "Avoid quoting the speaker letter. Use natural questions like who/what/where/when/why or paraphrases.\n\n"
+                f"DIALOGUE:\n{transcript}\n"
+            )
+            for name in candidates:
+                try:
+                    model = genai.GenerativeModel(name)
+                    resp = model.generate_content(prompt)
+                    raw = (getattr(resp, 'text', None) or '').strip()
+                    if not raw:
+                        continue
+                    if raw.startswith('```'):
+                        first_nl = raw.find('\n')
+                        if first_nl != -1:
+                            raw = raw[first_nl+1:]
+                        if raw.endswith('```'):
+                            raw = raw[:-3]
+                        raw = raw.strip()
+                    data = json.loads(raw)
+                    out: list[dict] = []
+                    if isinstance(data, list):
+                        for item in data:
+                            try:
+                                q = str(item.get('question', '')).strip()
+                                options = [str(x).strip() for x in (item.get('options') or []) if str(x).strip()]
+                                ans = str(item.get('answer', '')).strip()
+                                if q and len(options) == 4 and ans in options:
+                                    out.append({
+                                        'id': str(uuid.uuid4()),
+                                        'question': q.split('\n')[0].strip(),
+                                        'options': options,
+                                        'answer': ans,
+                                    })
+                            except Exception:
+                                continue
+                    if out:
+                        return out[:8]
+                except Exception as e:
+                    logger.warning('Gemini listening questions via %s failed: %s', name, e)
+                    continue
+        except Exception as e:
+            logger.warning('Gemini listening setup failed: %s', e)
+
+    # Fallback: generate simple speaker identification questions
+    qs: list[dict] = []
+    for i, turn in enumerate(conv[:6]):
+        try:
+            spk = str(turn.get('speaker', '')).strip().upper() or 'A'
+            txt = str(turn.get('text', '')).strip()
+            if not txt:
+                continue
+            q = f"Who said: \"{txt}\"?"
+            options = ["Speaker A", "Speaker B", "Both", "Neither"]
+            ans = "Speaker A" if spk == 'A' else "Speaker B"
+            qs.append({
+                'id': str(uuid.uuid4()),
+                'question': q,
+                'options': options,
+                'answer': ans,
+            })
+        except Exception:
+            continue
+    return qs
+
+class StartListeningPracticeView(APIView):
+    """Start a listening practice session for a topic using its conversation example.
+
+    Response: { sessionId, totalQuestions, questions: [{id, question, options}] }
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, topic_id):
+        topic = get_object_or_404(Topic, id=topic_id, is_active=True)
+        conv = topic.conversation_example or []
+        if not conv:
+            return Response({'detail': 'No conversation available for this topic'}, status=status.HTTP_400_BAD_REQUEST)
+
+        questions = _build_listening_questions(topic)
+        if not questions:
+            return Response({'detail': 'Unable to generate listening questions'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Create session
+        session = ListeningPracticeSession.objects.create(
+            user=request.user,
+            topic=topic,
+            session_id=uuid.uuid4(),
+            questions=questions,
+            total_questions=len(questions),
+            current_index=0,
+            correct_count=0,
+            total_score=0,
+            completed=False,
+        )
+
+        payload = {
+            'sessionId': str(session.session_id),
+            'totalQuestions': session.total_questions,
+            'questions': [
+                {
+                    'id': q.get('id'),
+                    'question': q.get('question') or '',
+                    'options': q.get('options') or [],
+                }
+                for q in session.questions
+            ],
+        }
+        out = StartListeningPracticeResponseSerializer(payload)
+        return Response(out.data, status=status.HTTP_200_OK)
+
+
+class SubmitListeningAnswerView(APIView):
+    """Submit an answer for a listening question.
+
+    Request: { sessionId, questionId, selected }
+    Response: { correct, xpAwarded, nextIndex, completed, totalScore }
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, topic_id):
+        topic = get_object_or_404(Topic, id=topic_id, is_active=True)
+        ser = SubmitListeningAnswerRequestSerializer(data=request.data)
+        if not ser.is_valid():
+            return Response(ser.errors, status=status.HTTP_400_BAD_REQUEST)
+        data = ser.validated_data
+        session_id = data.get('sessionId')
+        question_id = data.get('questionId')
+        selected = (data.get('selected') or '').strip()
+
+        session = get_object_or_404(ListeningPracticeSession, session_id=session_id, user=request.user, topic=topic)
+        if session.completed:
+            return Response({
+                'correct': False,
+                'xpAwarded': 0,
+                'nextIndex': None,
+                'completed': True,
+                'totalScore': int(session.total_score or 0),
+            }, status=status.HTTP_200_OK)
+
+        questions = list(session.questions or [])
+        idx = next((i for i, q in enumerate(questions) if str(q.get('id')) == str(question_id)), None)
+        if idx is None:
+            return Response({'detail': 'Invalid questionId'}, status=status.HTTP_400_BAD_REQUEST)
+
+        q = dict(questions[idx])
+        correct_answer = str(q.get('answer', '')).strip()
+        is_correct = bool(selected and correct_answer and (selected == correct_answer))
+        q['answered'] = True
+        q['correct'] = is_correct
+        questions[idx] = q
+
+        if is_correct:
+            session.correct_count = int(session.correct_count or 0) + 1
+
+        # Compute score as rounded percentage
+        try:
+            total = int(session.total_questions or 0)
+            corr = int(session.correct_count or 0)
+            session.total_score = int(round((corr / total) * 100.0)) if total > 0 else 0
+        except Exception:
+            pass
+
+        # Next unanswered index
+        next_index = None
+        for j in range(idx + 1, len(questions)):
+            if not questions[j].get('answered'):
+                next_index = j
+                break
+        if next_index is None:
+            for j in range(0, idx):
+                if not questions[j].get('answered'):
+                    next_index = j
+                    break
+
+        session.questions = questions
+        session.current_index = next_index if next_index is not None else len(questions)
+        session.completed = next_index is None
+        session.save(update_fields=['questions', 'correct_count', 'total_score', 'current_index', 'completed', 'updated_at'])
+
+        xp_awarded = 0
+        if is_correct:
+            xp_awarded = _award_xp(request.user, 10, 'listening_answer', {'topicId': str(topic.id), 'questionId': str(question_id)})
+
+        resp = {
+            'correct': is_correct,
+            'xpAwarded': xp_awarded,
+            'nextIndex': next_index,
+            'completed': session.completed,
+            'totalScore': int(session.total_score or 0),
+        }
+        out = SubmitListeningAnswerResponseSerializer(resp)
+        return Response(out.data, status=status.HTTP_200_OK)
+
+
+class CompleteListeningPracticeView(APIView):
+    """Complete listening session, persist progress and award completion XP.
+
+    Request: { sessionId }
+    Response: totals and XP.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, topic_id):
+        topic = get_object_or_404(Topic, id=topic_id, is_active=True)
+        ser = CompleteListeningPracticeRequestSerializer(data=request.data)
+        if not ser.is_valid():
+            return Response(ser.errors, status=status.HTTP_400_BAD_REQUEST)
+        session_id = ser.validated_data.get('sessionId')
+        session = get_object_or_404(ListeningPracticeSession, session_id=session_id, user=request.user, topic=topic)
+
+        # Compute final totals if needed
+        total = int(session.total_questions or 0)
+        corr = int(session.correct_count or 0)
+        session.total_score = int(round((corr / total) * 100.0)) if total > 0 else 0
+
+        xp_awarded = 0
+        try:
+            # Bonus for completing all questions
+            if total > 0 and all(bool((q or {}).get('answered')) for q in (session.questions or [])):
+                xp_awarded += _award_xp(request.user, 20, 'listening_complete', {'topicId': str(topic.id), 'sessionId': str(session.session_id)})
+        except Exception:
+            pass
+
+        # Persist to TopicProgress
+        tp, _ = TopicProgress.objects.get_or_create(user=request.user, topic=topic)
+        tp.listening_total_score = int(session.total_score or 0)
+        tp.listening_completed = True
+        # Do not change unlocking rules here (listening not required for unlock yet)
+        if not tp.completed and tp.all_modes_completed:
+            tp.completed = True
+            tp.completed_at = timezone.now()
+        tp.save()
+
+        session.completed = True
+        session.save(update_fields=['total_score', 'completed', 'updated_at'])
+
+        payload = {
+            'success': True,
+            'totalQuestions': int(session.total_questions or 0),
+            'correctCount': int(session.correct_count or 0),
+            'totalScore': int(session.total_score or 0),
+            'xpAwarded': xp_awarded,
+            'listeningTotalScore': int(tp.listening_total_score or 0),
+            'topicCompleted': bool(tp.completed),
+        }
+        out = CompleteListeningPracticeResponseSerializer(payload)
+        return Response(out.data, status=status.HTTP_200_OK)
 
 def _sample_vocabulary_questions(topic: Topic, n: int) -> list[dict]:
     """Build n questions from topic.vocabulary with AI definitions and 3 distractors each.
@@ -1116,6 +1402,8 @@ class SpeakingTopicsView(APIView):
                 'pronunciation': pronunciation_score,
                 'fluency': fluency_total_score,
                 'vocabulary': vocabulary_score,
+                # Listening practice (optional; not part of unlock criteria yet)
+                'listening': int(getattr(tp, 'listening_total_score', 0) or 0),
                 # Keep average as a normalized combined percent for clearer UI
                 'average': combined_percent,
                 'meetsRequirement': meets_requirement,
@@ -1123,9 +1411,11 @@ class SpeakingTopicsView(APIView):
                 'maxPronunciation': pron_max,
                 'maxFluency': flu_max,
                 'maxVocabulary': vocab_max,
+                'maxListening': 100,
                 'pronunciationMet': pron_met,
                 'fluencyMet': flu_met,
                 'vocabularyMet': vocab_met,
+                'listeningMet': False,
                 'totalScore': total_score,
                 'totalMaxScore': total_max,
                 'combinedThresholdScore': combined_threshold_score,

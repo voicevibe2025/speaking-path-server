@@ -56,6 +56,8 @@ class TopicProgress(models.Model):
     fluency_total_score = models.IntegerField(default=0)
     # Vocabulary total score across generated quiz sessions (latest completed)
     vocabulary_total_score = models.IntegerField(default=0)
+    # Listening total score across generated listening quiz sessions (latest completed, normalized 0-100)
+    listening_total_score = models.IntegerField(default=0)
     # Per-prompt scores recorded in order; length up to number of prompts (typically 3)
     fluency_prompt_scores = models.JSONField(default=list, blank=True)
     # Conversation practice (bonus mode) aggregate score and completion flag
@@ -125,6 +127,42 @@ class VocabularyPracticeSession(models.Model):
     def __str__(self):
         return f"VocabSession {self.session_id} - {self.user_id} - {self.topic_id}"
 
+
+class ListeningPracticeSession(models.Model):
+    """
+    Track per-user Listening practice session for a topic.
+    Stores generated MCQ questions (audio prompt is generated client-side via TTS).
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='listening_sessions')
+    topic = models.ForeignKey(Topic, on_delete=models.CASCADE, related_name='listening_sessions')
+    # Public session identifier returned to clients
+    session_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+
+    # Persist the full question set for this session as a list of dicts:
+    # [{ 'id': '<uuid>', 'question': '...', 'options': ['..','..','..','..'], 'answer': '<exact correct option>', 'answered': False, 'correct': None }]
+    questions = models.JSONField(default=list, blank=True)
+    total_questions = models.IntegerField(default=0)
+    current_index = models.IntegerField(default=0)
+    correct_count = models.IntegerField(default=0)
+    total_score = models.IntegerField(default=0)
+    completed = models.BooleanField(default=False)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'speaking_journey_listening_sessions'
+        verbose_name = _('Listening Practice Session')
+        verbose_name_plural = _('Listening Practice Sessions')
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', 'topic']),
+            models.Index(fields=['session_id']),
+        ]
+
+    def __str__(self):
+        return f"ListeningSession {self.session_id} - {self.user_id} - {self.topic_id}"
 
 class PhraseProgress(models.Model):
     """

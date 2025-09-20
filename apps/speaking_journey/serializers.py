@@ -17,15 +17,18 @@ class PracticeScoresSerializer(serializers.Serializer):
     pronunciation = serializers.IntegerField()
     fluency = serializers.IntegerField()
     vocabulary = serializers.IntegerField()
+    listening = serializers.IntegerField(required=False)
     average = serializers.FloatField()
     meetsRequirement = serializers.BooleanField()
     # New fields for per-practice thresholds and combined progress bar
     maxPronunciation = serializers.IntegerField()
     maxFluency = serializers.IntegerField()
     maxVocabulary = serializers.IntegerField()
+    maxListening = serializers.IntegerField(required=False)
     pronunciationMet = serializers.BooleanField()
     fluencyMet = serializers.BooleanField()
     vocabularyMet = serializers.BooleanField()
+    listeningMet = serializers.BooleanField(required=False)
     totalScore = serializers.IntegerField()
     totalMaxScore = serializers.IntegerField()
     combinedThresholdScore = serializers.IntegerField()
@@ -178,6 +181,47 @@ class CompleteVocabularyPracticeResponseSerializer(serializers.Serializer):
     totalScore = serializers.IntegerField()
     xpAwarded = serializers.IntegerField()
     vocabularyTotalScore = serializers.IntegerField()
+    topicCompleted = serializers.BooleanField()
+
+
+# --- Listening Practice ---
+class ListeningQuestionSerializer(serializers.Serializer):
+    id = serializers.CharField()
+    question = serializers.CharField()
+    options = serializers.ListField(child=serializers.CharField())
+
+
+class StartListeningPracticeResponseSerializer(serializers.Serializer):
+    sessionId = serializers.CharField()
+    totalQuestions = serializers.IntegerField()
+    questions = ListeningQuestionSerializer(many=True)
+
+
+class SubmitListeningAnswerRequestSerializer(serializers.Serializer):
+    sessionId = serializers.CharField()
+    questionId = serializers.CharField()
+    selected = serializers.CharField()
+
+
+class SubmitListeningAnswerResponseSerializer(serializers.Serializer):
+    correct = serializers.BooleanField()
+    xpAwarded = serializers.IntegerField()
+    nextIndex = serializers.IntegerField(allow_null=True)
+    completed = serializers.BooleanField()
+    totalScore = serializers.IntegerField()
+
+
+class CompleteListeningPracticeRequestSerializer(serializers.Serializer):
+    sessionId = serializers.CharField()
+
+
+class CompleteListeningPracticeResponseSerializer(serializers.Serializer):
+    success = serializers.BooleanField()
+    totalQuestions = serializers.IntegerField()
+    correctCount = serializers.IntegerField()
+    totalScore = serializers.IntegerField()
+    xpAwarded = serializers.IntegerField()
+    listeningTotalScore = serializers.IntegerField()
     topicCompleted = serializers.BooleanField()
 
 
