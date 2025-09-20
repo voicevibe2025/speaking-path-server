@@ -153,36 +153,36 @@ def _cache_set(word: str, definition: str):
 
 def _compute_unlocks(user):
     topics = list(Topic.objects.filter(is_active=True).order_by('sequence'))
-    
+
     # Get all topic progress for the user
     topic_progress = {
-        tp.topic.sequence: tp 
+        tp.topic.sequence: tp
         for tp in TopicProgress.objects.filter(user=user, topic__is_active=True)
         .select_related('topic')
     }
-    
+
     completed_sequences = set()
     unlocked_sequences = set()
-    
+
     if topics:
         unlocked_sequences.add(topics[0].sequence)  # First topic always unlocked
-    
-    for t in topics:
+
+    # Unlock using ordered position to handle non-contiguous sequences
+    for idx, t in enumerate(topics):
         tp = topic_progress.get(t.sequence)
-        
+
         # Check if this topic meets the new completion criteria
         if tp and _meets_completion_criteria(tp):
             completed_sequences.add(t.sequence)
             unlocked_sequences.add(t.sequence)
-            
-            # Unlock next topic if it exists
-            next_topic = next((topic for topic in topics if topic.sequence == t.sequence + 1), None)
-            if next_topic:
-                unlocked_sequences.add(next_topic.sequence)
+
+            # Unlock the next topic in order if it exists
+            if idx + 1 < len(topics):
+                unlocked_sequences.add(topics[idx + 1].sequence)
         elif t.sequence in unlocked_sequences:
             # Keep already unlocked topics unlocked
             pass
-    
+
     return topics, completed_sequences, unlocked_sequences
 
 
@@ -192,10 +192,49 @@ def _meets_completion_criteria(topic_progress):
     - All 3 main practices (pronunciation, fluency, vocabulary) must be completed
     - For EACH practice, user must reach at least 75% of that practice's maximum score for the topic
     """
-    # Check if all 3 main practices are completed
-    if not (topic_progress.pronunciation_completed and 
-            topic_progress.fluency_completed and 
-            topic_progress.vocabulary_completed):
+    # Check if all 3 main practices are completed (robust: accept phrase progress as pronunciation completion)
+    try:
+        topic = getattr(topic_progress, 'topic', None)
+        user = getattr(topic_progress, 'user', None)
+    except Exception:
+        topic = None
+        user = None
+    pron_complete_effective = bool(getattr(topic_progress, 'pronunciation_completed', False))
+    if not pron_complete_effective and topic and user:
+        try:
+            pp = PhraseProgress.objects.filter(user=user, topic=topic).first()
+            if pp and getattr(pp, 'is_all_phrases_completed', False):
+                pron_complete_effective = True
+        except Exception:
+            pass
+    # Fluency completion: accept flag, or infer by checking scores length vs prompts count
+    fluency_complete_effective = bool(getattr(topic_progress, 'fluency_completed', False))
+    try:
+        if topic and not fluency_complete_effective:
+            fprompts = list(getattr(topic, 'fluency_practice_prompt', []) or [])
+            scores = list(getattr(topic_progress, 'fluency_prompt_scores', []) or [])
+            if fprompts:
+                ok = True
+                for i in range(len(fprompts)):
+                    if i >= len(scores) or not isinstance(scores[i], int):
+                        ok = False
+                        break
+                if ok:
+                    fluency_complete_effective = True
+    except Exception:
+        pass
+
+    # Vocabulary completion: accept flag, or infer by session completion existence
+    vocabulary_complete_effective = bool(getattr(topic_progress, 'vocabulary_completed', False))
+    try:
+        if topic and (not vocabulary_complete_effective):
+            exists = VocabularyPracticeSession.objects.filter(user=topic_progress.user, topic=topic, completed=True).exists()
+            if exists:
+                vocabulary_complete_effective = True
+    except Exception:
+        pass
+
+    if not (pron_complete_effective and fluency_complete_effective and vocabulary_complete_effective):
         return False
 
     topic = getattr(topic_progress, 'topic', None)
