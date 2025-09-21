@@ -14,6 +14,9 @@ from .views import (
     CompleteListeningPracticeView,
     SubmitConversationTurnView,
     SpeakingActivitiesView,
+    DebugTopicStatusView,
+    SeedPerfectScoresView,
+    RecomputeTopicAggregatesView,
 )
 
 app_name = 'speaking_journey'
@@ -35,4 +38,8 @@ urlpatterns = [
     path('topics/<uuid:topic_id>/recordings', UserPhraseRecordingsView.as_view(), name='topic_recordings'),
     path('activities', SpeakingActivitiesView.as_view(), name='activities'),
     path('tts/generate', GenerateTTSView.as_view(), name='tts_generate'),
+    # Debug endpoints
+    path('topics/<uuid:topic_id>/debug', DebugTopicStatusView.as_view(), name='debug_topic_status'),
+    path('topics/<uuid:topic_id>/seed-perfect', SeedPerfectScoresView.as_view(), name='seed_perfect_scores'),
+    path('topics/<uuid:topic_id>/recompute', RecomputeTopicAggregatesView.as_view(), name='recompute_topic_aggregates'),
 ]

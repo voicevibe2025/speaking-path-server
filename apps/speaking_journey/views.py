@@ -207,16 +207,16 @@ def _meets_completion_criteria(topic_progress):
                 pron_complete_effective = True
         except Exception:
             pass
-    # Fluency completion: accept flag, or infer by checking scores length vs prompts count
-    fluency_complete_effective = bool(getattr(topic_progress, 'fluency_completed', False))
+    # Fluency completion: compute from prompt scores only (ignore flags)
+    fluency_complete_effective = False
     try:
-        if topic and not fluency_complete_effective:
+        if topic:
             fprompts = list(getattr(topic, 'fluency_practice_prompt', []) or [])
             scores = list(getattr(topic_progress, 'fluency_prompt_scores', []) or [])
-            if fprompts:
+            if fprompts and len(scores) >= len(fprompts):
                 ok = True
                 for i in range(len(fprompts)):
-                    if i >= len(scores) or not isinstance(scores[i], int):
+                    if not isinstance(scores[i], int):
                         ok = False
                         break
                 if ok:
@@ -224,13 +224,11 @@ def _meets_completion_criteria(topic_progress):
     except Exception:
         pass
 
-    # Vocabulary completion: accept flag, or infer by session completion existence
-    vocabulary_complete_effective = bool(getattr(topic_progress, 'vocabulary_completed', False))
+    # Vocabulary completion: require at least one completed session (ignore flags)
+    vocabulary_complete_effective = False
     try:
-        if topic and (not vocabulary_complete_effective):
-            exists = VocabularyPracticeSession.objects.filter(user=topic_progress.user, topic=topic, completed=True).exists()
-            if exists:
-                vocabulary_complete_effective = True
+        if topic and user:
+            vocabulary_complete_effective = VocabularyPracticeSession.objects.filter(user=user, topic=topic, completed=True).exists()
     except Exception:
         pass
 
@@ -271,7 +269,6 @@ def _meets_completion_criteria(topic_progress):
                 pron_total = recomputed_avg
         except Exception:
             pass
-
     flu_total = int(topic_progress.fluency_total_score or 0)
     vocab_total = int(topic_progress.vocabulary_total_score or 0)
     if pron_max > 0:
@@ -1792,9 +1789,10 @@ class SubmitPhraseRecordingView(APIView):
                     cnt += 1
                 except Exception:
                     pass
-            avg_acc = int(round(total_acc / cnt)) if cnt > 0 else 0
-            topic_progress.pronunciation_total_score = avg_acc
-            topic_progress.save(update_fields=['pronunciation_total_score'])
+            if cnt > 0:
+                avg_acc = int(round(total_acc / cnt))
+                topic_progress.pronunciation_total_score = avg_acc
+                topic_progress.save(update_fields=['pronunciation_total_score'])
         except Exception as e:
             logger.warning('Failed updating pronunciation totals (avg): %s', e)
 
@@ -2614,6 +2612,281 @@ class CompleteVocabularyPracticeView(APIView):
         out = CompleteVocabularyPracticeResponseSerializer(payload)
         return Response(out.data, status=status.HTTP_200_OK)
 
+
+class DebugTopicStatusView(APIView):
+    """Debug endpoint to see exact completion status and scores for a topic"""
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get(self, request, topic_id):
+        topic = get_object_or_404(Topic, id=topic_id, is_active=True)
+        tp, _ = TopicProgress.objects.get_or_create(user=request.user, topic=topic)
+        
+        # Check PhraseProgress
+        try:
+            pp = PhraseProgress.objects.get(user=request.user, topic=topic)
+            phrase_data = {
+                'current_phrase_index': pp.current_phrase_index,
+                'completed_phrases': pp.completed_phrases or [],
+                'total_phrases': len(topic.material_lines or []),
+                'is_all_phrases_completed': pp.is_all_phrases_completed
+            }
+        except PhraseProgress.DoesNotExist:
+            phrase_data = {'error': 'No PhraseProgress found'}
+        
+        # Check VocabularyPracticeSession
+        try:
+            vocab_sessions = list(VocabularyPracticeSession.objects.filter(
+                user=request.user, topic=topic
+            ).values('completed', 'total_score', 'created_at'))
+        except Exception:
+            vocab_sessions = []
+            
+        # Check fluency prompts vs scores
+        fprompts = topic.fluency_practice_prompt or []
+        fscores = tp.fluency_prompt_scores or []
+        
+        # Compute strict all_prompts_scored: require full length and all ints
+        all_prompts_scored = False
+        try:
+            all_prompts_scored = bool(len(fprompts) > 0 and len(fscores) >= len(fprompts) and all(isinstance(fscores[i], int) for i in range(len(fprompts))))
+        except Exception:
+            all_prompts_scored = False
+
+        # Pronunciation recompute details for debugging
+        pron_details = {}
+        try:
+            qs = UserPhraseRecording.objects.filter(user=request.user, topic=topic).order_by('phrase_index', '-created_at')
+            latest_by_phrase = {}
+            for r in qs:
+                if r.phrase_index not in latest_by_phrase:
+                    latest_by_phrase[r.phrase_index] = r
+            latest_map = {int(k): int(round(float(v.accuracy or 0.0))) for k, v in latest_by_phrase.items()}
+            rec_cnt = len(latest_map)
+            recomputed_avg = int(round(sum(latest_map.values()) / rec_cnt)) if rec_cnt > 0 else 0
+            pron_details = {
+                'recordings_count': len(list(qs)),
+                'latest_per_phrase_accuracies': latest_map,
+                'recomputed_avg': recomputed_avg,
+            }
+        except Exception:
+            pron_details = {}
+
+        debug_data = {
+            'topic_id': str(topic.id),
+            'topic_title': topic.title,
+            'topic_progress_flags': {
+                'pronunciation_completed': tp.pronunciation_completed,
+                'fluency_completed': tp.fluency_completed,
+                'vocabulary_completed': tp.vocabulary_completed,
+                'listening_completed': tp.listening_completed,
+                'grammar_completed': tp.grammar_completed,
+                'completed': tp.completed
+            },
+            'scores': {
+                'pronunciation_total_score': tp.pronunciation_total_score,
+                'fluency_total_score': tp.fluency_total_score,
+                'vocabulary_total_score': tp.vocabulary_total_score
+            },
+            'phrase_progress': phrase_data,
+            'fluency_details': {
+                'prompts_count': len(fprompts),
+                'scores_count': len([s for s in fscores if isinstance(s, int)]),
+                'fluency_prompt_scores': fscores,
+                'all_prompts_scored': all_prompts_scored
+            },
+            'pronunciation_details': pron_details,
+            'vocabulary_sessions': vocab_sessions,
+            'meets_completion_criteria': _meets_completion_criteria(tp),
+            'all_modes_completed': tp.all_modes_completed
+        }
+        
+        return Response(debug_data, status=status.HTTP_200_OK)
+
+
+class SeedPerfectScoresView(APIView):
+    """Seed perfect scores and completion flags for testing unlock mechanism"""
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def post(self, request, topic_id):
+        topic = get_object_or_404(Topic, id=topic_id, is_active=True)
+        tp, _ = TopicProgress.objects.get_or_create(user=request.user, topic=topic)
+        
+        # Set perfect scores
+        tp.pronunciation_total_score = 100
+        tp.fluency_total_score = 100
+        tp.vocabulary_total_score = 100
+        
+        # Set all completion flags
+        tp.pronunciation_completed = True
+        tp.fluency_completed = True
+        tp.vocabulary_completed = True
+        tp.listening_completed = True
+        tp.grammar_completed = True
+        
+        # Set fluency prompt scores to perfect
+        fprompts = topic.fluency_practice_prompt or []
+        if fprompts:
+            tp.fluency_prompt_scores = [100] * len(fprompts)
+            
+        # Mark topic as completed if all modes are now completed
+        if tp.all_modes_completed and not tp.completed:
+            tp.completed = True
+            tp.completed_at = timezone.now()
+            
+        tp.save()
+        
+        # Ensure phrase progress shows all completed
+        try:
+            pp, _ = PhraseProgress.objects.get_or_create(
+                user=request.user,
+                topic=topic,
+                defaults={'current_phrase_index': 0, 'completed_phrases': []}
+            )
+            total_phrases = len(topic.material_lines or [])
+            if total_phrases > 0:
+                pp.completed_phrases = list(range(total_phrases))
+                pp.current_phrase_index = total_phrases
+                pp.save()
+        except Exception as e:
+            pass
+            
+        # Create a completed vocabulary session if none exists
+        try:
+            if not VocabularyPracticeSession.objects.filter(
+                user=request.user, topic=topic, completed=True
+            ).exists():
+                VocabularyPracticeSession.objects.create(
+                    user=request.user,
+                    topic=topic,
+                    total_questions=5,
+                    correct_count=5,
+                    total_score=100,
+                    completed=True
+                )
+        except Exception:
+            pass
+        
+        return Response({
+            'success': True,
+            'message': f'Seeded perfect scores for topic: {topic.title}',
+            'topic_id': str(topic.id),
+            'meets_criteria_after_seed': _meets_completion_criteria(tp)
+        }, status=status.HTTP_200_OK)
+
+
+class RecomputeTopicAggregatesView(APIView):
+    """Recompute and persist aggregate scores for a topic from existing data.
+
+    - Pronunciation: average of latest accuracy per phrase (0–100)
+    - Fluency: average of per-prompt scores (ints), completed if all prompts have scores
+    - Vocabulary: latest completed session's total_score
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, topic_id):
+        topic = get_object_or_404(Topic, id=topic_id, is_active=True)
+        tp, _ = TopicProgress.objects.get_or_create(user=request.user, topic=topic)
+
+        # Pronunciation aggregate from latest per-phrase recordings
+        pron_total = 0
+        try:
+            qs = (
+                UserPhraseRecording.objects
+                .filter(user=request.user, topic=topic)
+                .order_by('phrase_index', '-created_at')
+            )
+            latest_by_phrase = {}
+            for r in qs:
+                if r.phrase_index not in latest_by_phrase:
+                    latest_by_phrase[r.phrase_index] = r
+            total_acc = 0
+            cnt = 0
+            for r in latest_by_phrase.values():
+                try:
+                    total_acc += int(round(float(r.accuracy or 0.0)))
+                    cnt += 1
+                except Exception:
+                    pass
+            pron_total = int(round(total_acc / cnt)) if cnt > 0 else 0
+        except Exception:
+            pron_total = 0
+
+        # Fluency aggregate from stored per-prompt scores
+        flu_scores = []
+        try:
+            scores = list(tp.fluency_prompt_scores or [])
+            for s in scores:
+                if isinstance(s, int):
+                    flu_scores.append(int(s))
+        except Exception:
+            pass
+        flu_total = int(round(sum(flu_scores) / len(flu_scores))) if flu_scores else 0
+
+        # Vocabulary aggregate from latest completed session
+        vocab_total = 0
+        try:
+            last_v = (
+                VocabularyPracticeSession.objects
+                .filter(user=request.user, topic=topic, completed=True)
+                .order_by('-updated_at', '-created_at')
+                .first()
+            )
+            if last_v:
+                vocab_total = int(last_v.total_score or 0)
+        except Exception:
+            vocab_total = int(tp.vocabulary_total_score or 0)
+
+        # Persist aggregates
+        tp.pronunciation_total_score = pron_total
+        tp.fluency_total_score = flu_total
+        tp.vocabulary_total_score = vocab_total
+
+        # Sync completion flags from data
+        try:
+            pp = PhraseProgress.objects.filter(user=request.user, topic=topic).first()
+            if pp and pp.is_all_phrases_completed:
+                tp.pronunciation_completed = True
+        except Exception:
+            pass
+        try:
+            prompts = list(topic.fluency_practice_prompt or [])
+            tp.fluency_completed = bool(prompts) and all(
+                (i < len(tp.fluency_prompt_scores or [])) and isinstance((tp.fluency_prompt_scores or [None])[i], int)
+                for i in range(len(prompts))
+            )
+        except Exception:
+            pass
+        try:
+            tp.vocabulary_completed = VocabularyPracticeSession.objects.filter(user=request.user, topic=topic, completed=True).exists()
+        except Exception:
+            pass
+
+        # Mark topic completed if all modes completed
+        if not tp.completed and tp.all_modes_completed:
+            tp.completed = True
+            tp.completed_at = timezone.now()
+        tp.save()
+
+        data = {
+            'success': True,
+            'topicId': str(topic.id),
+            'title': topic.title,
+            'aggregates': {
+                'pronunciation': int(tp.pronunciation_total_score or 0),
+                'fluency': int(tp.fluency_total_score or 0),
+                'vocabulary': int(tp.vocabulary_total_score or 0),
+            },
+            'flags': {
+                'pronunciation_completed': tp.pronunciation_completed,
+                'fluency_completed': tp.fluency_completed,
+                'vocabulary_completed': tp.vocabulary_completed,
+                'listening_completed': tp.listening_completed,
+                'grammar_completed': tp.grammar_completed,
+                'completed': tp.completed,
+            },
+            'meetsCompletionCriteria': _meets_completion_criteria(tp),
+        }
+        return Response(data, status=status.HTTP_200_OK)
 
 class SpeakingActivitiesView(APIView):
     """Return a consolidated list of speaking journey activities for the current user.
