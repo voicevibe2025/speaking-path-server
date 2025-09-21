@@ -1699,9 +1699,18 @@ class SubmitPhraseRecordingView(APIView):
         except Exception:
             existing_total = 0
         new_acc_int = int(round(float(combined_accuracy or 0.0)))
-        delta = new_acc_int - prev_acc_int
+        # Normalize contribution: each phrase contributes up to 100 / N toward the total
         try:
-            topic_progress.pronunciation_total_score = max(0, existing_total + delta)
+            total_phrases = len(topic.material_lines or [])
+        except Exception:
+            total_phrases = 0
+        n = max(1, int(total_phrases or 0))
+        delta = (new_acc_int - prev_acc_int) / float(n)
+        try:
+            new_total = float(existing_total) + float(delta)
+            # Clamp to [0, 100] and round to nearest int for storage
+            new_total_int = int(round(max(0.0, min(100.0, new_total))))
+            topic_progress.pronunciation_total_score = new_total_int
             topic_progress.save(update_fields=['pronunciation_total_score'])
         except Exception as e:
             logger.warning('Failed to update pronunciation_total_score pre-save: %s', e)
