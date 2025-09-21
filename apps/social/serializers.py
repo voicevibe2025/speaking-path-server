@@ -43,14 +43,15 @@ class PostSerializer(serializers.ModelSerializer):
     commentsCount = serializers.SerializerMethodField()
     isLikedByMe = serializers.SerializerMethodField()
     canInteract = serializers.SerializerMethodField()
+    canDelete = serializers.SerializerMethodField()
 
     class Meta:
         model = Post
         fields = [
             'id', 'author', 'text', 'imageUrl', 'linkUrl', 'createdAt', 'updatedAt',
-            'likesCount', 'commentsCount', 'isLikedByMe', 'canInteract'
+            'likesCount', 'commentsCount', 'isLikedByMe', 'canInteract', 'canDelete'
         ]
-        read_only_fields = ['id', 'author', 'createdAt', 'updatedAt', 'likesCount', 'commentsCount', 'isLikedByMe', 'canInteract']
+        read_only_fields = ['id', 'author', 'createdAt', 'updatedAt', 'likesCount', 'commentsCount', 'isLikedByMe', 'canInteract', 'canDelete']
 
     def get_author(self, obj: Post):
         return AuthorSerializer(obj.user, context=self.context).data
@@ -88,6 +89,13 @@ class PostSerializer(serializers.ModelSerializer):
             UserFollow.objects.filter(follower=obj.user, following=request.user).exists()
         )
 
+    def get_canDelete(self, obj: Post):
+        request = self.context.get('request')
+        try:
+            return bool(request and request.user.is_authenticated and (request.user == obj.user or request.user.is_staff))
+        except Exception:
+            return False
+
     def validate(self, attrs):
         request = self.context.get('request')
         # In create(), we might pass through; ensure one-of rule
@@ -114,11 +122,12 @@ class CommentSerializer(serializers.ModelSerializer):
     parent = serializers.IntegerField(source='parent_id', required=False, allow_null=True)
     likesCount = serializers.SerializerMethodField()
     isLikedByMe = serializers.SerializerMethodField()
+    canDelete = serializers.SerializerMethodField()
 
     class Meta:
         model = PostComment
-        fields = ['id', 'post', 'author', 'text', 'parent', 'createdAt', 'likesCount', 'isLikedByMe']
-        read_only_fields = ['id', 'post', 'author', 'createdAt', 'likesCount', 'isLikedByMe']
+        fields = ['id', 'post', 'author', 'text', 'parent', 'createdAt', 'likesCount', 'isLikedByMe', 'canDelete']
+        read_only_fields = ['id', 'post', 'author', 'createdAt', 'likesCount', 'isLikedByMe', 'canDelete']
 
     def get_author(self, obj: PostComment):
         return AuthorSerializer(obj.user, context=self.context).data
@@ -131,6 +140,16 @@ class CommentSerializer(serializers.ModelSerializer):
         if not request or not request.user.is_authenticated:
             return False
         return PostCommentLike.objects.filter(comment=obj, user=request.user).exists()
+
+    def get_canDelete(self, obj: PostComment):
+        request = self.context.get('request')
+        try:
+            if not request or not request.user.is_authenticated:
+                return False
+            # Comment author or the post author (moderation) or staff
+            return bool(request.user == obj.user or request.user == obj.post.user or request.user.is_staff)
+        except Exception:
+            return False
 
 
 class CreateCommentRequest(serializers.Serializer):

@@ -85,6 +85,19 @@ class PostLikeView(generics.GenericAPIView):
         return Response({'status': 'unliked'})
 
 
+class PostDetailView(generics.GenericAPIView):
+    queryset = Post.objects.all()
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, post_id: int):
+        post = get_object_or_404(Post, id=post_id)
+        # Only author or staff can delete
+        if not (request.user == post.user or request.user.is_staff):
+            return Response({'detail': 'Not allowed to delete this post.'}, status=status.HTTP_403_FORBIDDEN)
+        post.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
 class PostCommentListCreateView(generics.ListCreateAPIView):
     serializer_class = CommentSerializer
     permission_classes = [IsAuthenticated]
@@ -140,3 +153,16 @@ class PostCommentLikeView(generics.GenericAPIView):
             return Response({'detail': 'Only friends can unlike.'}, status=status.HTTP_403_FORBIDDEN)
         PostCommentLike.objects.filter(comment=comment, user=request.user).delete()
         return Response({'status': 'unliked'})
+
+
+class PostCommentDetailView(generics.GenericAPIView):
+    queryset = PostComment.objects.all()
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, comment_id: int):
+        comment = get_object_or_404(PostComment, id=comment_id)
+        # Allow deletion by comment author, post author, or staff
+        if not (request.user == comment.user or request.user == comment.post.user or request.user.is_staff):
+            return Response({'detail': 'Not allowed to delete this comment.'}, status=status.HTTP_403_FORBIDDEN)
+        comment.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
