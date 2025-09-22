@@ -14,6 +14,7 @@ from apps.gamification.serializers import UserBadgeSerializer
 from apps.speaking_sessions.models import PracticeSession
 from apps.learning_paths.models import UserProgress
 from apps.speaking_journey.models import TopicProgress, UserPhraseRecording, VocabularyPracticeSession, ListeningPracticeSession
+from apps.gamification.models import PointsTransaction
 
 User = get_user_model()
 
@@ -88,6 +89,9 @@ class UserProfileSerializer(serializers.ModelSerializer):
     monthly_days_active = serializers.SerializerMethodField()
     monthly_xp_earned = serializers.SerializerMethodField()
     monthly_lessons_completed = serializers.SerializerMethodField()
+    # XP windows (Leaderboard-consistent)
+    weekly_xp_earned = serializers.SerializerMethodField()
+    daily_xp_earned = serializers.SerializerMethodField()
 
     # Recent Activities Feed
     recent_activities = serializers.SerializerMethodField()
@@ -381,31 +385,38 @@ class UserProfileSerializer(serializers.ModelSerializer):
         ).dates('started_at', 'day').count()
 
     def get_monthly_xp_earned(self, obj):
-        """Get the total XP earned by the user in the current month"""
-        today = timezone.now()
-        start_of_month = today.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        _, last_day = monthrange(today.year, today.month)
-        end_of_month = today.replace(day=last_day, hour=23, minute=59, second=59, microsecond=999999)
-
-        # Calculate XP from completed practice sessions (assume 10-50 XP per session based on score)
-        monthly_sessions = PracticeSession.objects.filter(
+        """Monthly XP from PointsTransaction amounts > 0 (matches Leaderboard)."""
+        now = timezone.now()
+        start_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        return int(PointsTransaction.objects.filter(
             user=obj.user,
-            started_at__gte=start_of_month,
-            started_at__lte=end_of_month,
-            session_status='completed'
-        )
+            amount__gt=0,
+            created_at__gte=start_of_month,
+            created_at__lt=now
+        ).aggregate(total=Sum('amount'))['total'] or 0)
 
-        total_xp = 0
-        for session in monthly_sessions:
-            # Base XP calculation: 10 XP + bonus based on overall_score
-            base_xp = 10
-            if session.overall_score:
-                bonus_xp = int(session.overall_score * 0.4)  # Up to 40 XP bonus for perfect score
-                total_xp += base_xp + bonus_xp
-            else:
-                total_xp += base_xp
+    def get_weekly_xp_earned(self, obj):
+        """Weekly XP from PointsTransaction amounts > 0. Week starts Monday 00:00 (matches Leaderboard)."""
+        from datetime import timedelta
+        now = timezone.now()
+        start_of_week = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+        return int(PointsTransaction.objects.filter(
+            user=obj.user,
+            amount__gt=0,
+            created_at__gte=start_of_week,
+            created_at__lt=now
+        ).aggregate(total=Sum('amount'))['total'] or 0)
 
-        return total_xp
+    def get_daily_xp_earned(self, obj):
+        """Daily XP from PointsTransaction amounts > 0 for today (00:00..now)."""
+        now = timezone.now()
+        start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        return int(PointsTransaction.objects.filter(
+            user=obj.user,
+            amount__gt=0,
+            created_at__gte=start_of_day,
+            created_at__lt=now
+        ).aggregate(total=Sum('amount'))['total'] or 0)
 
     def get_monthly_lessons_completed(self, obj):
         """Number of Speaking Journey topics completed in the current month."""
@@ -687,6 +698,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'daily_practice_goal', 'learning_goal', 'target_language',
             'speaking_score', 'fluency_score', 'listening_score', 'grammar_score', 'vocabulary_score', 'pronunciation_score',
             'monthly_days_active', 'monthly_xp_earned', 'monthly_lessons_completed',
+            'weekly_xp_earned', 'daily_xp_earned',
             'recent_activities', 'membership_status',
             'last_practice_date',
             'created_at', 'updated_at', 'recent_achievements',
