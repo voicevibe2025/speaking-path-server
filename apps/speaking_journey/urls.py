@@ -19,6 +19,7 @@ from .views import (
     RecomputeTopicAggregatesView,
     CoachAnalysisView,
     CoachAnalysisRefreshView,
+    LingoLeagueView,
 )
 
 app_name = 'speaking_journey'
@@ -39,6 +40,7 @@ urlpatterns = [
     path('topics/<uuid:topic_id>/listening/complete', CompleteListeningPracticeView.as_view(), name='complete_listening'),
     path('topics/<uuid:topic_id>/recordings', UserPhraseRecordingsView.as_view(), name='topic_recordings'),
     path('activities', SpeakingActivitiesView.as_view(), name='activities'),
+    path('lingo-league', LingoLeagueView.as_view(), name='lingo_league'),
     path('tts/generate', GenerateTTSView.as_view(), name='tts_generate'),
     # AI Coach
     path('coach/analysis', CoachAnalysisView.as_view(), name='coach_analysis'),

@@ -12,6 +12,8 @@ from .views import (
     VerifyTokenView,
     CustomTokenObtainPairView,
     password_reset_request,
+    password_reset_confirm,
+    password_reset_confirm_page,
     GoogleLoginView,
 )
 
@@ -34,4 +36,7 @@ urlpatterns = [
 
     # Password Reset
     path('password-reset/', password_reset_request, name='password_reset'),
+    path('password-reset-confirm/', password_reset_confirm, name='password_reset_confirm'),
+    # Simple HTML page for human-friendly reset via email link
+    path('password-reset/confirm/', password_reset_confirm_page, name='password_reset_confirm_page'),
 ]

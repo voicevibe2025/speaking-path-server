@@ -15,6 +15,11 @@ import firebase_admin
 from firebase_admin import auth as fb_auth
 from firebase_admin import credentials as fb_credentials
 from .firebase import init_firebase
+from django.conf import settings
+from django.core.mail import send_mail
+from django.urls import reverse
+from django.core.signing import dumps, loads, BadSignature, SignatureExpired
+from django.shortcuts import render
 
 from .models import User, RefreshTokenBlacklist
 from .serializers import (
@@ -23,6 +28,25 @@ from .serializers import (
     UserSerializer,
     CustomTokenObtainPairSerializer
 )
+
+
+# Password reset token configuration
+RESET_TOKEN_SALT = 'password-reset'
+RESET_TOKEN_MAX_AGE = 60 * 60 * 24  # 24 hours
+
+
+def _make_reset_token(user: User) -> str:
+    """Create a signed, timestamped token containing the user's id."""
+    return dumps({'uid': user.id}, salt=RESET_TOKEN_SALT)
+
+
+def _parse_reset_token(token: str) -> int:
+    """Validate and parse token, returning user id or raising."""
+    data = loads(token, salt=RESET_TOKEN_SALT, max_age=RESET_TOKEN_MAX_AGE)
+    uid = data.get('uid')
+    if not uid:
+        raise BadSignature('Invalid token payload')
+    return int(uid)
 
 
 class CustomTokenObtainPairView(TokenObtainPairView):
@@ -211,14 +235,124 @@ def password_reset_request(request):
     """
     email = request.data.get('email')
 
+    # Always return a generic success message for security.
+    generic_response = Response({
+        'message': 'If an account exists for this email, a reset link has been sent.',
+        'success': True,
+    }, status=status.HTTP_200_OK)
+
+    if not email:
+        # Still return generic success to avoid user enumeration
+        return generic_response
+
     try:
         user = User.objects.get(email=email)
-        # TODO: Implement email sending with reset token
-        return Response({
-            'message': 'Password reset email sent'
-        }, status=status.HTTP_200_OK)
     except User.DoesNotExist:
-        # Return success even if user doesn't exist (security)
-        return Response({
-            'message': 'Password reset email sent'
-        }, status=status.HTTP_200_OK)
+        # Do not reveal whether user exists
+        return generic_response
+
+    try:
+        token = _make_reset_token(user)
+        # Build confirmation URL for a simple HTML page
+        confirm_page_url = request.build_absolute_uri(
+            reverse('authentication:password_reset_confirm_page')
+        ) + f'?token={token}'
+
+        subject = 'Reset your VoiceVibe password'
+        message = (
+            'You requested a password reset for your VoiceVibe account.\n\n'
+            f'Click the link below to set a new password (valid for 24 hours):\n{confirm_page_url}\n\n'
+            'If you did not request this, you can safely ignore this email.'
+        )
+        from_email = settings.DEFAULT_FROM_EMAIL or settings.EMAIL_HOST_USER or 'no-reply@voicevibe.app'
+
+        send_mail(
+            subject=subject,
+            message=message,
+            from_email=from_email,
+            recipient_list=[email],
+            fail_silently=False,
+        )
+    except Exception as e:
+        # Log but still return generic success
+        logging.exception('Failed to send password reset email')
+
+    return generic_response
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def password_reset_confirm(request):
+    """
+    Confirm password reset via token and set new password.
+    Body: { "token": str, "new_password": str }
+    """
+    token = request.data.get('token')
+    new_password = request.data.get('new_password')
+
+    if not token or not new_password:
+        return Response({'message': 'token and new_password are required', 'success': False}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        uid = _parse_reset_token(token)
+        user = User.objects.get(id=uid)
+        user.set_password(new_password)
+        user.save(update_fields=['password'])
+        return Response({'message': 'Password has been reset successfully', 'success': True}, status=status.HTTP_200_OK)
+    except (BadSignature, SignatureExpired):
+        return Response({'message': 'Invalid or expired token', 'success': False}, status=status.HTTP_400_BAD_REQUEST)
+    except User.DoesNotExist:
+        # Should be rare; treat as invalid token
+        return Response({'message': 'Invalid token', 'success': False}, status=status.HTTP_400_BAD_REQUEST)
+
+
+def password_reset_confirm_page(request):
+    """
+    Simple HTML page to set a new password via a token passed as a query param.
+    Supports GET (form) and POST (submit new password).
+    """
+    if request.method == 'GET':
+        token = request.GET.get('token')
+        return render(request, 'auth/password_reset_confirm.html', {'token': token, 'success': None, 'error': None})
+
+    # POST
+    token = request.POST.get('token')
+    new_password = request.POST.get('new_password')
+    confirm_password = request.POST.get('confirm_password')
+
+    if not token or not new_password or not confirm_password:
+        return render(request, 'auth/password_reset_confirm.html', {
+            'token': token,
+            'success': None,
+            'error': 'All fields are required.'
+        })
+
+    if new_password != confirm_password:
+        return render(request, 'auth/password_reset_confirm.html', {
+            'token': token,
+            'success': None,
+            'error': 'Passwords do not match.'
+        })
+
+    try:
+        uid = _parse_reset_token(token)
+        user = User.objects.get(id=uid)
+        user.set_password(new_password)
+        user.save(update_fields=['password'])
+        return render(request, 'auth/password_reset_confirm.html', {
+            'token': None,
+            'success': 'Your password has been reset successfully. You can now close this page and log in to the app.',
+            'error': None,
+        })
+    except (BadSignature, SignatureExpired):
+        return render(request, 'auth/password_reset_confirm.html', {
+            'token': None,
+            'success': None,
+            'error': 'Invalid or expired token.'
+        })
+    except User.DoesNotExist:
+        return render(request, 'auth/password_reset_confirm.html', {
+            'token': None,
+            'success': None,
+            'error': 'Invalid token.'
+        })

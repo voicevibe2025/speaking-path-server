@@ -7,7 +7,7 @@ User = get_user_model()
 class Post(models.Model):
     """
     A simple social Post that can be exactly one of: text, image, or link.
-    Visible to all authenticated users. Likes/comments allowed only for friends (mutual follows).
+    Visible to all authenticated users. Likes/comments allowed for all authenticated users.
     """
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='posts')
     text = models.TextField(blank=True)

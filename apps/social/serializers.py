@@ -1,6 +1,5 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from apps.users.models import UserFollow, UserProfile
 from .models import Post, PostLike, PostComment, PostCommentLike
 
 User = get_user_model()
@@ -81,13 +80,8 @@ class PostSerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         if not request or not request.user.is_authenticated:
             return False
-        if request.user == obj.user:
-            return True
-        # Mutual follow = friends
-        return (
-            UserFollow.objects.filter(follower=request.user, following=obj.user).exists() and
-            UserFollow.objects.filter(follower=obj.user, following=request.user).exists()
-        )
+        # Any authenticated user can interact (like/comment)
+        return True
 
     def get_canDelete(self, obj: Post):
         request = self.context.get('request')

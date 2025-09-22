@@ -5,21 +5,8 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.shortcuts import get_object_or_404
 from django.db import transaction
 
-from apps.users.models import UserFollow
 from .models import Post, PostLike, PostComment, PostCommentLike
 from .serializers import PostSerializer, CreatePostRequest, CommentSerializer, CreateCommentRequest
-
-
-def are_friends(user_a, user_b) -> bool:
-    if user_a == user_b:
-        return True
-    try:
-        return (
-            UserFollow.objects.filter(follower=user_a, following=user_b).exists() and
-            UserFollow.objects.filter(follower=user_b, following=user_a).exists()
-        )
-    except Exception:
-        return False
 
 
 class PostListCreateView(generics.ListCreateAPIView):
@@ -71,16 +58,12 @@ class PostLikeView(generics.GenericAPIView):
 
     def post(self, request, post_id: int):
         post = get_object_or_404(Post, id=post_id)
-        if not are_friends(request.user, post.user):
-            return Response({'detail': 'Only friends can like.'}, status=status.HTTP_403_FORBIDDEN)
         # idempotent like
         PostLike.objects.get_or_create(post=post, user=request.user)
         return Response({'status': 'liked'})
 
     def delete(self, request, post_id: int):
         post = get_object_or_404(Post, id=post_id)
-        if not are_friends(request.user, post.user):
-            return Response({'detail': 'Only friends can unlike.'}, status=status.HTTP_403_FORBIDDEN)
         PostLike.objects.filter(post=post, user=request.user).delete()
         return Response({'status': 'unliked'})
 
@@ -121,8 +104,6 @@ class PostCommentListCreateView(generics.ListCreateAPIView):
     @transaction.atomic
     def create(self, request, *args, **kwargs):
         post = get_object_or_404(Post, id=self.kwargs['post_id'])
-        if not are_friends(request.user, post.user):
-            return Response({'detail': 'Only friends can comment.'}, status=status.HTTP_403_FORBIDDEN)
         req = CreateCommentRequest(data=request.data)
         req.is_valid(raise_exception=True)
         parent_id = req.validated_data.get('parent')
@@ -142,15 +123,11 @@ class PostCommentLikeView(generics.GenericAPIView):
 
     def post(self, request, comment_id: int):
         comment = get_object_or_404(PostComment, id=comment_id)
-        if not are_friends(request.user, comment.post.user):
-            return Response({'detail': 'Only friends can like.'}, status=status.HTTP_403_FORBIDDEN)
         PostCommentLike.objects.get_or_create(comment=comment, user=request.user)
         return Response({'status': 'liked'})
 
     def delete(self, request, comment_id: int):
         comment = get_object_or_404(PostComment, id=comment_id)
-        if not are_friends(request.user, comment.post.user):
-            return Response({'detail': 'Only friends can unlike.'}, status=status.HTTP_403_FORBIDDEN)
         PostCommentLike.objects.filter(comment=comment, user=request.user).delete()
         return Response({'status': 'unliked'})
 

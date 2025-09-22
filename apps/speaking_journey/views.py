@@ -31,6 +31,7 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from django.shortcuts import get_object_or_404
 from django.contrib.auth import get_user_model
 from django.utils import timezone
+from django.db.models import Avg, Count, Sum
 import requests
 from .models import Topic, TopicProgress, UserProfile, PhraseProgress, UserPhraseRecording, VocabularyPracticeSession, ListeningPracticeSession, UserConversationRecording
 from apps.gamification.models import UserLevel, PointsTransaction
@@ -3056,6 +3057,170 @@ class SpeakingActivitiesView(APIView):
         ser = JourneyActivitySerializer(events, many=True)
         return Response(ser.data, status=status.HTTP_200_OK)
 
+
+class LingoLeagueView(APIView):
+    """Provide cross-user rankings based on Speaking Journey data.
+
+    Categories:
+      - PRONUNCIATION: average accuracy from UserPhraseRecording.accuracy (0-100)
+      - FLUENCY: average of all values in TopicProgress.fluency_prompt_scores (0-100)
+      - VOCABULARY: average percent across completed VocabularyPracticeSession (0-100)
+      - TOPICS_COMPLETED: count of TopicProgress entries with completed=True
+
+    Returns Android-friendly LeaderboardData-like payload to match existing mobile domain models.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def _resolve_avatar_url(self, user, request):
+        try:
+            profile = getattr(user, 'profile', None)
+            if not profile:
+                return None
+            avatar_field = getattr(profile, 'avatar', None)
+            if avatar_field and hasattr(avatar_field, 'url'):
+                try:
+                    return request.build_absolute_uri(avatar_field.url) if request else avatar_field.url
+                except Exception:
+                    return getattr(avatar_field, 'url', None)
+            legacy = getattr(profile, 'avatar_url', '') or ''
+            return legacy or None
+        except Exception:
+            return None
+
+    def get(self, request):
+        User = get_user_model()
+        category = str(request.query_params.get('category') or 'PRONUNCIATION').strip().upper()
+        try:
+            limit = int(request.query_params.get('limit') or 50)
+        except Exception:
+            limit = 50
+        limit = max(1, min(limit, 200))
+
+        # Compute scores per user based on category
+        scores: list[tuple[int, float]] = []  # list of (user_id, score)
+
+        if category == 'PRONUNCIATION':
+            try:
+                qs = (
+                    UserPhraseRecording.objects
+                    .filter(accuracy__isnull=False)
+                    .values('user_id')
+                    .annotate(score=Avg('accuracy'))
+                    .order_by('-score')
+                )
+                scores = [(row['user_id'], float(row['score'] or 0.0)) for row in qs]
+            except Exception:
+                scores = []
+        elif category == 'FLUENCY':
+            try:
+                raw = TopicProgress.objects.values('user_id', 'fluency_prompt_scores')
+                agg: dict[int, list[float]] = {}
+                for row in raw:
+                    uid = int(row['user_id'])
+                    arr = row.get('fluency_prompt_scores') or []
+                    for v in arr:
+                        try:
+                            val = float(v)
+                        except Exception:
+                            continue
+                        if uid not in agg:
+                            agg[uid] = []
+                        agg[uid].append(val)
+                temp = []
+                for uid, vals in agg.items():
+                    if vals:
+                        avg = sum(vals) / len(vals)
+                        temp.append((uid, avg))
+                scores = sorted(temp, key=lambda x: x[1], reverse=True)
+            except Exception:
+                scores = []
+        elif category == 'VOCABULARY':
+            try:
+                raw = VocabularyPracticeSession.objects.filter(completed=True).values('user_id', 'total_questions', 'total_score')
+                sums: dict[int, float] = {}
+                counts: dict[int, int] = {}
+                for r in raw:
+                    uid = int(r['user_id'])
+                    tq = int(r.get('total_questions') or 0)
+                    ts = int(r.get('total_score') or 0)
+                    if tq <= 0:
+                        continue
+                    max_score = tq * 10
+                    perc = max(0.0, min(100.0, (ts / max(1, max_score)) * 100.0))
+                    sums[uid] = sums.get(uid, 0.0) + perc
+                    counts[uid] = counts.get(uid, 0) + 1
+                items = []
+                for uid, s in sums.items():
+                    c = counts.get(uid, 0)
+                    if c > 0:
+                        items.append((uid, s / c))
+                scores = sorted(items, key=lambda x: x[1], reverse=True)
+            except Exception:
+                scores = []
+        else:  # TOPICS_COMPLETED
+            try:
+                qs = (
+                    TopicProgress.objects.filter(completed=True)
+                    .values('user_id')
+                    .annotate(score=Count('id'))
+                    .order_by('-score')
+                )
+                scores = [(row['user_id'], float(row['score'] or 0.0)) for row in qs]
+                category = 'TOPICS_COMPLETED'
+            except Exception:
+                scores = []
+
+        # Trim and gather user info
+        scores = scores[:limit]
+        user_ids = [uid for uid, _ in scores]
+        users = {u.id: u for u in User.objects.filter(id__in=user_ids).select_related('profile', 'level_profile')}
+        levels = {u.id: getattr(u, 'level_profile', None) for u in users.values()}
+
+        entries = []
+        current_user_entry = None
+        for rank, (uid, score) in enumerate(scores, 1):
+            user = users.get(uid)
+            if not user:
+                continue
+            # Display name prefers full name if available
+            try:
+                name_val = (user.get_full_name() or '').strip() or user.username
+            except Exception:
+                name_val = getattr(user, 'username', str(uid))
+            lvl = levels.get(uid)
+            level_val = int(getattr(lvl, 'current_level', 0) or 0)
+            streak_val = int(getattr(lvl, 'streak_days', 0) or 0)
+            entry = {
+                'rank': rank,
+                'userId': str(uid),
+                'username': getattr(user, 'username', str(uid)),
+                'displayName': name_val,
+                'avatarUrl': self._resolve_avatar_url(user, request),
+                'score': int(round(score)),
+                'level': level_val,
+                'streakDays': streak_val,
+                'country': None,
+                'countryCode': None,
+                'isCurrentUser': uid == getattr(request.user, 'id', None),
+                'change': 'NONE',
+                'achievements': 0,
+                'weeklyXp': 0,
+                'monthlyXp': 0,
+                'badge': None,
+            }
+            if entry['isCurrentUser']:
+                current_user_entry = entry
+            entries.append(entry)
+
+        data = {
+            'type': 'LINGO_LEAGUE',
+            'filter': category,
+            'entries': entries,
+            'currentUserEntry': current_user_entry,
+            'lastUpdated': timezone.now(),
+            'totalParticipants': len(entries),
+        }
+        return Response(data, status=status.HTTP_200_OK)
 
 # ---------------------------
 # AI Coach (Gemini-as-GRU)
