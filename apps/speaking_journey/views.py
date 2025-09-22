@@ -11,6 +11,7 @@ import hashlib
 import subprocess
 import json
 import math
+from datetime import timedelta
 from difflib import SequenceMatcher
 # Defer openai-whisper import to runtime to avoid import-time overhead and potential coverage/numba issues
 _openai_whisper = None
@@ -58,6 +59,7 @@ from .serializers import (
     CompleteListeningPracticeRequestSerializer,
     CompleteListeningPracticeResponseSerializer,
     JourneyActivitySerializer,
+    CoachAnalysisSerializer,
 )
 
 logger = logging.getLogger(__name__)
@@ -3015,4 +3017,302 @@ class SpeakingActivitiesView(APIView):
         events = events[:limit]
 
         ser = JourneyActivitySerializer(events, many=True)
+        return Response(ser.data, status=status.HTTP_200_OK)
+
+
+# ---------------------------
+# AI Coach (Gemini-as-GRU)
+# ---------------------------
+_COACH_CACHE: dict[str, dict] = {}
+
+def _collapse_repeats_text(s: str) -> str:
+    """Collapse short repeated n-grams to reduce transcription noise, preserving original casing.
+    Mirrors the helper used in faster-whisper paths but exposed as a reusable function.
+    """
+    try:
+        import re as _re
+        words = (_re.sub(r"\s+", " ", s or "").strip()).split(" ")
+        norm = [
+            _re.sub(r"[^A-Za-z0-9']+", "", w.replace("’", "'").replace("`", "'"))
+            .lower()
+            for w in words
+        ]
+        n = len(words)
+        if n <= 3:
+            return " ".join(words)
+        i = 0
+        out_words: list[str] = []
+        while i < n:
+            max_w = min(5, n - i)
+            collapsed = False
+            for w in range(max_w, 1, -1):
+                chunk_norm = norm[i:i+w]
+                if any(t == "" for t in chunk_norm):
+                    continue
+                repeats = 1
+                while (
+                    i + (repeats * w) + w <= n
+                    and norm[i + repeats*w:i + (repeats+1)*w] == chunk_norm
+                ):
+                    repeats += 1
+                if repeats >= 2:
+                    out_words.extend(words[i:i+w])
+                    i += repeats * w
+                    collapsed = True
+                    break
+            if not collapsed:
+                out_words.append(words[i])
+                i += 1
+        return " ".join(out_words)
+    except Exception:
+        return s
+
+
+def _build_coach_features(user) -> dict:
+    """Aggregate compact features for the AI Coach. Keep token budget small.
+
+    Returns a dict with:
+      - perTopic: [{title, pron, flu, vocab, completed}]
+      - totals: {pronunciation, fluency, vocabulary, topicsCompleted, recencyLatest}
+      - recentTranscripts: [{type:"phrase"|"conversation", text, topic, accuracy}]
+    """
+    features: dict = {
+        'perTopic': [],
+        'totals': {
+            'pronunciation': 0,
+            'fluency': 0,
+            'vocabulary': 0,
+            'topicsCompleted': 0,
+            'recencyLatest': None,
+        },
+        'recentTranscripts': [],
+    }
+    try:
+        tps = TopicProgress.objects.select_related('topic').filter(user=user)
+        pron_total = 0
+        flu_total = 0
+        vocab_total = 0
+        count = 0
+        completed_cnt = 0
+        latest_dt = None
+        for tp in tps:
+            try:
+                pron = int(tp.pronunciation_total_score or 0)
+                flu = int(tp.fluency_total_score or 0)
+                vocab = int(tp.vocabulary_total_score or 0)
+                features['perTopic'].append({
+                    'title': tp.topic.title,
+                    'pron': pron,
+                    'flu': flu,
+                    'vocab': vocab,
+                    'completed': bool(tp.completed),
+                })
+                pron_total += pron
+                flu_total += flu
+                vocab_total += vocab
+                count += 1
+                if tp.completed and tp.completed_at:
+                    completed_cnt += 1
+                    if latest_dt is None or tp.completed_at > latest_dt:
+                        latest_dt = tp.completed_at
+            except Exception:
+                continue
+        if count > 0:
+            features['totals']['pronunciation'] = int(round(pron_total / count))
+            features['totals']['fluency'] = int(round(flu_total / count))
+            features['totals']['vocabulary'] = int(round(vocab_total / count))
+        features['totals']['topicsCompleted'] = completed_cnt
+        features['totals']['recencyLatest'] = (latest_dt.isoformat() if latest_dt else None)
+    except Exception:
+        pass
+
+    # Recent transcripts (limit small)
+    try:
+        pr = list(
+            UserPhraseRecording.objects.select_related('topic')
+            .filter(user=user).order_by('-created_at')[:5]
+        )
+        for r in pr:
+            try:
+                txt = _collapse_repeats_text((r.transcription or '').strip())[:220]
+                if txt:
+                    features['recentTranscripts'].append({
+                        'type': 'phrase', 'text': txt, 'topic': r.topic.title, 'accuracy': int(round(float(r.accuracy or 0)))
+                    })
+            except Exception:
+                continue
+    except Exception:
+        pass
+    try:
+        cr = list(
+            UserConversationRecording.objects.select_related('topic')
+            .filter(user=user).order_by('-created_at')[:5]
+        )
+        for r in cr:
+            try:
+                txt = _collapse_repeats_text((r.transcription or '').strip())[:220]
+                if txt:
+                    features['recentTranscripts'].append({
+                        'type': 'conversation', 'text': txt, 'topic': r.topic.title, 'accuracy': int(round(float(r.accuracy or 0)))
+                    })
+            except Exception:
+                continue
+    except Exception:
+        pass
+
+    return features
+
+
+def _heuristic_coach(user) -> dict:
+    """Build a minimal coach analysis without LLM based on topic progress averages."""
+    feats = _build_coach_features(user)
+    pron = int(feats.get('totals', {}).get('pronunciation') or 0)
+    flu = int(feats.get('totals', {}).get('fluency') or 0)
+    vocab = int(feats.get('totals', {}).get('vocabulary') or 0)
+    skills = [
+        {'id': 'pronunciation', 'name': 'Pronunciation', 'mastery': pron, 'confidence': 0.6, 'trend': 'flat', 'evidence': []},
+        {'id': 'fluency', 'name': 'Fluency', 'mastery': flu, 'confidence': 0.6, 'trend': 'flat', 'evidence': []},
+        {'id': 'vocabulary', 'name': 'Vocabulary', 'mastery': vocab, 'confidence': 0.6, 'trend': 'flat', 'evidence': []},
+    ]
+    # strengths/weaknesses by sorting
+    ordered = sorted(skills, key=lambda s: s['mastery'], reverse=True)
+    strengths = [s['id'] for s in ordered[:2]]
+    weaknesses = [s['id'] for s in ordered[-2:]]
+    # Recommend next best action on weakest area
+    weakest = weaknesses[0] if weaknesses else 'pronunciation'
+    nba_title = {
+        'pronunciation': 'Practice Pronunciation Now',
+        'fluency': 'Do a Fluency Prompt',
+        'vocabulary': 'Study Vocabulary Lesson',
+    }.get(weakest, 'Master Current Topic')
+    # Choose current/first unlocked topic for deeplink context (best-effort)
+    topic = Topic.objects.filter(is_active=True).order_by('sequence').first()
+    deeplink = f"app://voicevibe/speaking/topic/{topic.id if topic else 'current'}/" + (
+        'master' if weakest == 'pronunciation' else ('conversation' if weakest == 'fluency' else 'vocab')
+    )
+    out = {
+        'currentVersion': 1,
+        'generatedAt': timezone.now(),
+        'skills': skills,
+        'strengths': strengths,
+        'weaknesses': weaknesses,
+        'nextBestActions': [
+            {
+                'id': f'nba:{weakest}',
+                'title': nba_title,
+                'rationale': 'Based on your recent scores, focusing here will improve your overall progress the fastest.',
+                'deeplink': deeplink,
+                'expectedGain': 'medium',
+            }
+        ],
+        'difficultyCalibration': {
+            'pronunciation': 'baseline',
+            'fluency': 'baseline',
+            'vocabulary': 'baseline',
+        },
+        'schedule': [],
+        'coachMessage': 'You are doing well! Let\'s target one area this week and keep your streak.',
+        'cacheForHours': 12,
+    }
+    return out
+
+
+def _call_gemini_coach(user) -> dict:
+    api_key = (
+        getattr(settings, 'GEMINI_API_KEY', '') or os.environ.get('GEMINI_API_KEY', '') or os.environ.get('GOOGLE_API_KEY', '')
+    )
+    if not api_key:
+        return _heuristic_coach(user)
+    feats = _build_coach_features(user)
+    prompt = (
+        "You are an AI Coach for an English speaking app. Analyze the user's compact features and return STRICT JSON only.\n"
+        "Schema: {\n"
+        "  currentVersion: int, generatedAt: isoDateTime,\n"
+        "  skills: [{id: string, name: string, mastery: 0-100, confidence: 0-1, trend: 'up'|'down'|'flat', evidence: string[]}],\n"
+        "  strengths: string[], weaknesses: string[],\n"
+        "  nextBestActions: [{id: string, title: string, rationale: string, deeplink: string, expectedGain: 'small'|'medium'|'large'}],\n"
+        "  difficultyCalibration: {pronunciation: 'easier'|'baseline'|'harder', fluency: 'slower'|'baseline'|'faster', vocabulary: 'fewer_terms'|'baseline'|'more_terms'},\n"
+        "  schedule: [{date: 'YYYY-MM-DD', focus: string, microSkills: string[], reason: string}],\n"
+        "  coachMessage: string, cacheForHours: int\n"
+        "}\n"
+        "Return JSON only.\n"
+        f"FEATURES: {json.dumps(feats, ensure_ascii=False)}\n"
+        "Prefer short evidence quotes from recentTranscripts.\n"
+        "Build deeplinks like app://voicevibe/speaking/topic/<topicId>/(master|conversation|vocab). If no topicId, use 'current'.\n"
+    )
+    candidates = [
+        getattr(settings, 'GEMINI_TEXT_MODEL', None) or os.environ.get('GEMINI_MODEL') or 'gemini-2.5-pro',
+        'gemini-2.5-flash',
+        'gemini-1.5-pro',
+        'gemini-1.5-flash',
+    ]
+    try:
+        genai.configure(api_key=api_key)
+    except Exception:
+        return _heuristic_coach(user)
+    for name in candidates:
+        try:
+            model = genai.GenerativeModel(name)
+            resp = model.generate_content(prompt)
+            raw = (getattr(resp, 'text', None) or '').strip()
+            if not raw:
+                continue
+            if raw.startswith('```'):
+                first_nl = raw.find('\n')
+                if first_nl != -1:
+                    raw = raw[first_nl+1:]
+                if raw.endswith('```'):
+                    raw = raw[:-3]
+                raw = raw.strip()
+            data = json.loads(raw)
+            # Validate with serializer shape
+            ser = CoachAnalysisSerializer(data=data)
+            if ser.is_valid():
+                return ser.validated_data
+        except Exception as e:
+            logger.warning('Gemini coach via %s failed: %s', name, e)
+            continue
+    return _heuristic_coach(user)
+
+
+class CoachAnalysisView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        key = str(user.id)
+        now = timezone.now()
+        cached = _COACH_CACHE.get(key)
+        if cached:
+            try:
+                if cached.get('expires_at') and cached['expires_at'] > now:
+                    ser = CoachAnalysisSerializer(cached['data'])
+                    return Response(ser.data, status=status.HTTP_200_OK)
+            except Exception:
+                pass
+        # Miss or expired: compute
+        data = _call_gemini_coach(user)
+        ttl_hours = int(data.get('cacheForHours', 12) or 12)
+        _COACH_CACHE[key] = {
+            'data': data,
+            'expires_at': now + timedelta(hours=max(1, min(ttl_hours, 48)))
+        }
+        ser = CoachAnalysisSerializer(data)
+        return Response(ser.data, status=status.HTTP_200_OK)
+
+
+class CoachAnalysisRefreshView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        key = str(user.id)
+        data = _call_gemini_coach(user)
+        now = timezone.now()
+        ttl_hours = int(data.get('cacheForHours', 12) or 12)
+        _COACH_CACHE[key] = {
+            'data': data,
+            'expires_at': now + timedelta(hours=max(1, min(ttl_hours, 48)))
+        }
+        ser = CoachAnalysisSerializer(data)
         return Response(ser.data, status=status.HTTP_200_OK)

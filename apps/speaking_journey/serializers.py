@@ -232,3 +232,47 @@ class JourneyActivitySerializer(serializers.Serializer):
     description = serializers.CharField(allow_blank=True, required=False)
     timestamp = serializers.DateTimeField()
     xpEarned = serializers.IntegerField(required=False)
+
+
+# --- AI Coach (Gemini-as-GRU) ---
+class CoachSkillSerializer(serializers.Serializer):
+    id = serializers.CharField()
+    name = serializers.CharField()
+    mastery = serializers.IntegerField(min_value=0, max_value=100)
+    confidence = serializers.FloatField(required=False)
+    trend = serializers.ChoiceField(choices=["up", "down", "flat"], required=False)
+    evidence = serializers.ListField(child=serializers.CharField(), required=False)
+
+
+class NextBestActionSerializer(serializers.Serializer):
+    id = serializers.CharField()
+    title = serializers.CharField()
+    rationale = serializers.CharField()
+    deeplink = serializers.CharField()
+    expectedGain = serializers.ChoiceField(choices=["small", "medium", "large"], required=False)
+
+
+class DifficultyCalibrationSerializer(serializers.Serializer):
+    pronunciation = serializers.ChoiceField(choices=["easier", "baseline", "harder"], required=False)
+    fluency = serializers.ChoiceField(choices=["slower", "baseline", "faster"], required=False)
+    vocabulary = serializers.ChoiceField(choices=["fewer_terms", "baseline", "more_terms"], required=False)
+
+
+class CoachScheduleItemSerializer(serializers.Serializer):
+    date = serializers.DateField()
+    focus = serializers.CharField()
+    microSkills = serializers.ListField(child=serializers.CharField(), required=False)
+    reason = serializers.CharField(required=False)
+
+
+class CoachAnalysisSerializer(serializers.Serializer):
+    currentVersion = serializers.IntegerField()
+    generatedAt = serializers.DateTimeField()
+    skills = CoachSkillSerializer(many=True)
+    strengths = serializers.ListField(child=serializers.CharField())
+    weaknesses = serializers.ListField(child=serializers.CharField())
+    nextBestActions = NextBestActionSerializer(many=True)
+    difficultyCalibration = DifficultyCalibrationSerializer(required=False)
+    schedule = CoachScheduleItemSerializer(many=True, required=False)
+    coachMessage = serializers.CharField()
+    cacheForHours = serializers.IntegerField(default=12)

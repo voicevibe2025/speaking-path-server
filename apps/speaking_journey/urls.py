@@ -17,6 +17,8 @@ from .views import (
     DebugTopicStatusView,
     SeedPerfectScoresView,
     RecomputeTopicAggregatesView,
+    CoachAnalysisView,
+    CoachAnalysisRefreshView,
 )
 
 app_name = 'speaking_journey'
@@ -38,6 +40,9 @@ urlpatterns = [
     path('topics/<uuid:topic_id>/recordings', UserPhraseRecordingsView.as_view(), name='topic_recordings'),
     path('activities', SpeakingActivitiesView.as_view(), name='activities'),
     path('tts/generate', GenerateTTSView.as_view(), name='tts_generate'),
+    # AI Coach
+    path('coach/analysis', CoachAnalysisView.as_view(), name='coach_analysis'),
+    path('coach/analysis/refresh', CoachAnalysisRefreshView.as_view(), name='coach_analysis_refresh'),
     # Debug endpoints
     path('topics/<uuid:topic_id>/debug', DebugTopicStatusView.as_view(), name='debug_topic_status'),
     path('topics/<uuid:topic_id>/seed-perfect', SeedPerfectScoresView.as_view(), name='seed_perfect_scores'),
