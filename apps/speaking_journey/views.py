@@ -2940,7 +2940,20 @@ class SpeakingActivitiesView(APIView):
         except Exception:
             limit = 50
 
-        user = request.user
+        # Support viewing another user's activity feed when a userId/user_id is provided
+        target_user = request.user
+        try:
+            raw_uid = request.query_params.get('userId') or request.query_params.get('user_id')
+            if raw_uid:
+                UserModel = get_user_model()
+                tu = UserModel.objects.filter(id=raw_uid).first()
+                if tu is not None:
+                    target_user = tu
+        except Exception:
+            # Fallback silently to current user if lookup fails
+            pass
+
+        user = target_user
 
         events: list[dict] = []
 

@@ -78,6 +78,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
     # Skill Progress computed from Speaking Journey models (not analytics)
     speaking_score = serializers.SerializerMethodField()
+    fluency_score = serializers.SerializerMethodField()
     listening_score = serializers.SerializerMethodField()
     grammar_score = serializers.SerializerMethodField()
     vocabulary_score = serializers.SerializerMethodField()
@@ -289,8 +290,36 @@ class UserProfileSerializer(serializers.ModelSerializer):
             pass
         return 0.0
 
+    def get_fluency_score(self, obj):
+        """Fluency score averaged from TopicProgress.fluency_total_score across topics (0-100)."""
+        user = obj.user
+        try:
+            tp_scores = list(
+                TopicProgress.objects.filter(user=user).values_list('fluency_total_score', flat=True)
+            )
+            vals = [float(s or 0.0) for s in tp_scores]
+            nonzero = [v for v in vals if v > 0.0]
+            if nonzero:
+                avg = sum(nonzero) / len(nonzero)
+                return round(max(0.0, min(100.0, avg)), 1)
+        except Exception:
+            pass
+        return 0.0
+
     def get_listening_score(self, obj):
-        """Listening not implemented yet; return 0."""
+        """Listening score averaged from TopicProgress.listening_total_score across topics (0-100)."""
+        user = obj.user
+        try:
+            tp_scores = list(
+                TopicProgress.objects.filter(user=user).values_list('listening_total_score', flat=True)
+            )
+            vals = [float(s or 0.0) for s in tp_scores]
+            nonzero = [v for v in vals if v > 0.0]
+            if nonzero:
+                avg = sum(nonzero) / len(nonzero)
+                return round(max(0.0, min(100.0, avg)), 1)
+        except Exception:
+            pass
         return 0.0
 
     def get_grammar_score(self, obj):
@@ -622,7 +651,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'total_practice_time', 'current_level', 'experience_points', 'total_points_earned', 'streak_days',
             'total_practice_hours', 'lessons_completed', 'recordings_count', 'avg_score',
             'daily_practice_goal', 'learning_goal', 'target_language',
-            'speaking_score', 'listening_score', 'grammar_score', 'vocabulary_score', 'pronunciation_score',
+            'speaking_score', 'fluency_score', 'listening_score', 'grammar_score', 'vocabulary_score', 'pronunciation_score',
             'monthly_days_active', 'monthly_xp_earned', 'monthly_lessons_completed',
             'recent_activities', 'membership_status',
             'last_practice_date',
