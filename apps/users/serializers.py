@@ -13,7 +13,7 @@ from .models import UserProfile, LearningPreference, UserAchievement, UserFollow
 from apps.gamification.serializers import UserBadgeSerializer
 from apps.speaking_sessions.models import PracticeSession
 from apps.learning_paths.models import UserProgress
-from apps.speaking_journey.models import TopicProgress, UserPhraseRecording, VocabularyPracticeSession
+from apps.speaking_journey.models import TopicProgress, UserPhraseRecording, VocabularyPracticeSession, ListeningPracticeSession
 
 User = get_user_model()
 
@@ -94,6 +94,10 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
     # Membership Status
     membership_status = serializers.SerializerMethodField()
+
+    # Learning Progress (for Overview tab)
+    practice_count = serializers.SerializerMethodField()
+    words_learned = serializers.SerializerMethodField()
 
     def get_total_practice_hours(self, obj):
         """
@@ -330,6 +334,36 @@ class UserProfileSerializer(serializers.ModelSerializer):
         """Get the 3 most recent achievements earned by the user"""
         recent_badges = obj.user.earned_badges.select_related('badge').order_by('-earned_at')[:3]
         return UserBadgeSerializer(recent_badges, many=True).data
+
+    def get_practice_count(self, obj):
+        """Total number of practice completions across modes for the user, sourced from TopicProgress flags only."""
+        user = obj.user
+        try:
+            tp_qs = TopicProgress.objects.filter(user=user)
+            total = (
+                tp_qs.filter(pronunciation_completed=True).count()
+                + tp_qs.filter(fluency_completed=True).count()
+                + tp_qs.filter(vocabulary_completed=True).count()
+                + tp_qs.filter(listening_completed=True).count()
+                + tp_qs.filter(conversation_completed=True).count()
+            )
+            return int(max(0, total))
+        except Exception:
+            return 0
+
+    def get_words_learned(self, obj):
+        """Sum of vocabulary list lengths across fully completed topics for the user."""
+        user = obj.user
+        try:
+            words = 0
+            for tp in TopicProgress.objects.filter(user=user, completed=True).select_related('topic').only('topic__vocabulary'):
+                try:
+                    words += len(tp.topic.vocabulary or [])
+                except Exception:
+                    continue
+            return int(max(0, words))
+        except Exception:
+            return 0
 
     def get_monthly_days_active(self, obj):
         """Get the number of days the user was active in the current month"""
@@ -655,7 +689,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'monthly_days_active', 'monthly_xp_earned', 'monthly_lessons_completed',
             'recent_activities', 'membership_status',
             'last_practice_date',
-            'created_at', 'updated_at', 'recent_achievements'
+            'created_at', 'updated_at', 'recent_achievements',
+            'practice_count', 'words_learned'
         ]
         read_only_fields = ['id', 'user', 'total_practice_time', 'created_at', 'updated_at']
 
