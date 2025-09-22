@@ -895,6 +895,7 @@ class CompleteListeningPracticeView(APIView):
 
         # Persist to TopicProgress
         tp, _ = TopicProgress.objects.get_or_create(user=request.user, topic=topic)
+        was_completed = bool(tp.completed)
         tp.listening_total_score = int(session.total_score or 0)
         tp.listening_completed = True
         # Do not change unlocking rules here (listening not required for unlock yet)
@@ -902,6 +903,12 @@ class CompleteListeningPracticeView(APIView):
             tp.completed = True
             tp.completed_at = timezone.now()
         tp.save()
+        # If the topic has just become completed, refresh AI Coach immediately
+        try:
+            if not was_completed and tp.completed:
+                _refresh_coach_cache_for_user(request.user)
+        except Exception:
+            pass
 
         session.completed = True
         session.save(update_fields=['total_score', 'completed', 'updated_at'])
@@ -2065,6 +2072,7 @@ class CompleteTopicView(APIView):
     def post(self, request, topic_id):
         topic = get_object_or_404(Topic, id=topic_id, is_active=True)
         progress, created = TopicProgress.objects.get_or_create(user=request.user, topic=topic)
+        was_completed = bool(progress.completed)
         # Mark all modes completed when manually completing a topic (keeps behavior consistent during testing)
         progress.pronunciation_completed = True
         progress.fluency_completed = True
@@ -2078,6 +2086,11 @@ class CompleteTopicView(APIView):
         else:
             message = 'Topic already completed'
         progress.save()
+        try:
+            if not was_completed and progress.completed:
+                _refresh_coach_cache_for_user(request.user)
+        except Exception:
+            pass
 
         # Determine next topic to unlock
         next_topic = (
@@ -2178,6 +2191,11 @@ class SubmitFluencyPromptView(APIView):
             tp.completed = True
             tp.completed_at = timezone.now()
         tp.save()
+        try:
+            if not was_completed and tp.completed:
+                _refresh_coach_cache_for_user(request.user)
+        except Exception:
+            pass
 
         # Compute next prompt index after update
         try:
@@ -2588,10 +2606,16 @@ class CompleteVocabularyPracticeView(APIView):
         tp.vocabulary_total_score = int(session.total_score or 0)
         tp.vocabulary_completed = True
         # Mark topic completed if all modes completed
+        was_completed = bool(tp.completed)
         if not tp.completed and tp.all_modes_completed:
             tp.completed = True
             tp.completed_at = timezone.now()
         tp.save()
+        try:
+            if not was_completed and tp.completed:
+                _refresh_coach_cache_for_user(request.user)
+        except Exception:
+            pass
 
         # Award +20 XP for completion of this practice (Option A)
         xp_awarded += _award_xp(
@@ -3025,6 +3049,20 @@ class SpeakingActivitiesView(APIView):
 # ---------------------------
 _COACH_CACHE: dict[str, dict] = {}
 
+def _refresh_coach_cache_for_user(user, ttl_minutes: int = 15) -> dict:
+    """Recompute coach analysis for user and store in in-process cache with a short TTL.
+
+    Returns the computed data for optional reuse by callers.
+    """
+    data = _call_gemini_coach(user)
+    now = timezone.now()
+    ttl_minutes = max(5, min(int(ttl_minutes or 15), 60))  # clamp between 5 and 60 minutes
+    _COACH_CACHE[str(user.id)] = {
+        'data': data,
+        'expires_at': now + timedelta(minutes=ttl_minutes),
+    }
+    return data
+
 def _collapse_repeats_text(s: str) -> str:
     """Collapse short repeated n-grams to reduce transcription noise, preserving original casing.
     Mirrors the helper used in faster-whisper paths but exposed as a reusable function.
@@ -3290,12 +3328,12 @@ class CoachAnalysisView(APIView):
                     return Response(ser.data, status=status.HTTP_200_OK)
             except Exception:
                 pass
-        # Miss or expired: compute
+        # Miss or expired: compute with a short default TTL (~15 minutes)
         data = _call_gemini_coach(user)
-        ttl_hours = int(data.get('cacheForHours', 12) or 12)
+        ttl_minutes = min(int((data.get('cacheForHours', 12) or 12) * 60), 15)
         _COACH_CACHE[key] = {
             'data': data,
-            'expires_at': now + timedelta(hours=max(1, min(ttl_hours, 48)))
+            'expires_at': now + timedelta(minutes=max(5, ttl_minutes))
         }
         ser = CoachAnalysisSerializer(data)
         return Response(ser.data, status=status.HTTP_200_OK)
@@ -3309,10 +3347,10 @@ class CoachAnalysisRefreshView(APIView):
         key = str(user.id)
         data = _call_gemini_coach(user)
         now = timezone.now()
-        ttl_hours = int(data.get('cacheForHours', 12) or 12)
+        ttl_minutes = min(int((data.get('cacheForHours', 12) or 12) * 60), 15)
         _COACH_CACHE[key] = {
             'data': data,
-            'expires_at': now + timedelta(hours=max(1, min(ttl_hours, 48)))
+            'expires_at': now + timedelta(minutes=max(5, ttl_minutes))
         }
         ser = CoachAnalysisSerializer(data)
         return Response(ser.data, status=status.HTTP_200_OK)
