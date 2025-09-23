@@ -3,7 +3,7 @@ User profile views for VoiceVibe
 """
 from datetime import date, timedelta
 from django.shortcuts import get_object_or_404
-from django.db.models import Sum, Count
+from django.db.models import Sum, Count, Q
 from rest_framework import generics, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -183,6 +183,42 @@ def update_streak(request):
             {'error': str(e)},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def search_users(request):
+    """
+    Search users by first name, last name, or username.
+    Accepts 'q' or 'query' query params. Returns up to 25 matches.
+    """
+    try:
+        raw = (request.query_params.get('q') or request.query_params.get('query') or '').strip()
+        if not raw:
+            return Response([], status=status.HTTP_200_OK)
+
+        terms = [t for t in raw.split() if t]
+        qs = UserProfile.objects.select_related('user')
+        if terms:
+            # Match any term across first_name, last_name, username
+            q = Q()
+            for t in terms:
+                q |= Q(user__first_name__icontains=t)
+                q |= Q(user__last_name__icontains=t)
+                q |= Q(user__username__icontains=t)
+            qs = qs.filter(q)
+        else:
+            qs = qs.filter(
+                Q(user__first_name__icontains=raw)
+                | Q(user__last_name__icontains=raw)
+                | Q(user__username__icontains=raw)
+            )
+
+        qs = qs.order_by('user__first_name', 'user__last_name')[:25]
+        serializer = UserProfileSerializer(qs, many=True, context={'request': request})
+        return Response(serializer.data)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['POST', 'DELETE'])

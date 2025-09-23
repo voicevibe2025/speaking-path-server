@@ -92,16 +92,19 @@ class PostSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         request = self.context.get('request')
-        # In create(), we might pass through; ensure one-of rule
-        text = (request.data.get('text') if request else attrs.get('text')) or ''
-        link_url = (request.data.get('link_url') if request else attrs.get('link_url')) or ''
+        # Allow text and/or image. If link_url is provided, it must be exclusive.
+        text = ((request.data.get('text') if request else attrs.get('text')) or '').strip()
+        link_url = ((request.data.get('link_url') if request else attrs.get('link_url')) or '').strip()
         image = request.FILES.get('image') if request else None
-        present = sum([1 if text.strip() else 0, 1 if link_url.strip() else 0, 1 if image else 0])
-        if present != 1:
-            raise serializers.ValidationError('Exactly one of text, image, or link_url must be provided.')
-        # Optional: basic validation on link
-        if link_url and not (link_url.startswith('http://') or link_url.startswith('https://')):
-            raise serializers.ValidationError('link_url must start with http:// or https://')
+
+        if link_url:
+            if image or text:
+                raise serializers.ValidationError('link_url cannot be combined with text or image.')
+            if not (link_url.startswith('http://') or link_url.startswith('https://')):
+                raise serializers.ValidationError('link_url must start with http:// or https://')
+        else:
+            if not (text or image):
+                raise serializers.ValidationError('Provide text and/or image.')
         return attrs
 
 

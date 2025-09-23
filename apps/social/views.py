@@ -28,25 +28,28 @@ class PostListCreateView(generics.ListCreateAPIView):
 
     @transaction.atomic
     def create(self, request, *args, **kwargs):
-        # Support exactly one-of: text, image, link_url
+        # Allow text and/or image, or link_url (link cannot be combined with others)
         image = request.FILES.get('image')
-        text = request.data.get('text', '')
-        link_url = request.data.get('link_url', '')
-        present = sum([1 if image else 0, 1 if (text or '').strip() else 0, 1 if (link_url or '').strip() else 0])
-        if present != 1:
-            return Response({'detail': 'Exactly one of text, image, or link_url must be provided.'}, status=status.HTTP_400_BAD_REQUEST)
+        text = (request.data.get('text') or '').strip()
+        link_url = (request.data.get('link_url') or '').strip()
 
-        post = Post(user=request.user)
-        if image:
-            post.image = image
-        elif (text or '').strip():
-            post.text = (text or '').strip()
-        else:
-            # link
+        if link_url:
+            # Link posts are exclusive (no text/image combination for now)
+            if image or text:
+                return Response({'detail': 'link_url cannot be combined with text or image.'}, status=status.HTTP_400_BAD_REQUEST)
             if not (link_url.startswith('http://') or link_url.startswith('https://')):
                 return Response({'detail': 'link_url must start with http:// or https://'}, status=status.HTTP_400_BAD_REQUEST)
-            post.link_url = link_url.strip()
-        post.save()
+            post = Post(user=request.user, link_url=link_url)
+            post.save()
+        else:
+            if not image and not text:
+                return Response({'detail': 'Provide text and/or image.'}, status=status.HTTP_400_BAD_REQUEST)
+            post = Post(user=request.user)
+            if image:
+                post.image = image
+            if text:
+                post.text = text
+            post.save()
 
         serializer = self.get_serializer(post)
         headers = self.get_success_headers(serializer.data)

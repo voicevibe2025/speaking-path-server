@@ -26,6 +26,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
     first_name = serializers.CharField(source='user.first_name', read_only=True)
     last_name = serializers.CharField(source='user.last_name', read_only=True)
     username = serializers.CharField(source='user.username', read_only=True)
+    userId = serializers.SerializerMethodField()
     email = serializers.EmailField(source='user.email', read_only=True)
     displayName = serializers.SerializerMethodField()
     user_email = serializers.EmailField(source='user.email', allow_blank=True, required=False)
@@ -537,6 +538,12 @@ class UserProfileSerializer(serializers.ModelSerializer):
         if obj.user.first_name and obj.user.last_name:
             return f"{obj.user.first_name} {obj.user.last_name}"
         return obj.user.username or "User"
+
+    def get_userId(self, obj):
+        try:
+            return int(obj.user.id)
+        except Exception:
+            return None
         
     def get_xpToNextLevel(self, obj):
         """Calculate XP needed to reach next level (Option A)."""
@@ -681,7 +688,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserProfile
         fields = [
-            'id', 'user', 'user_email', 'username', 'email', 'displayName', 'first_name', 'last_name',
+            'id', 'user', 'user_email', 'username', 'userId', 'email', 'displayName', 'first_name', 'last_name',
             'level', 'xp', 'xpToNextLevel', 'streakDays', 'longestStreak', 'joinedDate', 'lastActiveDate',
             'language', 'isVerified', 'isPremium', 'isOnline', 'isFollowing', 'isFollower', 'isBlocked',
             'followersCount', 'followingCount',

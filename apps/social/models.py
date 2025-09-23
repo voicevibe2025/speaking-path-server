@@ -6,7 +6,7 @@ User = get_user_model()
 
 class Post(models.Model):
     """
-    A simple social Post that can be exactly one of: text, image, or link.
+    A simple social Post that can include text and/or image, or a link (exclusive).
     Visible to all authenticated users. Likes/comments allowed for all authenticated users.
     """
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='posts')

@@ -11,6 +11,7 @@ from .views import (
     UserStatsView,
     update_streak,
     add_practice_time,
+    search_users,
     follow_toggle,
     list_followers,
     list_following,
@@ -23,6 +24,9 @@ urlpatterns = [
     path('profile/', UserProfileView.as_view(), name='profile'),
     path('<int:user_id>/', UserProfileDetailView.as_view(), name='user_profile_detail'),
     path('preferences/', LearningPreferenceView.as_view(), name='preferences'),
+
+    # Search users
+    path('search/', search_users, name='search_users'),
 
     # Social: follow/unfollow and lists
     path('follow/<int:user_id>/', follow_toggle, name='follow_toggle'),
