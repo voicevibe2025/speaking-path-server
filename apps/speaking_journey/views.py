@@ -186,7 +186,39 @@ def _compute_unlocks(user):
             # Keep already unlocked topics unlocked
             pass
 
+    if _unlock_all_for_user(user):
+        unlocked_sequences = set(t.sequence for t in topics)
+
     return topics, completed_sequences, unlocked_sequences
+
+
+def _unlock_all_for_user(user) -> bool:
+    """
+    Feature flag: unlock all topics for designated test accounts without modifying DB.
+    Controlled by env/settings:
+      - UNLOCK_ALL_TOPICS_USERS: comma- or semicolon-separated list of user IDs, usernames, or emails.
+      - UNLOCK_ALL_TOPICS_FOR_STAFF: if true, unlock for staff/superusers.
+    """
+    try:
+        allow_staff = str(os.environ.get('UNLOCK_ALL_TOPICS_FOR_STAFF', '')).strip().lower() in {'1', 'true', 'yes', 'on'}
+        if allow_staff and (getattr(user, 'is_staff', False) or getattr(user, 'is_superuser', False)):
+            return True
+        raw = (
+            str(getattr(settings, 'UNLOCK_ALL_TOPICS_USERS', '') or os.environ.get('UNLOCK_ALL_TOPICS_USERS', '')).strip()
+        )
+        if not raw:
+            return False
+        tokens = [t.strip().lower() for t in raw.replace(';', ',').split(',') if t.strip()]
+        if not tokens:
+            return False
+        candidates = {
+            str(getattr(user, 'id', '')).strip().lower(),
+            str(getattr(user, 'username', '')).strip().lower(),
+            str(getattr(user, 'email', '')).strip().lower(),
+        }
+        return any(tok in candidates for tok in tokens)
+    except Exception:
+        return False
 
 
 def _meets_completion_criteria(topic_progress):
@@ -1338,6 +1370,9 @@ class SpeakingTopicsView(APIView):
 
     def get(self, request):
         topics, completed_sequences, unlocked_sequences = _compute_unlocks(request.user)
+        # Test flag: unlock all topics for designated test accounts
+        if _unlock_all_for_user(request.user):
+            unlocked_sequences = {t.sequence for t in topics}
 
         # Get or create user profile for welcome screen personalization
         profile, created = UserProfile.objects.get_or_create(

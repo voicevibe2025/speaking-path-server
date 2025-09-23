@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .models import Post, PostLike, PostComment, PostCommentLike
+from .models import Post, PostLike, PostComment, PostCommentLike, Notification
 
 User = get_user_model()
 
@@ -149,3 +149,22 @@ class CommentSerializer(serializers.ModelSerializer):
 class CreateCommentRequest(serializers.Serializer):
     text = serializers.CharField(required=True, allow_blank=False)
     parent = serializers.IntegerField(required=False, allow_null=True)
+
+
+class NotificationSerializer(serializers.ModelSerializer):
+    actor = serializers.SerializerMethodField()
+    postId = serializers.IntegerField(source='post_id')
+    commentId = serializers.IntegerField(source='comment_id', required=False, allow_null=True)
+    createdAt = serializers.DateTimeField(source='created_at')
+    read = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Notification
+        fields = ['id', 'type', 'actor', 'postId', 'commentId', 'createdAt', 'read']
+        read_only_fields = ['id', 'type', 'actor', 'postId', 'commentId', 'createdAt', 'read']
+
+    def get_actor(self, obj: Notification):
+        return AuthorSerializer(obj.actor, context=self.context).data
+
+    def get_read(self, obj: Notification):
+        return obj.read_at is not None

@@ -1,5 +1,8 @@
 from django.urls import path
-from .views import PostListCreateView, PostLikeView, PostCommentListCreateView, PostCommentLikeView, PostDetailView, PostCommentDetailView
+from .views import (
+    PostListCreateView, PostLikeView, PostCommentListCreateView, PostCommentLikeView, PostDetailView, PostCommentDetailView,
+    NotificationListView, NotificationMarkReadView, NotificationMarkAllReadView, NotificationUnreadCountView,
+)
 
 urlpatterns = [
     path('posts/', PostListCreateView.as_view(), name='post-list-create'),
@@ -8,4 +11,9 @@ urlpatterns = [
     path('posts/<int:post_id>/comments/', PostCommentListCreateView.as_view(), name='post-comments'),
     path('comments/<int:comment_id>/like/', PostCommentLikeView.as_view(), name='comment-like'),
     path('comments/<int:comment_id>/', PostCommentDetailView.as_view(), name='comment-detail'),
+    # Notifications
+    path('notifications/', NotificationListView.as_view(), name='notification-list'),
+    path('notifications/unread-count/', NotificationUnreadCountView.as_view(), name='notification-unread-count'),
+    path('notifications/mark-all-read/', NotificationMarkAllReadView.as_view(), name='notification-mark-all-read'),
+    path('notifications/<int:notif_id>/read/', NotificationMarkReadView.as_view(), name='notification-mark-read'),
 ]

@@ -76,3 +76,37 @@ class PostCommentLike(models.Model):
 
     def __str__(self):
         return f"CommentLike({self.user_id} -> {self.comment_id})"
+
+
+class Notification(models.Model):
+    """In-app notifications for social interactions."""
+    TYPE_POST_LIKE = 'post_like'
+    TYPE_POST_COMMENT = 'post_comment'
+    TYPE_COMMENT_LIKE = 'comment_like'
+    TYPE_COMMENT_REPLY = 'comment_reply'
+
+    NOTIF_TYPES = [
+        (TYPE_POST_LIKE, 'Post liked'),
+        (TYPE_POST_COMMENT, 'New comment on your post'),
+        (TYPE_COMMENT_LIKE, 'Comment liked'),
+        (TYPE_COMMENT_REPLY, 'New reply to your comment'),
+    ]
+
+    recipient = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notifications')
+    actor = models.ForeignKey(User, on_delete=models.CASCADE, related_name='actor_notifications')
+    type = models.CharField(max_length=32, choices=NOTIF_TYPES)
+    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='notifications')
+    comment = models.ForeignKey(PostComment, null=True, blank=True, on_delete=models.CASCADE, related_name='notifications')
+    created_at = models.DateTimeField(auto_now_add=True)
+    read_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['recipient', 'created_at']),
+            models.Index(fields=['recipient', 'read_at']),
+            models.Index(fields=['type', 'created_at']),
+        ]
+
+    def __str__(self):
+        return f"Notification({self.type}) to {self.recipient_id} on Post({self.post_id})"
