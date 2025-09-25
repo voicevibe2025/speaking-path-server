@@ -6,14 +6,124 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.views.decorators.csrf import csrf_exempt
+from django.conf import settings
 import asyncio
 import json
 import logging
+
+from google import genai
+from google.genai import types as genai_types
 
 from .services import WhisperService, LLMEvaluationService
 from .prompts import PromptTemplates
 
 logger = logging.getLogger(__name__)
+
+
+def _ensure_live_connect_config(payload: dict) -> dict:
+    response_modalities = payload.get('response_modalities')
+    if not isinstance(response_modalities, list) or not response_modalities:
+        response_modalities = ['TEXT']
+
+    connect_config: dict[str, object] = {
+        'response_modalities': response_modalities,
+    }
+
+    system_instruction = payload.get('system_instruction')
+    if isinstance(system_instruction, str) and system_instruction.strip():
+        connect_config['system_instruction'] = system_instruction.strip()
+
+    output_audio_config = payload.get('output_audio_config')
+    if isinstance(output_audio_config, dict):
+        connect_config['output_audio_config'] = output_audio_config
+
+    proactivity_config = payload.get('proactivity_config')
+    if isinstance(proactivity_config, dict):
+        connect_config['proactivity_config'] = proactivity_config
+
+    return connect_config
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def create_live_session_token(request):
+    """
+    Issue a short-lived Gemini Live API token for direct client connections.
+
+    Optional JSON body:
+    - model: override Gemini model (default gemini-live-2.5-flash-preview)
+    - response_modalities: list of response modalities (default ['TEXT'])
+    - system_instruction: optional system prompt to lock into the session
+    - lock_additional_fields: list of extra LiveConnectConfig fields to lock
+    """
+
+    if not settings.GEMINI_API_KEY:
+        return Response(
+            {
+                'error': 'GEMINI_API_KEY is not configured on the server.',
+            },
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+
+    payload = request.data if isinstance(request.data, dict) else {}
+
+    model = payload.get('model') or 'gemini-live-2.5-flash-preview'
+    connect_config = _ensure_live_connect_config(payload)
+
+    lock_additional_fields = payload.get('lock_additional_fields')
+    if not isinstance(lock_additional_fields, list):
+        lock_additional_fields = []
+
+    try:
+        client = genai.Client(
+            api_key=settings.GEMINI_API_KEY,
+            http_options={'api_version': 'v1alpha'}
+        )
+
+        token_config = genai_types.CreateAuthTokenConfig(
+            live_connect_constraints=genai_types.LiveConnectConstraints(
+                model=model,
+                config=genai_types.LiveConnectConfig(**connect_config),
+            ),
+            lock_additional_fields=lock_additional_fields,
+        )
+
+        auth_token = client.auth_tokens.create(config=token_config)
+
+        token_value = (
+            getattr(auth_token, 'token', None)
+            or getattr(auth_token, 'auth_token', None)
+            or getattr(auth_token, 'name', None)
+        )
+
+        expires_at = (
+            getattr(auth_token, 'expire_time', None)
+            or getattr(auth_token, 'expireTime', None)
+        )
+
+        if not token_value:
+            raise ValueError('AuthToken missing token payload')
+
+        response_payload = {
+            'token': token_value,
+            'expiresAt': expires_at,
+            'sessionId': getattr(auth_token, 'session_id', None),
+            'model': model,
+            'responseModalities': connect_config.get('response_modalities'),
+            'lockedFields': lock_additional_fields,
+        }
+
+        return Response(response_payload, status=status.HTTP_200_OK)
+
+    except Exception as exc:  # pragma: no cover - defensive handling of SDK errors
+        logger.exception('Failed to create Gemini Live auth token: %s', exc)
+        return Response(
+            {
+                'error': 'Unable to create Gemini Live token.',
+                'details': str(exc),
+            },
+            status=status.HTTP_502_BAD_GATEWAY,
+        )
 
 
 @api_view(['POST'])

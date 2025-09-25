@@ -3,6 +3,7 @@ URL patterns for AI evaluation
 """
 from django.urls import path
 from .views import (
+    create_live_session_token,
     transcribe_audio,
     evaluate_speech,
     evaluate_pronunciation,
@@ -14,6 +15,9 @@ from .views import (
 app_name = 'ai_evaluation'
 
 urlpatterns = [
+    # Gemini Live session token
+    path('live/token/', create_live_session_token, name='create_live_session_token'),
+
     # Transcription
     path('transcribe/', transcribe_audio, name='transcribe_audio'),
 
