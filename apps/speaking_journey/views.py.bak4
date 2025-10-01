@@ -1,4 +1,4 @@
-import re
+﻿import re
 import string
 import tempfile
 import os
@@ -1097,8 +1097,7 @@ def _transcribe_audio_with_whisper(audio_file):
             # Try OpenAI Whisper API first if key present and not disabled
             api_text = ""
             try:
-                # Prefer WHISPER_API_KEY (same as WhisperService) and strip whitespace
-                api_key = (os.environ.get('WHISPER_API_KEY') or os.environ.get('OPENAI_API_KEY') or '').strip()
+                api_key = os.environ.get('OPENAI_API_KEY') or os.environ.get('WHISPER_API_KEY')
                 if api_key and str(os.environ.get('DISABLE_OPENAI_WHISPER_API', '')).strip().lower() not in {'1','true','yes'}:
                     headers = {'Authorization': 'Bearer ' + api_key}
                     data = {
@@ -1113,43 +1112,17 @@ def _transcribe_audio_with_whisper(audio_file):
                         try:
                             j = resp.json()
                             api_text = (j.get('text') or '').strip()
-                            if not api_text:
-                                try:
-                                    body = resp.text
-                                    logger.warning('OpenAI Whisper API 200 but empty text (speaking_journey): %s', body[:200])
-                                except Exception:
-                                    logger.warning('OpenAI Whisper API 200 but empty text (speaking_journey)')
-                        except Exception as je:
-                            try:
-                                body = resp.text
-                            except Exception:
-                                body = ''
-                            logger.warning('OpenAI Whisper API JSON parse failed (speaking_journey): %s | body: %s', je, body[:200])
-                            api_text = ''
-                    else:
-                        try:
-                            status_code = getattr(resp, 'status_code', 'unknown')
-                            body = resp.text
-                            logger.warning('OpenAI Whisper API error %s (speaking_journey): %s', status_code, body[:200])
                         except Exception:
-                            logger.warning('OpenAI Whisper API error (speaking_journey): non-200 response')
+                            api_text = ''
             except Exception as e:
                 logger.warning('OpenAI Whisper API call failed: %s', e)
 
             if api_text:
-                try:
-                    logger.info('ASR used: openai-api (speaking_journey), chars=%d', len(api_text))
-                except Exception:
-                    pass
                 return api_text
 
             # Fallback to local Whisper
             result = model.transcribe(conv_path, language='en')
             transcription = (result.get("text") or "").strip()
-            try:
-                logger.info('ASR used: openai-whisper (local, speaking_journey), chars=%d', len(transcription))
-            except Exception:
-                pass
             return transcription
         finally:
             # Clean up temporary files
@@ -3669,6 +3642,5 @@ class CoachAnalysisRefreshView(APIView):
         }
         ser = CoachAnalysisSerializer(data)
         return Response(ser.data, status=status.HTTP_200_OK)
-
 
 

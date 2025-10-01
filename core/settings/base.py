@@ -276,32 +276,36 @@ LOGGING = {
             "level": "ERROR",
             "propagate": False,
         },
-        # runserver per-request logs (the noisy ones)
         "django.server": {
             "handlers": ["console"],
             "level": "ERROR",
             "propagate": False,
         },
-        # Request/response errors
         "django.request": {
             "handlers": ["console"],
             "level": "ERROR",
             "propagate": False,
         },
-        # SQL logs
         "django.db.backends": {
             "handlers": ["console"],
             "level": "ERROR",
             "propagate": False,
         },
-        # Local project app logs
-        "apps": {
+
+        # Local project logs (only these will show INFO)
+        "apps.ai_evaluation": {
             "handlers": ["console"],
-            "level": "ERROR",
+            "level": "INFO",
+            "propagate": False,
+        },
+        "apps.speaking_journey": {
+            "handlers": ["console"],
+            "level": "INFO",
             "propagate": False,
         },
     },
 }
+
 
 # AI API Configuration
 AI_CONFIG = {
