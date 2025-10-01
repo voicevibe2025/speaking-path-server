@@ -6,14 +6,15 @@ import os
 import json
 import asyncio
 import aiohttp
-try:
-    import openai  # Optional dependency; only used if OPENAI_API_KEY is set
-except Exception:  # pragma: no cover - optional dependency not installed
-    openai = None
+import subprocess
 from typing import Dict, List, Optional, Any
 import base64
 import tempfile
 import time
+try:
+    import openai  # Optional dependency; only used if OPENAI_API_KEY is set
+except Exception:  # pragma: no cover - optional dependency not installed
+    openai = None
 # Defer openai-whisper import to runtime to avoid import-time overhead and potential
 # coverage/numba incompatibility (coverage.types.Tracer vs TTracer)
 _openai_whisper = None
@@ -21,7 +22,6 @@ from django.conf import settings
 import logging
 
 logger = logging.getLogger(__name__)
-
 
 class WhisperService:
     """
@@ -62,6 +62,20 @@ class WhisperService:
                 tmp.flush()
                 temp_path = tmp.name
 
+            # Normalize to 16kHz mono WAV to avoid ASR shape errors on certain inputs
+            input_path = temp_path
+            conv_path = temp_path + ".wav"
+            try:
+                subprocess.run(
+                    ['ffmpeg', '-y', '-i', temp_path, '-ac', '1', '-ar', '16000', conv_path],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    check=True
+                )
+                input_path = conv_path
+            except Exception as e:
+                logger.warning("ffmpeg conversion failed, using original: %s", e)
+
             # Choose engine preference via env flags
             # - ENABLE_FASTER_WHISPER or PREFER_FASTER_WHISPER: prefer faster-whisper first
             # - DISABLE_WHISPER: skip openai-whisper entirely (use faster-whisper only)
@@ -72,6 +86,10 @@ class WhisperService:
             disable_whisper = (os.environ.get("DISABLE_WHISPER", "").strip().lower() in {"1", "true", "yes"})
             strict_dedup = (os.environ.get("WHISPER_STRICT_DEDUP", "").strip().lower() in {"1", "true", "yes"})
             disable_fw = (os.environ.get("DISABLE_FASTER_WHISPER", "").strip().lower() in {"1", "true", "yes"})
+            # Prefer hosted OpenAI Whisper API when an API key is present, unless explicitly disabled
+            prefer_api = (
+                os.environ.get("DISABLE_OPENAI_WHISPER_API", "").strip().lower() not in {"1", "true", "yes"}
+            ) and bool(self.api_key)
 
             def _transcribe_with_fw(path: str, lang: str) -> Optional[str]:
                 """Best-effort faster-whisper transcription on CPU. Returns text or None on failure."""
@@ -307,17 +325,45 @@ class WhisperService:
             engine_used = None
 
             try:
+                # Try OpenAI Whisper API (hosted) first if available
+                if prefer_api:
+                    try:
+                        import aiohttp as _aio
+                        headers = {"Authorization": f"Bearer {self.api_key}"}
+                        timeout = _aio.ClientTimeout(total=60)
+                        async with _aio.ClientSession(headers=headers, timeout=timeout) as session:
+                            with open(input_path, "rb") as f:
+                                form = _aio.FormData()
+                                form.add_field("file", f, filename=os.path.basename(input_path), content_type="audio/wav")
+                                form.add_field("model", os.environ.get("OPENAI_WHISPER_MODEL", "whisper-1"))
+                                if language:
+                                    form.add_field("language", language)
+                                form.add_field("response_format", "json")
+                                async with session.post("https://api.openai.com/v1/audio/transcriptions", data=form) as resp:
+                                    if resp.status == 200:
+                                        data = await resp.json()
+                                        text = (data.get("text") or "").strip()
+                                        if text:
+                                            engine_used = "openai-api"
+                                    else:
+                                        body = await resp.text()
+                                        logger.warning("OpenAI Whisper API error %s: %s", resp.status, body[:200])
+                    except Exception as e:
+                        logger.warning("OpenAI Whisper API call failed: %s", e)
+
                 if (prefer_fw or disable_whisper) and not disable_fw:
-                    text = _transcribe_with_fw(temp_path, language)
-                    engine_used = "faster-whisper" if text is not None else None
+                    if not text:
+                        text = _transcribe_with_fw(input_path, language)
+                    engine_used = engine_used or ("faster-whisper" if text is not None else None)
                     if not disable_whisper and (text is None or text == ""):
-                        text = _transcribe_with_openai_whisper(temp_path, language)
+                        text = _transcribe_with_openai_whisper(input_path, language)
                         engine_used = engine_used or ("openai-whisper" if text is not None else None)
                 else:
-                    text = _transcribe_with_openai_whisper(temp_path, language)
-                    engine_used = "openai-whisper" if text is not None else None
+                    if not text:
+                        text = _transcribe_with_openai_whisper(input_path, language)
+                    engine_used = engine_used or ("openai-whisper" if text is not None else None)
                     if (text is None or text == "") and not disable_fw:
-                        text = _transcribe_with_fw(temp_path, language)
+                        text = _transcribe_with_fw(input_path, language)
                         engine_used = engine_used or ("faster-whisper" if text is not None else None)
 
                 duration = round(time.perf_counter() - started, 3)
@@ -391,7 +437,7 @@ class WhisperService:
                 # If repetition seems present and we can try VAD, do a second pass
                 try:
                     if _repetition_score(final_text) >= 1 and prefer_fw and not disable_fw:
-                        alt = _transcribe_with_fw_vad(temp_path, language)
+                        alt = _transcribe_with_fw_vad(input_path, language)
                         if alt:
                             # Prefer the alternative if it reduces repetition noticeably
                             if _repetition_score(alt) < _repetition_score(final_text):
@@ -419,6 +465,11 @@ class WhisperService:
                 try:
                     if os.path.exists(temp_path):
                         os.unlink(temp_path)
+                except Exception:
+                    pass
+                try:
+                    if 'conv_path' in locals() and os.path.exists(conv_path):
+                        os.unlink(conv_path)
                 except Exception:
                     pass
 

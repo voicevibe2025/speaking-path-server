@@ -148,7 +148,7 @@ class UserLevelViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         
         try:
-            profile = UserLevel.objects.get(user=request.user)
+            profile, _ = UserLevel.objects.get_or_create(user=request.user)
             today = timezone.now().date()
             
             # Check if already practiced today

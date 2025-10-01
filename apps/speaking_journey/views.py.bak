@@ -1,4 +1,4 @@
-﻿import re
+import re
 import string
 import tempfile
 import os
@@ -274,7 +274,7 @@ def _meets_completion_criteria(topic_progress):
     if not topic:
         return False
 
-    # Compute per-practice maxima (normalized 0â€“100 scale per practice)
+    # Compute per-practice maxima (normalized 0–100 scale per practice)
     pron_max = 100
     flu_max = 100
     vocab_max = 100
@@ -444,7 +444,7 @@ def _collapse_repeats_text(s: str) -> str:
         import re as _re
         words = (_re.sub(r"\s+", " ", s or "").strip()).split(" ")
         norm = [
-            _re.sub(r"[^A-Za-z0-9']+", "", w.replace("â€™", "'").replace("`", "'"))
+            _re.sub(r"[^A-Za-z0-9']+", "", w.replace("’", "'").replace("`", "'"))
             .lower()
             for w in words
         ]
@@ -483,7 +483,7 @@ def _get_gemini_feedback(expected_phrase: str, transcribed_text: str, accuracy: 
     """Get pronunciation feedback using Gemini 2.5 (pro/flash), transcript-aware.
 
     The feedback references the exact transcript and highlights weak vs. good words,
-    then provides 2â€“3 concise, actionable tips. Falls back gracefully if API/model
+    then provides 2–3 concise, actionable tips. Falls back gracefully if API/model
     are not available.
     """
     # Build diff context
@@ -503,7 +503,7 @@ def _get_gemini_feedback(expected_phrase: str, transcribed_text: str, accuracy: 
         if accuracy >= 80:
             base = "Great job! Your pronunciation was clear."
         elif accuracy >= 60:
-            base = "Nice effort. You're closeâ€”focus on clarity."
+            base = "Nice effort. You're close—focus on clarity."
         else:
             base = "Keep practicing. Aim for slower, clearer articulation."
         tips = []
@@ -512,14 +512,14 @@ def _get_gemini_feedback(expected_phrase: str, transcribed_text: str, accuracy: 
         if good:
             tips.append(f"Well done on: {', '.join(good[:3])}. Keep that consistency.")
         if not tips:
-            tips = ["Speak slightly slower and emphasize vowel sounds.", "End each word crisplyâ€”avoid dropping final consonants."]
+            tips = ["Speak slightly slower and emphasize vowel sounds.", "End each word crisply—avoid dropping final consonants."]
         return base + "\n- " + "\n- ".join(tips[:3])
 
 
 def _get_gemini_definition(word: str) -> str:
     """Generate a concise learner-friendly definition for a word using Gemini.
 
-    The definition should avoid repeating the word itself and be 5â€“18 words.
+    The definition should avoid repeating the word itself and be 5–18 words.
     Fallback returns a heuristic placeholder if API is unavailable.
     """
     safe_word = (word or '').strip()
@@ -551,7 +551,7 @@ def _get_gemini_definition(word: str) -> str:
         "- Exactly one sentence, 12-24 words.\n"
         "- Do NOT include or hint the word itself.\n"
         "- No quotes, no markdown, no lists, no colons.\n"
-        "- Use only very simple English (CEFR A2â€“B1 level words).\n"
+        "- Use only very simple English (CEFR A2–B1 level words).\n"
         f"TARGET: {safe_word}"
     )
     try:
@@ -568,7 +568,7 @@ def _get_gemini_definition(word: str) -> str:
                 # Guard: avoid echoing the word
                 if safe_word.lower() in out.lower():
                     # try to mask
-                    out = out.replace(safe_word, 'â–¢â–¢â–¢')
+                    out = out.replace(safe_word, '▢▢▢')
                 # Trim to a single sentence and length
                 out = out.split('\n')[0].strip()
                 _cache_set(safe_word, out)
@@ -612,7 +612,7 @@ def _get_gemini_definitions_batch(words: list[str]) -> dict:
         "You are an English tutor. For each TARGET word, return a JSON object mapping the word\n"
         "to exactly one playful clue sentence.\n"
         "Styles: situational/roleplay, personification, exaggeration/humor, action/sound.\n"
-        "Rules: one sentence only; 12-24 words; avoid the word itself; no quotes; no markdown. Use only very simple English (CEFR A2â€“B1 level words)\n"
+        "Rules: one sentence only; 12-24 words; avoid the word itself; no quotes; no markdown. Use only very simple English (CEFR A2–B1 level words)\n"
         "Output JSON only, keys must be the input words, values are the clue sentences.\n"
         "WORDS: " + json.dumps(words, ensure_ascii=False)
     )
@@ -653,7 +653,7 @@ def _get_gemini_definitions_batch(words: list[str]) -> dict:
                         continue
                     # avoid echoing word
                     if w.lower() in val.lower():
-                        val = val.replace(w, 'â–¢â–¢â–¢')
+                        val = val.replace(w, '▢▢▢')
                     # strip wrapping quotes if present
                     if (val.startswith('"') and val.endswith('"')) or (val.startswith("'") and val.endswith("'")):
                         val = val[1:-1].strip()
@@ -702,7 +702,7 @@ def _build_listening_questions(topic: Topic) -> list[dict]:
             ]
             prompt = (
                 "You are an English tutor. Read the DIALOGUE below and create 3 to 8 multiple-choice LISTENING questions.\n"
-                "Rules: very short, CEFR A2â€“B1 vocabulary; each question must have exactly 4 distinct options;\n"
+                "Rules: very short, CEFR A2–B1 vocabulary; each question must have exactly 4 distinct options;\n"
                 "Return STRICT JSON array, no prose, in the shape:\n"
                 "[ {\"question\": <string>, \"options\": [<opt1>,<opt2>,<opt3>,<opt4>], \"answer\": <one of options> }, ... ]\n"
                 "Avoid quoting the speaker letter. Use natural questions like who/what/where/when/why or paraphrases.\n\n"
@@ -1044,72 +1044,23 @@ def _transcribe_audio_with_whisper(audio_file):
             _transcribe_audio_with_whisper._model = _openai_whisper.load_model("tiny.en")
         model = _transcribe_audio_with_whisper._model
 
-        # Persist upload to a temp file using original extension, then convert to 16kHz mono WAV
-        try:
-            orig_name = getattr(audio_file, 'name', '')
-            ext = os.path.splitext(orig_name)[1] or '.m4a'
-        except Exception:
-            ext = '.m4a'
-        with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as src:
+        # Create temporary file for audio processing
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as temp_file:
+            # Write uploaded audio to temporary file
             for chunk in audio_file.chunks():
-                src.write(chunk)
-            src_path = src.name
-
-        conv_path = src_path + '.wav'
-        try:
-            subprocess.run(
-                ['ffmpeg', '-y', '-i', src_path, '-ac', '1', '-ar', '16000', conv_path],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                check=True
-            )
-        except Exception as e:
-            logger.error('ffmpeg conversion failed for Whisper ASR: %s', e)
-            try:
-                if os.path.exists(src_path):
-                    os.unlink(src_path)
-            except Exception:
-                pass
-            return ""
-
-        # Optional short-audio guard to avoid empty/invalid transcripts
-        try:
-            with wave.open(conv_path, 'rb') as wf:
-                frames = wf.getnframes()
-                rate = wf.getframerate() or 16000
-                duration = frames / float(rate)
-                if duration < 0.25:
-                    try:
-                        if os.path.exists(conv_path):
-                            os.unlink(conv_path)
-                    except Exception:
-                        pass
-                    try:
-                        if os.path.exists(src_path):
-                            os.unlink(src_path)
-                    except Exception:
-                        pass
-                    return ""
-        except Exception:
-            pass
+                temp_file.write(chunk)
+            temp_file_path = temp_file.name
 
         try:
-            # Transcribe from normalized WAV
-            result = model.transcribe(conv_path, language='en')
-            transcription = (result.get("text") or "").strip()
+            # Transcribe audio
+            result = model.transcribe(temp_file_path)
+            transcription = result.get("text", "").strip()
             return transcription
         finally:
-            # Clean up temporary files
-            try:
-                if os.path.exists(conv_path):
-                    os.unlink(conv_path)
-            except Exception:
-                pass
-            try:
-                if os.path.exists(src_path):
-                    os.unlink(src_path)
-            except Exception:
-                pass
+            # Clean up temporary file
+            if os.path.exists(temp_file_path):
+                os.unlink(temp_file_path)
+
     except Exception as e:
         logger.error('Whisper transcription error: %s', e)
         return ""
@@ -1268,7 +1219,7 @@ def _transcribe_audio_with_faster_whisper(audio_file):
                     # Keep original words for output, but compare using normalized tokens
                     words = (_re.sub(r"\s+", " ", s or "").strip()).split(" ")
                     norm = [
-                        _re.sub(r"[^A-Za-z0-9']+", "", w.replace("â€™", "'").replace("`", "'"))
+                        _re.sub(r"[^A-Za-z0-9']+", "", w.replace("’", "'").replace("`", "'"))
                         .lower()
                         for w in words
                     ]
@@ -1366,7 +1317,7 @@ def _transcribe_audio_with_faster_whisper_vad(audio_file):
                     import re as _re
                     words = (_re.sub(r"\s+", " ", s or "").strip()).split(" ")
                     norm = [
-                        _re.sub(r"[^A-Za-z0-9']+", "", w.replace("â€™", "'").replace("`", "'"))
+                        _re.sub(r"[^A-Za-z0-9']+", "", w.replace("’", "'").replace("`", "'"))
                         .lower()
                         for w in words
                     ]
@@ -1476,7 +1427,7 @@ class SpeakingTopicsView(APIView):
 
             # Build practice scores data
             pronunciation_score = int(tp.pronunciation_total_score or 0)
-            # Fallback recompute for legacy sessions where pron_total was not persisted (use average 0â€“100)
+            # Fallback recompute for legacy sessions where pron_total was not persisted (use average 0–100)
             if pronunciation_score <= 0:
                 try:
                     qs = UserPhraseRecording.objects.filter(user=request.user, topic=t).order_by('phrase_index', '-created_at')
@@ -1501,7 +1452,7 @@ class SpeakingTopicsView(APIView):
                     pass
             vocabulary_score = int(tp.vocabulary_total_score or 0)
 
-            # Compute per-practice maxima (normalized 0â€“100)
+            # Compute per-practice maxima (normalized 0–100)
             pron_max = 100
             flu_max = 100
             vocab_max = 100
@@ -1873,7 +1824,7 @@ class SubmitPhraseRecordingView(APIView):
             # Ensure outer try is closed to avoid SyntaxError, and continue with safe defaults
             logger.warning('Failed to persist user phrase recording or build audio URL: %s', e)
 
-        # Normalize pronunciation_total_score to 0â€“100 average across latest per-phrase recordings
+        # Normalize pronunciation_total_score to 0–100 average across latest per-phrase recordings
         try:
             qs = (
                 UserPhraseRecording.objects
@@ -2113,7 +2064,7 @@ class SubmitConversationTurnView(APIView):
         except Exception as e:
             logger.warning('Failed to persist conversation recording: %s', e)
 
-        # Update totals: latest per turn (store 0â€“100 average)
+        # Update totals: latest per turn (store 0–100 average)
         try:
             qs = UserConversationRecording.objects.filter(user=request.user, topic=topic).order_by('turn_index', '-created_at')
             latest_by_turn = {}
@@ -2265,7 +2216,7 @@ class SubmitFluencyPromptView(APIView):
             scores.extend([None] * (len(prompts) - len(scores)))
         scores[prompt_index] = int(score)
 
-        # Recompute totals and completion (normalize to 0â€“100 average)
+        # Recompute totals and completion (normalize to 0–100 average)
         non_null_scores = [int(s) for s in scores if isinstance(s, int)]
         avg_score = int(round(sum(non_null_scores) / len(non_null_scores))) if non_null_scores else 0
         tp.fluency_prompt_scores = scores
@@ -2647,7 +2598,7 @@ class SubmitVocabularyAnswerView(APIView):
         session.current_index = next_index if next_index is not None else len(questions)
         # Mark completed if no more
         session.completed = next_index is None
-        # Recompute total score as percentage (0â€“100)
+        # Recompute total score as percentage (0–100)
         try:
             total = int(session.total_questions or 0)
             corr = int(session.correct_count or 0)
@@ -2897,7 +2848,7 @@ class SeedPerfectScoresView(APIView):
 class RecomputeTopicAggregatesView(APIView):
     """Recompute and persist aggregate scores for a topic from existing data.
 
-    - Pronunciation: average of latest accuracy per phrase (0â€“100)
+    - Pronunciation: average of latest accuracy per phrase (0–100)
     - Fluency: average of per-prompt scores (ints), completed if all prompts have scores
     - Vocabulary: latest completed session's total_score
     """
@@ -3333,7 +3284,7 @@ def _collapse_repeats_text(s: str) -> str:
         import re as _re
         words = (_re.sub(r"\s+", " ", s or "").strip()).split(" ")
         norm = [
-            _re.sub(r"[^A-Za-z0-9']+", "", w.replace("â€™", "'").replace("`", "'"))
+            _re.sub(r"[^A-Za-z0-9']+", "", w.replace("’", "'").replace("`", "'"))
             .lower()
             for w in words
         ]
@@ -3616,4 +3567,3 @@ class CoachAnalysisRefreshView(APIView):
         }
         ser = CoachAnalysisSerializer(data)
         return Response(ser.data, status=status.HTTP_200_OK)
-
