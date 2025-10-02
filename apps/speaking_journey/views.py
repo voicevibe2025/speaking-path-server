@@ -1529,6 +1529,7 @@ class SpeakingTopicsView(APIView):
 
             # Build practice scores data
             pronunciation_score = int(tp.pronunciation_total_score or 0)
+            logger.info(f"Topic {t.title} - pronunciation_total_score from DB: {tp.pronunciation_total_score}, using: {pronunciation_score}")
             # Fallback recompute for legacy sessions where pron_total was not persisted (use average 0â€“100)
             if pronunciation_score <= 0:
                 try:
@@ -1786,8 +1787,8 @@ class SubmitPhraseRecordingView(APIView):
         except Exception:
             pass
 
-        # New rule: Any accuracy passes and auto-unlocks the next phrase
-        passed = True
+        # Determine pass/fail based on accuracy threshold (80% for passing)
+        passed = combined_accuracy >= 80.0
         next_phrase_index = None
         topic_completed = False
         xp_awarded = 0
@@ -1806,7 +1807,8 @@ class SubmitPhraseRecordingView(APIView):
                 }
             )
 
-        # Mark phrase as completed and advance regardless of accuracy
+        # Always mark phrase as completed and advance for progression (regardless of accuracy)
+        # The pass/fail logic affects UI feedback and XP, but not progression blocking
         phrase_progress.mark_phrase_completed(phrase_index)
         next_phrase_index = phrase_progress.current_phrase_index
 
@@ -1829,38 +1831,48 @@ class SubmitPhraseRecordingView(APIView):
         # Get feedback from Gemini based on the best transcription and combined accuracy
         feedback = _get_gemini_feedback(expected_phrase, best_transcription, combined_accuracy)
 
-        # Update running pronunciation_total_score regardless of audio file persistence
-        # We adjust by the delta between this attempt's accuracy and the previous latest accuracy for this phrase
+        # Update pronunciation_total_score BEFORE saving recording so it's available in response
+        # Temporarily create the recording object to include it in the calculation
+        temp_recording = UserPhraseRecording(
+            user=request.user,
+            topic=topic,
+            phrase_index=phrase_index,
+            transcription=best_transcription,
+            accuracy=round(combined_accuracy, 1),
+            feedback=feedback,
+        )
+        
+        # Calculate updated pronunciation_total_score including this new recording
         try:
-            prev_rec = (
+            # Get existing recordings for this topic
+            qs = (
                 UserPhraseRecording.objects
-                .filter(user=request.user, topic=topic, phrase_index=phrase_index)
-                .order_by('-created_at')
-                .first()
+                .filter(user=request.user, topic=topic)
+                .order_by('phrase_index', '-created_at')
             )
-            prev_acc_int = int(round(float(prev_rec.accuracy or 0.0))) if (prev_rec and prev_rec.accuracy is not None) else 0
-        except Exception:
-            prev_acc_int = 0
-        try:
-            existing_total = int(topic_progress.pronunciation_total_score or 0)
-        except Exception:
-            existing_total = 0
-        new_acc_int = int(round(float(combined_accuracy or 0.0)))
-        # Normalize contribution: each phrase contributes up to 100 / N toward the total
-        try:
-            total_phrases = len(topic.material_lines or [])
-        except Exception:
-            total_phrases = 0
-        n = max(1, int(total_phrases or 0))
-        delta = (new_acc_int - prev_acc_int) / float(n)
-        try:
-            new_total = float(existing_total) + float(delta)
-            # Clamp to [0, 100] and round to nearest int for storage
-            new_total_int = int(round(max(0.0, min(100.0, new_total))))
-            topic_progress.pronunciation_total_score = new_total_int
-            topic_progress.save(update_fields=['pronunciation_total_score'])
+            latest_by_phrase = {}
+            for r in qs:
+                if r.phrase_index not in latest_by_phrase:
+                    latest_by_phrase[r.phrase_index] = r
+            
+            # Include the new recording in the calculation
+            latest_by_phrase[phrase_index] = temp_recording
+            
+            total_acc = 0
+            cnt = 0
+            for r in latest_by_phrase.values():
+                try:
+                    total_acc += int(round(float(r.accuracy or 0.0)))
+                    cnt += 1
+                except Exception:
+                    pass
+            if cnt > 0:
+                avg_acc = int(round(total_acc / cnt))
+                logger.info(f"Updating pronunciation_total_score for topic {topic.id}: {topic_progress.pronunciation_total_score} -> {avg_acc} (based on {cnt} recordings, including new one)")
+                topic_progress.pronunciation_total_score = avg_acc
+                topic_progress.save(update_fields=['pronunciation_total_score'])
         except Exception as e:
-            logger.warning('Failed to update pronunciation_total_score pre-save: %s', e)
+            logger.warning('Failed updating pronunciation totals (pre-save): %s', e)
 
         # Persist user recording with audio and metadata
         recording_id = None
@@ -1926,31 +1938,7 @@ class SubmitPhraseRecordingView(APIView):
             # Ensure outer try is closed to avoid SyntaxError, and continue with safe defaults
             logger.warning('Failed to persist user phrase recording or build audio URL: %s', e)
 
-        # Normalize pronunciation_total_score to 0â€“100 average across latest per-phrase recordings
-        try:
-            qs = (
-                UserPhraseRecording.objects
-                .filter(user=request.user, topic=topic)
-                .order_by('phrase_index', '-created_at')
-            )
-            latest_by_phrase = {}
-            for r in qs:
-                if r.phrase_index not in latest_by_phrase:
-                    latest_by_phrase[r.phrase_index] = r
-            total_acc = 0
-            cnt = 0
-            for r in latest_by_phrase.values():
-                try:
-                    total_acc += int(round(float(r.accuracy or 0.0)))
-                    cnt += 1
-                except Exception:
-                    pass
-            if cnt > 0:
-                avg_acc = int(round(total_acc / cnt))
-                topic_progress.pronunciation_total_score = avg_acc
-                topic_progress.save(update_fields=['pronunciation_total_score'])
-        except Exception as e:
-            logger.warning('Failed updating pronunciation totals (avg): %s', e)
+        # pronunciation_total_score already updated above before saving recording
 
         # Build response
         result = {
@@ -1964,6 +1952,10 @@ class SubmitPhraseRecordingView(APIView):
             'recordingId': recording_id,
             'audioUrl': audio_url,
         }
+        
+        # Debug logging to track accuracy issues
+        logger.info(f"Pronunciation submission - Expected: '{expected_phrase}', Got: '{best_transcription}', Combined Accuracy: {combined_accuracy:.1f}%, Passed: {passed}")
+        
         serializer = PhraseSubmissionResultSerializer(result)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -2188,9 +2180,11 @@ class SubmitConversationTurnView(APIView):
         except Exception as e:
             logger.warning('Failed updating conversation totals: %s', e)
 
+        # Determine success based on accuracy threshold (80% for passing)
+        success = combined_accuracy >= 80.0
         next_turn_index = turn_index + 1 if (turn_index + 1) < len(conv) else None
         payload = {
-            'success': True,
+            'success': success,
             'accuracy': round(float(combined_accuracy or 0.0), 1),
             'transcription': best_tx or '',
             'feedback': feedback or '',
