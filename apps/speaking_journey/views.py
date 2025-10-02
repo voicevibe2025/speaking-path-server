@@ -2158,13 +2158,15 @@ class SubmitConversationTurnView(APIView):
         except Exception as e:
             logger.warning('Failed to persist conversation recording: %s', e)
 
-        # Update totals: latest per turn (store 0â€“100 average)
+        # Update totals: average accuracy across user's turns only (not all turns)
         try:
             qs = UserConversationRecording.objects.filter(user=request.user, topic=topic).order_by('turn_index', '-created_at')
             latest_by_turn = {}
             for r in qs:
                 if r.turn_index not in latest_by_turn:
                     latest_by_turn[r.turn_index] = r
+            
+            # Only count recorded turns (user's turns), not total conversation turns
             total = 0
             cnt = 0
             for r in latest_by_turn.values():
@@ -2175,8 +2177,30 @@ class SubmitConversationTurnView(APIView):
                     total += 0
             avg = int(round(total / cnt)) if cnt > 0 else 0
             tp.conversation_total_score = int(avg)
-            tp.conversation_completed = (len(latest_by_turn) >= len(conv) and len(conv) > 0)
+            
+            # Determine completion: check if user has recorded all their turns
+            # Count how many turns belong to the user's role based on existing recordings
+            user_role_from_recordings = None
+            if latest_by_turn:
+                # Infer user's role from their recordings
+                sample_recording = next(iter(latest_by_turn.values()))
+                user_role_from_recordings = getattr(sample_recording, 'role', None)
+            
+            if user_role_from_recordings and conv:
+                # Count total turns for this role in the conversation
+                role_turns_total = sum(1 for turn in conv if 
+                    (isinstance(turn, dict) and turn.get('speaker', '').upper() == user_role_from_recordings.upper()) or
+                    (isinstance(turn, (list, tuple)) and len(turn) >= 1 and str(turn[0]).upper() == user_role_from_recordings.upper()))
+                user_recorded_turns = len(latest_by_turn)
+                tp.conversation_completed = (user_recorded_turns >= role_turns_total and role_turns_total > 0)
+            else:
+                # Fallback: use original logic if role inference fails
+                tp.conversation_completed = (len(latest_by_turn) >= len(conv) and len(conv) > 0)
+            
             tp.save(update_fields=['conversation_total_score', 'conversation_completed'])
+            
+            logger.info(f"Conversation score updated - User role: {user_role_from_recordings}, Recorded: {len(latest_by_turn)}, Avg accuracy: {avg}%, Completed: {tp.conversation_completed}")
+            
         except Exception as e:
             logger.warning('Failed updating conversation totals: %s', e)
 
