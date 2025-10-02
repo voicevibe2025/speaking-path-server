@@ -647,17 +647,26 @@ class UserProfileSerializer(serializers.ModelSerializer):
         }
 
     def get_avatar_url(self, obj):
-        """Return absolute URL to uploaded avatar if present, otherwise fallback to stored URL string.
+        """Return URL to avatar from Supabase Storage if present, otherwise fallback to stored URL string.
         This ensures clients can always render a usable avatar URL."""
-        request = self.context.get('request')
         try:
             if obj.avatar and hasattr(obj.avatar, 'url'):
-                # Build absolute URL for media file
+                # Supabase Storage returns the full URL directly
+                avatar_url = obj.avatar.url
+                # Ensure it's a valid URL
+                if avatar_url and ('http://' in avatar_url or 'https://' in avatar_url):
+                    return avatar_url
+                # Fallback for relative URLs (shouldn't happen with Supabase but safety first)
+                request = self.context.get('request')
                 if request is not None:
-                    return request.build_absolute_uri(obj.avatar.url)
-                return obj.avatar.url
-        except Exception:
-            pass
+                    return request.build_absolute_uri(avatar_url)
+                return avatar_url
+        except Exception as e:
+            # Log the error for debugging
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error getting avatar URL for user {obj.user.id}: {e}")
+        
         # Fallback to legacy avatar_url field (might be external URL)
         return obj.avatar_url or None
 
@@ -724,6 +733,23 @@ class UserProfileSerializer(serializers.ModelSerializer):
             return UserFollow.objects.filter(follower=obj.user).count()
         except Exception:
             return 0
+    
+    def update(self, instance, validated_data):
+        """
+        Handle avatar upload to Supabase Storage
+        """
+        avatar = validated_data.get('avatar')
+        if avatar:
+            # Delete old avatar if it exists
+            if instance.avatar:
+                try:
+                    instance.avatar.delete(save=False)
+                except Exception as e:
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.warning(f"Failed to delete old avatar for user {instance.user.id}: {e}")
+        
+        return super().update(instance, validated_data)
 
 
 class LearningPreferenceSerializer(serializers.ModelSerializer):

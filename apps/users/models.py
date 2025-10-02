@@ -1,12 +1,24 @@
 """
 User profile and related models for VoiceVibe
 """
+import os
 from django.db import models
 from django.contrib.auth import get_user_model
 from django.utils.translation import gettext_lazy as _
 from django.core.validators import MinValueValidator, MaxValueValidator
+from core.storage import AvatarSupabaseStorage
 
 User = get_user_model()
+
+
+def user_avatar_path(instance, filename):
+    """
+    Generate upload path for user avatars
+    """
+    # Get file extension
+    ext = filename.split('.')[-1].lower() if '.' in filename else 'jpg'
+    # Create filename with user ID
+    return f"avatars/user_{instance.user.id}.{ext}"
 
 
 class UserProfile(models.Model):
@@ -40,8 +52,14 @@ class UserProfile(models.Model):
     # Personal Information
     date_of_birth = models.DateField(null=True, blank=True)
     phone_number = models.CharField(max_length=20, blank=True)
-    avatar = models.ImageField(upload_to='avatars/', null=True, blank=True)
-    avatar_url = models.URLField(blank=True)
+    avatar = models.ImageField(
+        upload_to=user_avatar_path, 
+        storage=AvatarSupabaseStorage(), 
+        null=True, 
+        blank=True,
+        help_text=_('User avatar image stored in Supabase Storage')
+    )
+    avatar_url = models.URLField(blank=True, help_text=_('Fallback avatar URL for external images'))
     bio = models.TextField(max_length=500, blank=True)
 
     # Language Settings

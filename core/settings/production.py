@@ -97,8 +97,21 @@ else:
 # Media root / storage
 # Option A (default): local disk, optionally backed by a Railway Volume via MEDIA_ROOT
 # Option B: S3-compatible storage when USE_S3_MEDIA=true
+# Option C: Supabase Storage for persistent avatar storage
 MEDIA_ROOT = env("MEDIA_ROOT", default=MEDIA_ROOT)
 USE_S3_MEDIA = env.bool("USE_S3_MEDIA", default=False)
+
+# Supabase Storage Configuration (using native API, not S3-compatible)
+SUPABASE_URL = env("SUPABASE_URL", default="")
+SUPABASE_SERVICE_ROLE_KEY = env("SUPABASE_SERVICE_ROLE_KEY", default="")
+SUPABASE_STORAGE_BUCKET_NAME = env("SUPABASE_STORAGE_BUCKET_NAME", default="avatars")
+SUPABASE_AVATARS_BUCKET_NAME = env("SUPABASE_AVATARS_BUCKET_NAME", default="avatars")
+
+# Check if Supabase Storage is properly configured
+SUPABASE_CONFIGURED = bool(
+    SUPABASE_URL and 
+    SUPABASE_SERVICE_ROLE_KEY
+)
 
 if USE_S3_MEDIA:
     # django-storages S3 backend
@@ -124,6 +137,14 @@ else:
         os.makedirs(str(MEDIA_ROOT), exist_ok=True)
     except Exception:
         pass
+
+# Log Supabase configuration status for debugging
+import logging
+logger = logging.getLogger(__name__)
+if SUPABASE_CONFIGURED:
+    logger.info("Supabase Storage is configured for avatar persistence")
+else:
+    logger.warning("Supabase Storage not configured - avatars will be stored locally and may be lost on deployment")
 
 # --- Logging ---
 LOGGING["root"]["level"] = "INFO"
