@@ -1787,23 +1787,28 @@ class SubmitPhraseRecordingView(APIView):
         except Exception:
             pass
 
-        # Determine pass/fail based on accuracy threshold (80% for passing)
+        # Determine pass/fail for UI feedback (80% threshold for "Phrase Passed!" message)
         passed = combined_accuracy >= 80.0
         next_phrase_index = None
         topic_completed = False
+        
+        # Calculate proportional score: 100% = 10 points, 90-99% = 9 points, etc.
+        proportional_score = int(min(10, max(0, combined_accuracy // 10)))
+        
+        # Award XP based on proportional score (0-20 XP, scaled from 0-10 score)
         xp_awarded = 0
-
-        # Award XP only for good performance to preserve gamification balance
-        if combined_accuracy >= 80.0:
-            # Option A: up to +20 XP per phrase for good accuracy
+        if proportional_score > 0:
+            # Scale proportional score (0-10) to XP amount (0-20)
+            xp_amount = proportional_score * 2
             xp_awarded += _award_xp(
                 user=request.user,
-                amount=20,
+                amount=xp_amount,
                 source='pronunciation',
                 context={
                     'topicId': str(topic.id),
                     'phraseIndex': phrase_index,
                     'accuracy': round(float(combined_accuracy or 0.0), 1),
+                    'proportionalScore': proportional_score,
                 }
             )
 
@@ -1953,8 +1958,8 @@ class SubmitPhraseRecordingView(APIView):
             'audioUrl': audio_url,
         }
         
-        # Debug logging to track accuracy issues
-        logger.info(f"Pronunciation submission - Expected: '{expected_phrase}', Got: '{best_transcription}', Combined Accuracy: {combined_accuracy:.1f}%, Passed: {passed}")
+        # Debug logging to track accuracy and scoring
+        logger.info(f"Pronunciation submission - Expected: '{expected_phrase}', Got: '{best_transcription}', Combined Accuracy: {combined_accuracy:.1f}%, Proportional Score: {proportional_score}/10, XP: {xp_awarded}, Passed UI: {passed}")
         
         serializer = PhraseSubmissionResultSerializer(result)
         return Response(serializer.data, status=status.HTTP_200_OK)
