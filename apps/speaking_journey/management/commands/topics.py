@@ -24,11 +24,7 @@ TOPICS = [
             "greeting", "introduction", "meet", "hello", "hi", "name", 
             "from", "country", "city", "nice", "pleasure", "acquaintance"
         ],
-        "fluency_practice_prompt": [
-            "Introduce yourself to a new classmate. Include your name, where you're from, what you do, and one hobby.",
-            "Role-play meeting a colleague for the first time at work. Greet them, exchange names, and ask a simple question.",
-            "Share a short self-introduction for a club meeting. Add one fun fact about yourself."
-        ]
+        "fluency_practice_prompt": "Introduce yourself to a new classmate. Include your name, where you're from, what you do, and one hobby."
     },
     {
         "title": "Daily Activities",
@@ -56,11 +52,7 @@ TOPICS = [
             "routine", "wake up", "breakfast", "commute", "transportation", "bus", 
             "work", "office", "relax", "weekend", "chores", "family", "schedule"
         ],
-        "fluency_practice_prompt": [
-            "Describe your weekday routine from morning to evening. Mention times and how you commute.",
-            "Talk about your perfect weekend. What do you usually do and why?",
-            "Explain how you balance study/work and free time during a typical day."
-        ]
+        "fluency_practice_prompt": "Describe your weekday routine from morning to evening. Mention times and how you commute."
     },
     {
         "title": "Time and Dates",
@@ -87,11 +79,7 @@ TOPICS = [
             "time", "clock", "hour", "minute", "day", "week", "month", 
             "year", "birthday", "holiday", "date", "calendar", "schedule"
         ],
-        "fluency_practice_prompt": [
-            "Describe your weekly schedule. Mention classes or work, and important times.",
-            "Talk about a special date you celebrate and how you celebrate it.",
-            "Explain how you plan your day to be on time for appointments."
-        ]
+        "fluency_practice_prompt": "Describe your weekly schedule. Mention classes or work, and important times."
     },
     {
         "title": "Hobbies and Interests",
@@ -118,11 +106,7 @@ TOPICS = [
             "hobby", "interest", "photography", "cooking", "reading", "hiking", 
             "guitar", "movies", "free time", "relax", "weekend", "activity", "passion"
         ],
-        "fluency_practice_prompt": [
-            "Talk about a hobby you love. Explain why you enjoy it and how you got started.",
-            "Describe a new activity you want to try this year and what you need to begin.",
-            "Share a memorable experience related to one of your interests."
-        ]
+        "fluency_practice_prompt": "Talk about a hobby you love. Explain why you enjoy it and how you got started."
     },
     {
         "title": "Shopping and Prices",
@@ -180,11 +164,7 @@ TOPICS = [
             {"speaker": "A", "text": "No problem. Bye."}
         ],
         "vocabulary": ["telephone", "call", "speak", "message", "number", "call back", "ring", "answer", "hang up"],
-        "fluency_practice_prompt": [
-            "Role-play making a phone call to a friend to make plans for the weekend.",
-            "Practice taking a message for someone who is not available.",
-            "Explain how to politely end a phone conversation."
-        ]
+        "fluency_practice_prompt": "Role-play making a phone call to a friend to make plans for the weekend."
     },
     {
         "title": "Ordering Food",
@@ -209,11 +189,7 @@ TOPICS = [
             "menu", "order", "recommend", "cheeseburger", "fries", "water", 
             "vegetarian", "bill", "waiter", "restaurant", "café", "food", "drink"
         ],
-        "fluency_practice_prompt": [
-            "Role-play ordering dinner at a restaurant. Ask for a recommendation and mention any dietary preferences.",
-            "Describe your favorite meal and how it is prepared.",
-            "Explain a positive or negative experience you had at a café or restaurant."
-        ]
+        "fluency_practice_prompt": "Role-play ordering dinner at a restaurant. Ask for a recommendation and mention any dietary preferences."
     },
     {
         "title": "Calling for Help",
@@ -235,11 +211,7 @@ TOPICS = [
             {"speaker": "B", "text": "Of course, here you go."}
         ],
         "vocabulary": ["help", "emergency", "accident", "doctor", "police", "ambulance", "lost", "stolen", "danger"],
-        "fluency_practice_prompt": [
-            "Role-play a situation where you need to call for help, such as a medical emergency.",
-            "Explain what you would do if you got lost in a foreign city.",
-            "Describe how to report a lost item to the authorities."
-        ]
+        "fluency_practice_prompt": "Explain what you would do if you got lost in a foreign city."
     },
     {
         "title": "Weather Report",
@@ -266,11 +238,7 @@ TOPICS = [
             {"speaker": "A", "text": "Thanks for the heads up!"}
         ],
         "vocabulary": ["weather", "sunny", "rainy", "cloudy", "windy", "snowy", "warm", "cold", "hot", "cool", "forecast", "temperature"],
-        "fluency_practice_prompt": [
-            "Describe the weather in your city today.",
-            "Give a weather forecast for the upcoming weekend.",
-            "Talk about your favorite type of weather and why you like it."
-        ]
+        "fluency_practice_prompt": "Talk about your favorite type of weather and why you like it."
     },
     {
         "title": "Asking for Directions",
@@ -296,11 +264,7 @@ TOPICS = [
             "directions", "location", "station", "distance", "straight", "turn", 
             "left", "right", "corner", "traffic light", "block", "walking", "bus"
         ],
-        "fluency_practice_prompt": [
-            "Explain how you would ask for directions to the nearest cinema. Include polite phrases.",
-            "Give clear directions from a train station to your favorite café.",
-            "Describe a time you got lost and how you found your way."
-        ]
+        "fluency_practice_prompt": "Give clear directions from a train station to your favorite café."
     },
     {
         "title": "At the Post Office",
@@ -323,11 +287,7 @@ TOPICS = [
             {"speaker": "A", "text": "Okay, I'll take it."}
         ],
         "vocabulary": ["post office", "mail", "letter", "package", "stamp", "envelope", "shipping", "tracking number", "address"],
-        "fluency_practice_prompt": [
-            "Role-play sending a birthday card to a friend who lives abroad.",
-            "Explain the process of mailing a package at the post office.",
-            "Describe the difference between standard and express mail."
-        ]
+        "fluency_practice_prompt": "Explain the process of mailing a package at the post office."
     },
     {
         "title": "Running Errands",
@@ -351,11 +311,7 @@ TOPICS = [
             {"speaker": "B", "text": "No problem. I’ll bring them over later this evening."}
         ],
         "vocabulary": ["errands", "grocery store", "bank", "post office", "pharmacy", "dry cleaning", "shopping list", "chores"],
-        "fluency_practice_prompt": [
-            "Describe the errands you usually run on a weekend.",
-            "Make a to-do list of errands for a busy day and explain the order you would do them in.",
-            "Talk about an errand you dislike doing and why."
-        ]
+        "fluency_practice_prompt": "Describe the errands you usually run on a weekend."
     },
     {
         "title": "Catching Up After Class",
@@ -379,11 +335,7 @@ TOPICS = [
             {"speaker": "B", "text": "Deal. See you later!"}
         ],
         "vocabulary": ["class", "lecture", "notes", "study", "exam", "library", "classmate", "weekend", "coffee"],
-        "fluency_practice_prompt": [
-            "Role-play a conversation with a classmate after a difficult lecture.",
-            "Invite a friend to study together for an upcoming test.",
-            "Talk about your plans for the upcoming school holiday."
-        ]
+        "fluency_practice_prompt": "Role-play a conversation with a classmate after a difficult lecture."
     },
     {
         "title": "Transportation",
@@ -409,11 +361,7 @@ TOPICS = [
             {"speaker": "B", "text": "You’re welcome. Have a safe trip!"}
         ],
         "vocabulary": ["transportation", "bus", "train", "taxi", "subway", "ticket", "fare", "schedule", "platform", "station"],
-        "fluency_practice_prompt": [
-            "Describe your daily commute to school or work.",
-            "Compare the advantages and disadvantages of public transportation versus driving a car.",
-            "Explain how to buy a train ticket from a ticket machine."
-        ]
+        "fluency_practice_prompt": "Compare the advantages and disadvantages of public transportation versus driving a car."
     },
     {
         "title": "How Old Are You",
@@ -436,11 +384,7 @@ TOPICS = [
             {"speaker": "A", "text": "Yeah, pretty much the same age."}
         ],
         "vocabulary": ["age", "old", "young", "birthday", "born", "years old", "twenties", "thirties"],
-        "fluency_practice_prompt": [
-            "Practice asking and answering questions about age with a partner.",
-            "Talk about the different stages of life (e.g., childhood, adolescence, adulthood).",
-            "Describe a birthday celebration you remember."
-        ]
+        "fluency_practice_prompt": "Talk about the different stages of life (e.g., childhood, adolescence, adulthood)."
     },
     {
         "title": "At the Movies",
@@ -465,11 +409,7 @@ TOPICS = [
             {"speaker": "A", "text": "Thanks!"}
         ],
         "vocabulary": ["movie", "cinema", "ticket", "seat", "showtime", "row", "comedy", "action", "drama", "popcorn"],
-        "fluency_practice_prompt": [
-            "Role-play buying movie tickets at the cinema.",
-            "Describe your favorite movie and why you like it.",
-            "Talk about the last movie you saw and give a short review."
-        ]
+        "fluency_practice_prompt": "Describe your favorite movie and why you like it."
     },
     {
         "title": "What Are You Good At",
@@ -493,11 +433,7 @@ TOPICS = [
             {"speaker": "B", "text": "No wonder you’re good at it. You get a lot of practice."}
         ],
         "vocabulary": ["good at", "skill", "talent", "ability", "strength", "knack", "expert", "gifted"],
-        "fluency_practice_prompt": [
-            "Talk about a skill you are proud of and how you developed it.",
-            "Describe a talent you would like to have and why.",
-            "Discuss the importance of having hobbies and skills outside of work or school."
-        ]
+        "fluency_practice_prompt": "Talk about a skill you are proud of and how you developed it."
     },
     {
         "title": "What's Your Favorite Sport",
@@ -520,11 +456,7 @@ TOPICS = [
             {"speaker": "A", "text": "LeBron James, for sure. He's a legend."}
         ],
         "vocabulary": ["sport", "fan", "team", "player", "game", "match", "score", "win", "lose", "soccer", "basketball"],
-        "fluency_practice_prompt": [
-            "Talk about your favorite sport and explain the basic rules.",
-            "Describe your favorite athlete and what you admire about them.",
-            "Discuss the benefits of playing sports for physical and mental health."
-        ]
+        "fluency_practice_prompt": "Discuss the benefits of playing sports for physical and mental health."
     },
     {
         "title": "At the Theater",
@@ -547,11 +479,7 @@ TOPICS = [
             {"speaker": "A", "text": "Perfect. The curtain’s going up—let’s be quiet."}
         ],
         "vocabulary": ["theater", "play", "musical", "performance", "ticket", "seat", "row", "stage", "actor", "actress", "intermission"],
-        "fluency_practice_prompt": [
-            "Role-play buying tickets for a musical at the box office.",
-            "Describe a memorable theater performance you have seen.",
-            "Discuss the differences between watching a play and watching a movie."
-        ]
+        "fluency_practice_prompt": "Describe a memorable theater performance you have seen."
     },
     {
         "title": "Taking a Vacation",
@@ -575,11 +503,7 @@ TOPICS = [
             {"speaker": "B", "text": "For sure. I’m just really looking forward to a break from work."}
         ],
         "vocabulary": ["vacation", "trip", "travel", "hotel", "resort", "booking", "flight", "beach", "tourist", "souvenir"],
-        "fluency_practice_prompt": [
-            "Describe your dream vacation. Where would you go and what would you do?",
-            "Talk about a past vacation that you really enjoyed.",
-            "Give advice to someone who is planning their first trip abroad."
-        ]
+        "fluency_practice_prompt": "Describe your dream vacation. Where would you go and what would you do?"
     },
     {
         "title": "At the Pet Store",
@@ -605,11 +529,7 @@ TOPICS = [
             {"speaker": "B", "text": "No problem. Let me know if you need anything else."}
         ],
         "vocabulary": ["pet", "dog", "cat", "hamster", "fish", "puppy", "kitten", "food", "cage", "leash", "toy", "vet"],
-        "fluency_practice_prompt": [
-            "Role-play a visit to a pet store to buy a new pet.",
-            "Describe your pet or a pet you would like to have.",
-            "Give advice on how to be a responsible pet owner."
-        ]
+        "fluency_practice_prompt": "Describe your pet or a pet you would like to have."
     },
     {
         "title": "Giving Your Opinion",
@@ -633,11 +553,7 @@ TOPICS = [
             {"speaker": "B", "text": "Fair point. I guess it depends on what you’re looking for—coffee or comfort."}
         ],
         "vocabulary": ["opinion", "think", "agree", "disagree", "point of view", "believe", "suggest", "recommend", "idea"],
-        "fluency_practice_prompt": [
-            "Express your opinion on a current event or a popular topic.",
-            "Practice agreeing and disagreeing with a partner on a controversial subject.",
-            "Give a recommendation for a book, movie, or restaurant and explain why you like it."
-        ]
+        "fluency_practice_prompt": "Express your opinion on a current event or a popular topic."
     },
     {
         "title": "Weddings",
@@ -661,11 +577,7 @@ TOPICS = [
             {"speaker": "B", "text": "Same here. And of course, seeing Sarah walk down the aisle will be the highlight."}
         ],
         "vocabulary": ["wedding", "marriage", "bride", "groom", "ceremony", "reception", "honeymoon", "engagement", "congratulations"],
-        "fluency_practice_prompt": [
-            "Describe a traditional wedding ceremony in your culture.",
-            "Talk about your ideal wedding. What would it be like?",
-            "Write a short congratulatory message for a friend who is getting married."
-        ]
+        "fluency_practice_prompt": "Talk about your ideal wedding. What would it be like?"
     },
     {
         "title": "Giving Advice",
@@ -689,10 +601,6 @@ TOPICS = [
             {"speaker": "B", "text": "No problem. Don’t worry, you’ll get better with practice."}
         ],
         "vocabulary": ["advice", "suggest", "recommend", "should", "ought to", "if I were you", "problem", "solution", "help"],
-        "fluency_practice_prompt": [
-            "Role-play a situation where a friend is asking for advice about a problem at work.",
-            "Give advice to someone who wants to learn a new language.",
-            "Talk about a piece of advice that you received and found very helpful."
-        ]
+        "fluency_practice_prompt": "Give advice to someone who wants to learn a new language."
     }
 ]

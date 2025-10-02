@@ -7,6 +7,9 @@ import io
 import wave
 import uuid
 import logging
+
+logger = logging.getLogger(__name__)
+import logging
 import hashlib
 import subprocess
 import json
@@ -246,15 +249,11 @@ def _meets_completion_criteria(topic_progress):
     fluency_complete_effective = False
     try:
         if topic:
-            fprompts = list(getattr(topic, 'fluency_practice_prompt', []) or [])
+            fprompt = getattr(topic, 'fluency_practice_prompt', '') or ''
             scores = list(getattr(topic_progress, 'fluency_prompt_scores', []) or [])
-            if fprompts and len(scores) >= len(fprompts):
-                ok = True
-                for i in range(len(fprompts)):
-                    if not isinstance(scores[i], int):
-                        ok = False
-                        break
-                if ok:
+            if fprompt and len(scores) >= 1:
+                # For single prompt, just check if first score exists and is >= 75
+                if len(scores) > 0 and isinstance(scores[0], int) and scores[0] >= 75:
                     fluency_complete_effective = True
     except Exception:
         pass
@@ -1506,26 +1505,20 @@ class SpeakingTopicsView(APIView):
                 }
 
             # Build fluency progress view
-            fprompts = t.fluency_practice_prompt or []
+            fprompt = t.fluency_practice_prompt or ''
             tp, _ = TopicProgress.objects.get_or_create(user=request.user, topic=t)
             stored_scores = list(tp.fluency_prompt_scores or [])
-            # Normalize to list of ints for existing entries
-            prompt_scores = []
-            for i in range(min(len(stored_scores), len(fprompts))):
+            # For single prompt, just get the first score if it exists
+            prompt_score = None
+            if len(stored_scores) > 0:
                 try:
-                    val = int(stored_scores[i])
-                    prompt_scores.append(val)
+                    prompt_score = int(stored_scores[0])
                 except Exception:
-                    # skip invalid entry
-                    prompt_scores.append(None)
-            # Determine next prompt index to unlock
-            next_prompt_index = None
-            for i in range(len(fprompts)):
-                if i >= len(prompt_scores) or prompt_scores[i] is None:
-                    next_prompt_index = i
-                    break
-            fluency_completed = (len(fprompts) > 0) and (next_prompt_index is None)
-            fluency_total_score = int(tp.fluency_total_score or 0)
+                    prompt_score = None
+            
+            # Single prompt is completed if score exists
+            fluency_completed = fprompt and prompt_score is not None
+            fluency_total_score = int(prompt_score or 0)
 
             # Build practice scores data
             pronunciation_score = int(tp.pronunciation_total_score or 0)
@@ -1615,12 +1608,12 @@ class SpeakingTopicsView(APIView):
                 'material': t.material_lines or [],
                 'vocabulary': t.vocabulary or [],
                 'conversation': t.conversation_example or [],
-                'fluencyPracticePrompts': t.fluency_practice_prompt or [],
+                'fluencyPracticePrompts': [t.fluency_practice_prompt] if t.fluency_practice_prompt else [],
                 'fluencyProgress': {
-                    'promptsCount': len(fprompts),
-                    'promptScores': [int(s) for s in prompt_scores if s is not None],
+                    'promptsCount': 1 if fprompt else 0,
+                    'promptScores': [int(prompt_score)] if prompt_score is not None else [],
                     'totalScore': fluency_total_score,
-                    'nextPromptIndex': next_prompt_index,
+                    'nextPromptIndex': 0 if not fluency_completed and fprompt else None,
                     'completed': fluency_completed,
                 },
                 'phraseProgress': phrase_progress_data,
@@ -2174,13 +2167,19 @@ class SubmitConversationTurnView(APIView):
             # Only count recorded turns (user's turns), not total conversation turns
             total = 0
             cnt = 0
+            individual_accuracies = []
             for r in latest_by_turn.values():
                 try:
-                    total += int(round(float(r.accuracy or 0.0)))
+                    accuracy = int(round(float(r.accuracy or 0.0)))
+                    total += accuracy
                     cnt += 1
+                    individual_accuracies.append(f"Turn {r.turn_index}: {accuracy}%")
                 except Exception:
                     total += 0
+                    individual_accuracies.append(f"Turn {r.turn_index}: 0% (error)")
             avg = int(round(total / cnt)) if cnt > 0 else 0
+            
+            logger.info(f"Individual turn accuracies: {', '.join(individual_accuracies)}, Average: {avg}%")
             tp.conversation_total_score = int(avg)
             
             # Determine completion: check if user has recorded all their turns
@@ -2192,15 +2191,40 @@ class SubmitConversationTurnView(APIView):
                 user_role_from_recordings = getattr(sample_recording, 'role', None)
             
             if user_role_from_recordings and conv:
+                # Clean user role (remove quotes and whitespace)
+                clean_user_role = str(user_role_from_recordings or '').strip().strip('"').strip("'").upper()
+                
                 # Count total turns for this role in the conversation
-                role_turns_total = sum(1 for turn in conv if 
-                    (isinstance(turn, dict) and turn.get('speaker', '').upper() == user_role_from_recordings.upper()) or
-                    (isinstance(turn, (list, tuple)) and len(turn) >= 1 and str(turn[0]).upper() == user_role_from_recordings.upper()))
+                role_turns_total = 0
+                for turn in conv:
+                    if isinstance(turn, dict):
+                        speaker = str(turn.get('speaker', '')).strip().upper()
+                        if speaker == clean_user_role:
+                            role_turns_total += 1
+                    elif isinstance(turn, (list, tuple)) and len(turn) >= 1:
+                        speaker = str(turn[0]).strip().upper()
+                        if speaker == clean_user_role:
+                            role_turns_total += 1
+                
                 user_recorded_turns = len(latest_by_turn)
                 tp.conversation_completed = (user_recorded_turns >= role_turns_total and role_turns_total > 0)
+                
+                # Debug logging for role counting  
+                logger.info(f"Conversation analysis - Topic: {topic.title} (ID: {topic.id}), User role: {repr(user_role_from_recordings)}, Total conversation turns: {len(conv)}, Role turns expected: {role_turns_total}, User recorded: {user_recorded_turns}")
+                logger.info(f"Cleaned user role: {repr(clean_user_role)}")
+                
+                for i, turn in enumerate(conv):
+                    speaker = turn.get('speaker', 'Unknown') if isinstance(turn, dict) else str(turn[0]) if isinstance(turn, (list, tuple)) and len(turn) > 0 else 'Unknown'
+                    clean_speaker = str(speaker).strip().upper()
+                    is_user_turn = clean_speaker == clean_user_role
+                    logger.info(f"  Turn {i}: Speaker '{speaker}' (clean: '{clean_speaker}') - {'USER TURN' if is_user_turn else 'OTHER'}")
+                    
+                # Also log conversation data structure for debugging
+                logger.info(f"Raw conversation data sample: {conv[:2] if len(conv) >= 2 else conv}")
             else:
                 # Fallback: use original logic if role inference fails
                 tp.conversation_completed = (len(latest_by_turn) >= len(conv) and len(conv) > 0)
+                logger.info(f"Conversation analysis fallback - No role inferred, total turns: {len(conv)}, recorded: {len(latest_by_turn)}")
             
             tp.save(update_fields=['conversation_total_score', 'conversation_completed'])
             
@@ -2290,6 +2314,217 @@ class UserPhraseRecordingsView(APIView):
         return Response(data, status=status.HTTP_200_OK)
 
 
+class SubmitFluencyRecordingView(APIView):
+    """Submit a fluency recording for comprehensive Gemini-based evaluation.
+
+    Request body (multipart/form-data):
+      - audio: audio file (m4a/wav)
+      - promptIndex: 0 (for single prompt)
+      - recordingDuration: actual seconds spoken (for timing scoring)
+    Response JSON body:
+      { "success": true, "score": 85, "feedback": "...", "suggestions": [...], "sessionId": "uuid" }
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, topic_id):
+        topic = get_object_or_404(Topic, id=topic_id, is_active=True)
+        prompt = topic.fluency_practice_prompt or ''
+        if not prompt:
+            return Response({'detail': 'No fluency prompt configured for this topic'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Get form data
+        audio_file = request.FILES.get('audio')
+        prompt_index = request.data.get('promptIndex', 0)
+        recording_duration = request.data.get('recordingDuration', 0)
+
+        if not audio_file:
+            return Response({'detail': 'Audio file is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            prompt_index = int(prompt_index)
+            recording_duration = float(recording_duration)
+        except (TypeError, ValueError):
+            return Response({'detail': 'Invalid promptIndex or recordingDuration'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if prompt_index != 0:  # Only allow index 0 for single prompt
+            return Response({'detail': 'Invalid promptIndex - only 0 allowed for single prompt'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            # Use the existing transcription and evaluation infrastructure
+            from ..ai_evaluation.services import WhisperService, LLMEvaluationService
+            import asyncio
+            import tempfile
+            import os
+
+            # Save audio to temp file
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.m4a') as temp_file:
+                for chunk in audio_file.chunks():
+                    temp_file.write(chunk)
+                temp_path = temp_file.name
+
+            try:
+                # Transcribe audio
+                whisper_service = WhisperService()
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    transcription = loop.run_until_complete(
+                        whisper_service.transcribe_audio_file(temp_path)
+                    )
+                finally:
+                    loop.close()
+
+                # Calculate comprehensive score using Gemini
+                score, feedback, suggestions = self._evaluate_fluency_with_gemini(
+                    prompt=prompt,
+                    transcription=transcription,
+                    recording_duration=recording_duration,
+                    target_duration=30.0  # 30 seconds target
+                )
+
+                # Create a session ID for tracking
+                session_id = str(uuid.uuid4())
+
+                return Response({
+                    'success': True,
+                    'score': score,
+                    'feedback': feedback,
+                    'suggestions': suggestions,
+                    'sessionId': session_id,
+                    'transcription': transcription
+                }, status=status.HTTP_200_OK)
+
+            finally:
+                # Clean up temp file
+                try:
+                    os.unlink(temp_path)
+                except Exception:
+                    pass
+
+        except Exception as e:
+            logger.error(f"Fluency recording evaluation error: {str(e)}")
+            return Response(
+                {'detail': f'Evaluation failed: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def _evaluate_fluency_with_gemini(self, prompt, transcription, recording_duration, target_duration=30.0):
+        """Use Gemini to evaluate fluency based on relevance, fluency metrics, and timing."""
+        import google.generativeai as genai
+        import os
+        import json
+        
+        api_key = (
+            getattr(settings, 'GEMINI_API_KEY', '') or
+            getattr(settings, 'GOOGLE_API_KEY', '') or
+            os.environ.get('GEMINI_API_KEY', '') or
+            os.environ.get('GOOGLE_API_KEY', '')
+        )
+        
+        if not api_key:
+            # Fallback to simple scoring
+            return 75, "Basic evaluation completed.", ["Keep practicing!"]
+        
+        genai.configure(api_key=api_key)
+        
+        # Calculate timing score (closer to 30 seconds = better)
+        timing_score = self._calculate_timing_score(recording_duration, target_duration)
+        
+        # Basic fluency metrics
+        word_count = len(transcription.split())
+        wpm = (word_count / recording_duration * 60) if recording_duration > 0 else 0
+        
+        # Count potential fluency issues
+        pause_indicators = transcription.count('...') + transcription.count('um') + transcription.count('uh')
+        stutter_indicators = len([w for w in transcription.split() if '-' in w or w.count(w[0] if w else '') > 2])
+        
+        prompt_text = f"""You are an English fluency evaluation AI. Analyze this speaking performance and provide a comprehensive score (0-100).
+
+FLUENCY PROMPT: "{prompt}"
+
+USER'S RESPONSE: "{transcription}"
+
+PERFORMANCE METRICS:
+- Recording Duration: {recording_duration:.1f} seconds (Target: {target_duration} seconds)
+- Word Count: {word_count} words
+- Words Per Minute: {wpm:.1f}
+- Pause Indicators: {pause_indicators}
+- Potential Stutters: {stutter_indicators}
+- Timing Score: {timing_score}/25 (based on how close to {target_duration}s target)
+
+EVALUATION CRITERIA:
+1. RELEVANCE (0-35 points): How well does the response address the prompt?
+2. FLUENCY (0-40 points): Natural flow, minimal pauses, appropriate pace, clear pronunciation
+3. TIMING (0-25 points): Optimal duration close to {target_duration} seconds
+
+Provide your response in this JSON format:
+{{
+  "relevance_score": <0-35>,
+  "fluency_score": <0-40>, 
+  "timing_score": <0-25>,
+  "total_score": <0-100>,
+  "feedback": "<brief overall feedback>",
+  "suggestions": ["<suggestion 1>", "<suggestion 2>", "<suggestion 3>"]
+}}
+
+Focus on constructive, specific feedback that helps the user improve."""
+
+        try:
+            model = genai.GenerativeModel('gemini-1.5-flash')
+            response = model.generate_content(prompt_text)
+            
+            # Parse JSON response
+            response_text = response.text.strip()
+            if '```json' in response_text:
+                response_text = response_text.split('```json')[1].split('```')[0].strip()
+            elif '```' in response_text:
+                response_text = response_text.split('```')[1].strip()
+            
+            result = json.loads(response_text)
+            
+            return (
+                int(result.get('total_score', 75)),
+                result.get('feedback', 'Good effort! Keep practicing.'),
+                result.get('suggestions', ['Keep practicing regularly', 'Focus on speaking clearly', 'Try to speak for the full 30 seconds'])
+            )
+            
+        except Exception as e:
+            logger.warning(f"Gemini fluency evaluation failed: {e}")
+            # Fallback scoring
+            base_score = 60
+            if word_count > 5:  # Basic relevance check
+                base_score += 20
+            base_score += min(timing_score, 20)  # Add timing bonus
+            
+            return (
+                min(base_score, 100),
+                "Evaluation completed. Keep practicing to improve your fluency!",
+                ["Try to speak more clearly", "Aim for about 30 seconds", "Stay focused on the topic"]
+            )
+    
+    def _calculate_timing_score(self, actual_duration, target_duration):
+        """Calculate timing score based on how close to target duration."""
+        if actual_duration <= 0:
+            return 0
+        
+        # Perfect score at exactly target duration
+        # Decrease score as we get further from target
+        difference = abs(actual_duration - target_duration)
+        
+        if difference == 0:
+            return 25
+        elif difference <= 5:
+            return 22
+        elif difference <= 10:
+            return 18
+        elif difference <= 15:
+            return 12
+        elif difference <= 20:
+            return 8
+        else:
+            return 5  # Minimum score for very long/short recordings
+
+
 class SubmitFluencyPromptView(APIView):
     """Submit a fluency prompt completion with a score, enforcing sequential unlocking.
 
@@ -2302,9 +2537,9 @@ class SubmitFluencyPromptView(APIView):
 
     def post(self, request, topic_id):
         topic = get_object_or_404(Topic, id=topic_id, is_active=True)
-        prompts = topic.fluency_practice_prompt or []
-        if not prompts:
-            return Response({'detail': 'No fluency prompts configured for this topic'}, status=status.HTTP_400_BAD_REQUEST)
+        prompt = topic.fluency_practice_prompt or ''
+        if not prompt:
+            return Response({'detail': 'No fluency prompt configured for this topic'}, status=status.HTTP_400_BAD_REQUEST)
 
         # Validate request body
         serializer = SubmitFluencyPromptRequestSerializer(data=request.data)
@@ -2314,39 +2549,32 @@ class SubmitFluencyPromptView(APIView):
         prompt_index: int = int(data.get('promptIndex'))
         score: int = int(data.get('score'))
 
-        if prompt_index < 0 or prompt_index >= len(prompts):
-            return Response({'detail': 'Invalid promptIndex'}, status=status.HTTP_400_BAD_REQUEST)
+        if prompt_index != 0:  # Only allow index 0 for single prompt
+            return Response({'detail': 'Invalid promptIndex - only 0 allowed for single prompt'}, status=status.HTTP_400_BAD_REQUEST)
 
         # Load or init progress
         tp, _ = TopicProgress.objects.get_or_create(user=request.user, topic=topic)
+        was_completed = bool(tp.completed)
         scores = list(tp.fluency_prompt_scores or [])
 
-        # Determine next expected prompt index (sequential unlocking)
-        completed_count = 0
-        for i in range(len(prompts)):
-            val = scores[i] if i < len(scores) else None
-            if isinstance(val, int):
-                completed_count += 1
-            else:
-                break
-        next_expected = completed_count if completed_count < len(prompts) else None
+        # For single prompt, just check if it's already completed
+        already_completed = len(scores) > 0 and isinstance(scores[0], int)
 
-        if next_expected is None:
-            return Response({'detail': 'All prompts already completed'}, status=status.HTTP_400_BAD_REQUEST)
-        if prompt_index != next_expected:
-            return Response({'detail': 'Prompt is locked. Complete previous prompts first.'}, status=status.HTTP_400_BAD_REQUEST)
+        # For single prompt, allow resubmission to improve score
+        if already_completed:
+            # Allow resubmission but just update the score
+            pass
 
-        # Persist new score at the prompt index (pad to required length)
-        if len(scores) < len(prompts):
-            scores.extend([None] * (len(prompts) - len(scores)))
-        scores[prompt_index] = int(score)
+        # Persist new score (ensure scores list has at least one element)
+        if len(scores) == 0:
+            scores = [int(score)]
+        else:
+            scores[0] = int(score)
 
-        # Recompute totals and completion (normalize to 0â€“100 average)
-        non_null_scores = [int(s) for s in scores if isinstance(s, int)]
-        avg_score = int(round(sum(non_null_scores) / len(non_null_scores))) if non_null_scores else 0
+        # For single prompt, total score is just the single score
         tp.fluency_prompt_scores = scores
-        tp.fluency_total_score = int(avg_score)
-        tp.fluency_completed = all(isinstance(s, int) for s in scores[:len(prompts)])
+        tp.fluency_total_score = int(score)
+        tp.fluency_completed = True  # Single prompt is always completed once score is set
         # If all modes completed, mark topic completed
         if tp.all_modes_completed and not tp.completed:
             tp.completed = True
@@ -2358,17 +2586,8 @@ class SubmitFluencyPromptView(APIView):
         except Exception:
             pass
 
-        # Compute next prompt index after update
-        try:
-            new_completed = 0
-            for i in range(len(prompts)):
-                if i < len(scores) and isinstance(scores[i], int):
-                    new_completed += 1
-                else:
-                    break
-            new_next = new_completed if new_completed < len(prompts) else None
-        except Exception:
-            new_next = None
+        # For single prompt, next is always None (no more prompts after the first)
+        new_next = None
 
         # XP awarding logic (Option A)
         xp_awarded = 0
