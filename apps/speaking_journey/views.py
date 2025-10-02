@@ -36,7 +36,11 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 from django.db.models import Avg, Count, Sum
 import requests
-from .models import Topic, TopicProgress, UserProfile, PhraseProgress, UserPhraseRecording, VocabularyPracticeSession, ListeningPracticeSession, UserConversationRecording
+from .models import (
+    Topic, PhraseProgress, UserPhraseRecording, TopicProgress,
+    VocabularyPracticeSession, ListeningPracticeSession,
+    UserConversationRecording, UserProfile
+)
 from apps.gamification.models import UserLevel, PointsTransaction
 from .serializers import (
     SpeakingTopicsResponseSerializer,
@@ -2327,6 +2331,7 @@ class SubmitFluencyRecordingView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request, topic_id):
+        logger.info(f"🔥 NEW GEMINI ENDPOINT CALLED - SubmitFluencyRecordingView for topic {topic_id} by user {request.user}")
         topic = get_object_or_404(Topic, id=topic_id, is_active=True)
         prompt = topic.fluency_practice_prompt or ''
         if not prompt:
@@ -2363,21 +2368,30 @@ class SubmitFluencyRecordingView(APIView):
                 temp_path = temp_file.name
 
             try:
+                # Read audio file content for transcription
+                with open(temp_path, 'rb') as f:
+                    audio_bytes = f.read()
+                
                 # Transcribe audio
                 whisper_service = WhisperService()
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
                 try:
                     transcription = loop.run_until_complete(
-                        whisper_service.transcribe_audio_file(temp_path)
+                        whisper_service.transcribe_audio(audio_bytes)
                     )
                 finally:
                     loop.close()
 
+                # Normalize transcription to string
+                transcribed_text = (
+                    transcription.get("text", "") if isinstance(transcription, dict) else str(transcription or "")
+                )
+
                 # Calculate comprehensive score using Gemini
                 score, feedback, suggestions = self._evaluate_fluency_with_gemini(
                     prompt=prompt,
-                    transcription=transcription,
+                    transcription=transcribed_text,
                     recording_duration=recording_duration,
                     target_duration=30.0  # 30 seconds target
                 )
@@ -2385,13 +2399,39 @@ class SubmitFluencyRecordingView(APIView):
                 # Create a session ID for tracking
                 session_id = str(uuid.uuid4())
 
+                # Also update the topic progress with the Gemini score
+                try:
+                    tp, _ = TopicProgress.objects.get_or_create(user=request.user, topic=topic)
+                    
+                    # Persist per-prompt score list (index 0 for single-prompt flow)
+                    scores = list(tp.fluency_prompt_scores or [])
+                    if prompt_index is None:
+                        prompt_index = 0
+                    # Ensure list capacity
+                    while len(scores) <= int(prompt_index):
+                        scores.append(None)
+                    scores[int(prompt_index)] = int(score)
+                    tp.fluency_prompt_scores = scores
+
+                    # Update total (for single prompt equals the first score)
+                    tp.fluency_total_score = int(score)
+
+                    # Mark fluency practice as completed once a score exists (threshold handled by meetsRequirement)
+                    tp.fluency_completed = True
+                    
+                    tp.save(update_fields=['fluency_prompt_scores', 'fluency_total_score', 'fluency_completed'])
+                    logger.info(f"✅ Updated TopicProgress: fluency_total_score={tp.fluency_total_score}, fluency_completed={tp.fluency_completed}, prompt_scores={tp.fluency_prompt_scores}")
+                
+                except Exception as e:
+                    logger.error(f"Failed to update TopicProgress: {e}")
+
                 return Response({
                     'success': True,
                     'score': score,
                     'feedback': feedback,
                     'suggestions': suggestions,
                     'sessionId': session_id,
-                    'transcription': transcription
+                    'transcription': transcribed_text
                 }, status=status.HTTP_200_OK)
 
             finally:
@@ -2423,6 +2463,7 @@ class SubmitFluencyRecordingView(APIView):
         
         if not api_key:
             # Fallback to simple scoring
+            logger.warning(f"🚨 GEMINI FALLBACK: No API key available, using simple scoring")
             return 75, "Basic evaluation completed.", ["Keep practicing!"]
         
         genai.configure(api_key=api_key)
@@ -2470,34 +2511,96 @@ Provide your response in this JSON format:
 Focus on constructive, specific feedback that helps the user improve."""
 
         try:
-            model = genai.GenerativeModel('gemini-1.5-flash')
-            response = model.generate_content(prompt_text)
+            logger.info(f"🤖 GEMINI EVALUATION: Starting evaluation for {word_count} words, {recording_duration:.1f}s duration")
+
+            # Select model: prefer settings/env, otherwise try a list of candidates
+            preferred = (
+                getattr(settings, 'GEMINI_MODEL', '')
+                or os.environ.get('GEMINI_MODEL', '')
+            ).strip()
+            candidates = [m for m in [
+                preferred or None,
+                'gemini-2.5-flash',
+                'gemini-2.0-flash',
+                'gemini-1.5-flash',
+                'gemini-1.5-flash-latest',
+            ] if m]
+
+            response_text = None
+            last_err = None
+
+            # Try new google-genai client first (supports 2.x models)
+            use_new_client = False
+            try:
+                from google import genai as genai_v1
+                client = genai_v1.Client(api_key=api_key)
+                use_new_client = True
+            except Exception:
+                use_new_client = False
+
+            if use_new_client:
+                for model_name in candidates:
+                    try:
+                        logger.info(f"Trying Gemini model (google-genai): {model_name}")
+                        resp = client.models.generate_content(model=model_name, contents=prompt_text)
+                        # Prefer output_text, fallback to text
+                        response_text = getattr(resp, 'output_text', None) or getattr(resp, 'text', None)
+                        if response_text:
+                            logger.info(f"Gemini model succeeded (google-genai): {model_name}")
+                            break
+                    except Exception as me:
+                        last_err = me
+                        logger.warning(f"Gemini model failed ({model_name}) via google-genai: {me}")
+                        continue
+
+            # Fallback to legacy google-generativeai client
+            if not response_text:
+                for model_name in candidates:
+                    try:
+                        logger.info(f"Trying Gemini model (google-generativeai): {model_name}")
+                        model = genai.GenerativeModel(model_name)
+                        resp = model.generate_content(prompt_text)
+                        response_text = getattr(resp, 'text', None)
+                        if response_text:
+                            logger.info(f"Gemini model succeeded (google-generativeai): {model_name}")
+                            break
+                    except Exception as me:
+                        last_err = me
+                        logger.warning(f"Gemini model failed ({model_name}) via google-generativeai: {me}")
+                        continue
+
+            if not response_text and last_err is not None:
+                raise last_err
             
             # Parse JSON response
-            response_text = response.text.strip()
+            response_text = (response_text or "").strip()
             if '```json' in response_text:
                 response_text = response_text.split('```json')[1].split('```')[0].strip()
             elif '```' in response_text:
                 response_text = response_text.split('```')[1].strip()
             
             result = json.loads(response_text)
+            score = int(result.get('total_score', 75))
+            logger.info(f"✅ GEMINI SUCCESS: Score {score}, Relevance: {result.get('relevance_score')}, Fluency: {result.get('fluency_score')}, Timing: {result.get('timing_score')}")
             
             return (
-                int(result.get('total_score', 75)),
+                score,
                 result.get('feedback', 'Good effort! Keep practicing.'),
                 result.get('suggestions', ['Keep practicing regularly', 'Focus on speaking clearly', 'Try to speak for the full 30 seconds'])
             )
             
         except Exception as e:
-            logger.warning(f"Gemini fluency evaluation failed: {e}")
+            logger.warning(f"🚨 GEMINI FALLBACK: Evaluation failed: {e}")
             # Fallback scoring
             base_score = 60
             if word_count > 5:  # Basic relevance check
                 base_score += 20
             base_score += min(timing_score, 20)  # Add timing bonus
+            fallback_score = min(base_score, 100)
+            logger.info(f"⚠️ FALLBACK SCORE: {fallback_score} (base={base_score}, words={word_count}, timing={timing_score})")
             
             return (
-                min(base_score, 100),
+                fallback_score,
                 "Evaluation completed. Keep practicing to improve your fluency!",
                 ["Try to speak more clearly", "Aim for about 30 seconds", "Stay focused on the topic"]
             )
@@ -2536,6 +2639,7 @@ class SubmitFluencyPromptView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request, topic_id):
+        logger.info(f"⚠️ OLD ENDPOINT CALLED - SubmitFluencyPromptView for topic {topic_id} by user {request.user}")
         topic = get_object_or_404(Topic, id=topic_id, is_active=True)
         prompt = topic.fluency_practice_prompt or ''
         if not prompt:
