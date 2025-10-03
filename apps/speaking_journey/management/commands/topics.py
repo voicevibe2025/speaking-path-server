@@ -133,11 +133,8 @@ TOPICS = [
             "shopping", "price", "size", "try on", "expensive", "purchase", 
             "credit card", "cash", "store", "market", "clothing", "accessory", "sale"
         ],
-        "fluency_practice_prompt": [
-            "Role-play buying clothes. Ask about price, size, and payment options.",
-            "Describe how you compare prices and decide what to buy.",
-            "Explain a time you bargained or asked for a discount in a market."
-        ]
+        "fluency_practice_prompt": "Role-play buying clothes. Ask about price, size, and payment options."
+
     },
     {
         "title": "A Telephone Call",
