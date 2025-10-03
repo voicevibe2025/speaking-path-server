@@ -1832,6 +1832,9 @@ class SubmitPhraseRecordingView(APIView):
 
         # Get feedback from Gemini based on the best transcription and combined accuracy
         feedback = _get_gemini_feedback(expected_phrase, best_transcription, combined_accuracy)
+        # Ensure feedback is never null to avoid DB constraint violation
+        if feedback is None:
+            feedback = ""
 
         # Update pronunciation_total_score BEFORE saving recording so it's available in response
         # Temporarily create the recording object to include it in the calculation
