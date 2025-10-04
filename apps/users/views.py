@@ -236,8 +236,18 @@ def follow_toggle(request, user_id):
 
     try:
         if request.method == 'POST':
-            UserFollow.objects.get_or_create(follower=request.user, following=target_user)
+            follow, created = UserFollow.objects.get_or_create(follower=request.user, following=target_user)
             is_following = True
+            # Emit notification when a new follow is created
+            if created:
+                from apps.social.models import Notification
+                Notification.objects.create(
+                    recipient=target_user,
+                    actor=request.user,
+                    type='user_follow',
+                    post=None,
+                    comment=None,
+                )
         else:  # DELETE
             UserFollow.objects.filter(follower=request.user, following=target_user).delete()
             is_following = False

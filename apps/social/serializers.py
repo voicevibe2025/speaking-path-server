@@ -156,7 +156,7 @@ class CreateCommentRequest(serializers.Serializer):
 
 class NotificationSerializer(serializers.ModelSerializer):
     actor = serializers.SerializerMethodField()
-    postId = serializers.IntegerField(source='post_id')
+    postId = serializers.IntegerField(source='post_id', required=False, allow_null=True)
     commentId = serializers.IntegerField(source='comment_id', required=False, allow_null=True)
     createdAt = serializers.DateTimeField(source='created_at')
     read = serializers.SerializerMethodField()
