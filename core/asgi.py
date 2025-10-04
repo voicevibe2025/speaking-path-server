@@ -21,13 +21,15 @@ django_asgi_app = get_asgi_application()
 
 # Import WebSocket routing after Django setup
 from apps.speaking_sessions import routing as speaking_routing
+from apps.messaging import routing as messaging_routing
 from apps.speaking_sessions.middleware import JwtAuthMiddleware
 
 application = ProtocolTypeRouter({
     "http": django_asgi_app,
     "websocket": JwtAuthMiddleware(
         URLRouter(
-            speaking_routing.websocket_urlpatterns
+            speaking_routing.websocket_urlpatterns +
+            messaging_routing.websocket_urlpatterns
         )
     ),
 })
