@@ -36,6 +36,10 @@ def _ensure_live_connect_config(payload: dict) -> dict:
     output_audio_config = payload.get('output_audio_config')
     if isinstance(output_audio_config, dict):
         connect_config['output_audio_config'] = output_audio_config
+    
+    speech_config = payload.get('speech_config')
+    if isinstance(speech_config, dict):
+        connect_config['speech_config'] = speech_config
 
     proactivity_config = payload.get('proactivity_config')
     if isinstance(proactivity_config, dict):
