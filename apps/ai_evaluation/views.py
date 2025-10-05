@@ -40,6 +40,24 @@ def _ensure_live_connect_config(payload: dict) -> dict:
     proactivity_config = payload.get('proactivity_config')
     if isinstance(proactivity_config, dict):
         connect_config['proactivity_config'] = proactivity_config
+    
+    # Handle function declarations for tool use
+    function_declarations = payload.get('function_declarations')
+    if function_declarations:
+        # If it's a JSON string, parse it
+        if isinstance(function_declarations, str):
+            try:
+                function_declarations = json.loads(function_declarations)
+            except json.JSONDecodeError:
+                logger.warning(f"Failed to parse function_declarations JSON: {function_declarations[:100]}")
+                function_declarations = None
+        
+        # If we have valid function declarations, add tools to config
+        if function_declarations and isinstance(function_declarations, dict):
+            func_decls = function_declarations.get('functionDeclarations', [])
+            if func_decls:
+                connect_config['tools'] = [{'function_declarations': func_decls}]
+                logger.info(f"Added {len(func_decls)} function declarations to Live API config")
 
     return connect_config
 

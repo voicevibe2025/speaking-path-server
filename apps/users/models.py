@@ -43,6 +43,49 @@ class UserProfile(models.Model):
         ('exam_prep', _('Exam Preparation')),
     ]
 
+    GENDER_CHOICES = [
+        ('male', _('Male')),
+        ('female', _('Female')),
+    ]
+
+    # Indonesian provinces (major ones)
+    PROVINCE_CHOICES = [
+        ('aceh', _('Aceh')),
+        ('bali', _('Bali')),
+        ('bangka_belitung', _('Bangka Belitung')),
+        ('banten', _('Banten')),
+        ('bengkulu', _('Bengkulu')),
+        ('dki_jakarta', _('DKI Jakarta')),
+        ('gorontalo', _('Gorontalo')),
+        ('jambi', _('Jambi')),
+        ('jawa_barat', _('Jawa Barat')),
+        ('jawa_tengah', _('Jawa Tengah')),
+        ('jawa_timur', _('Jawa Timur')),
+        ('kalimantan_barat', _('Kalimantan Barat')),
+        ('kalimantan_selatan', _('Kalimantan Selatan')),
+        ('kalimantan_tengah', _('Kalimantan Tengah')),
+        ('kalimantan_timur', _('Kalimantan Timur')),
+        ('kalimantan_utara', _('Kalimantan Utara')),
+        ('kepulauan_riau', _('Kepulauan Riau')),
+        ('lampung', _('Lampung')),
+        ('maluku', _('Maluku')),
+        ('maluku_utara', _('Maluku Utara')),
+        ('nusa_tenggara_barat', _('Nusa Tenggara Barat')),
+        ('nusa_tenggara_timur', _('Nusa Tenggara Timur')),
+        ('papua', _('Papua')),
+        ('papua_barat', _('Papua Barat')),
+        ('riau', _('Riau')),
+        ('sulawesi_barat', _('Sulawesi Barat')),
+        ('sulawesi_selatan', _('Sulawesi Selatan')),
+        ('sulawesi_tengah', _('Sulawesi Tengah')),
+        ('sulawesi_tenggara', _('Sulawesi Tenggara')),
+        ('sulawesi_utara', _('Sulawesi Utara')),
+        ('sumatera_barat', _('Sumatera Barat')),
+        ('sumatera_selatan', _('Sumatera Selatan')),
+        ('sumatera_utara', _('Sumatera Utara')),
+        ('yogyakarta', _('DI Yogyakarta')),
+    ]
+
     user = models.OneToOneField(
         User,
         on_delete=models.CASCADE,
@@ -50,6 +93,20 @@ class UserProfile(models.Model):
     )
 
     # Personal Information
+    gender = models.CharField(
+        max_length=10,
+        choices=GENDER_CHOICES,
+        null=True,
+        blank=True,
+        help_text=_('User gender for culturally-aware AI interactions')
+    )
+    province = models.CharField(
+        max_length=50,
+        choices=PROVINCE_CHOICES,
+        null=True,
+        blank=True,
+        help_text=_('Indonesian province for regional socio-cultural context')
+    )
     date_of_birth = models.DateField(null=True, blank=True)
     phone_number = models.CharField(max_length=20, blank=True)
     avatar = models.ImageField(

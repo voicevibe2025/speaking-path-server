@@ -44,13 +44,16 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
     native_language = serializers.CharField(write_only=True, required=False, allow_blank=True)
     target_language = serializers.CharField(write_only=True, required=False, allow_blank=True)
     proficiency_level = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    gender = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    province = serializers.CharField(write_only=True, required=False, allow_blank=True)
 
     class Meta:
         model = User
         fields = (
             'id', 'email', 'username', 'password',
             'password_confirm', 'first_name', 'last_name',
-            'native_language', 'target_language', 'proficiency_level'
+            'native_language', 'target_language', 'proficiency_level',
+            'gender', 'province'
         )
         read_only_fields = ('id',)
 
@@ -66,6 +69,8 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         native_language = validated_data.pop('native_language', None)
         target_language = validated_data.pop('target_language', None)
         proficiency_level = validated_data.pop('proficiency_level', None)
+        gender = validated_data.pop('gender', None)
+        province = validated_data.pop('province', None)
         validated_data.pop('password_confirm')
         # If username not provided, derive from email (fallback to email itself)
         username = validated_data.get('username')
@@ -78,7 +83,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
 
         # Optionally create a UserProfile if any related fields were provided
         try:
-            if native_language or target_language or proficiency_level:
+            if native_language or target_language or proficiency_level or gender or province:
                 def _lang_code(v):
                     if not v:
                         return None
@@ -97,12 +102,26 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
                     }
                     return mapping.get(v, v)
 
-                UserProfile.objects.create(
-                    user=user,
-                    native_language=_lang_code(native_language) or 'id',
-                    target_language=_lang_code(target_language) or 'en',
-                    current_proficiency=_prof(proficiency_level) or 'beginner'
-                )
+                def _normalize(v):
+                    """Normalize to lowercase snake_case for DB storage"""
+                    if not v:
+                        return None
+                    return v.strip().lower().replace(' ', '_')
+
+                profile_data = {
+                    'user': user,
+                    'native_language': _lang_code(native_language) or 'id',
+                    'target_language': _lang_code(target_language) or 'en',
+                    'current_proficiency': _prof(proficiency_level) or 'beginner',
+                }
+                
+                # Add gender and province if provided
+                if gender:
+                    profile_data['gender'] = _normalize(gender)
+                if province:
+                    profile_data['province'] = _normalize(province)
+                
+                UserProfile.objects.create(**profile_data)
         except Exception:
             # Profile creation is best-effort; ignore failures to not block registration
             pass
