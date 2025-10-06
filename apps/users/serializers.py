@@ -29,7 +29,10 @@ class UserProfileSerializer(serializers.ModelSerializer):
     userId = serializers.SerializerMethodField()
     email = serializers.EmailField(source='user.email', read_only=True)
     displayName = serializers.SerializerMethodField()
+    # Allow clients to update email via either 'email' or 'user_email'.
     user_email = serializers.EmailField(source='user.email', allow_blank=True, required=False)
+    # Write-only helper to set first/last name by sending a single display string
+    display_name = serializers.CharField(write_only=True, required=False, allow_blank=True)
 
     # New avatar fields
     avatar = serializers.ImageField(write_only=True, required=False, allow_null=True)
@@ -697,7 +700,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserProfile
         fields = [
-            'id', 'user', 'user_email', 'username', 'userId', 'email', 'displayName', 'first_name', 'last_name',
+            'id', 'user', 'user_email', 'username', 'userId', 'email', 'displayName', 'display_name', 'first_name', 'last_name',
             'level', 'xp', 'xpToNextLevel', 'streakDays', 'longestStreak', 'joinedDate', 'lastActiveDate',
             'language', 'isVerified', 'isPremium', 'isOnline', 'isFollowing', 'isFollower', 'isBlocked',
             'followersCount', 'followingCount',
@@ -736,19 +739,73 @@ class UserProfileSerializer(serializers.ModelSerializer):
     
     def update(self, instance, validated_data):
         """
-        Handle avatar upload to Supabase Storage
+        Apply updates to the related auth User (email/names) and this UserProfile (avatar, bio, etc.).
+        Supports the following request payload keys:
+          - email or user_email: updates auth user's email
+          - display_name: splits into first_name and last_name and updates auth user
+          - avatar and other UserProfile fields (default behavior)
         """
+        import logging
+        logger = logging.getLogger(__name__)
+
+        # Extract potential nested user dict produced by fields with source='user.*'
+        user_data = validated_data.pop('user', {}) if isinstance(validated_data.get('user', {}), dict) else {}
+
+        # Access raw request data for convenience keys not explicitly declared or for custom aliases
+        initial = getattr(self, 'initial_data', {}) or {}
+
+        # Resolve email from any accepted key
+        new_email = None
+        try:
+            new_email = initial.get('email') or initial.get('user_email') or user_data.get('email')
+        except Exception:
+            pass
+
+        # Resolve display name (write-only); split into first and last
+        display_name_in = (initial.get('display_name') or '').strip()
+
+        # Update auth user fields if provided
+        user_changed_fields = []
+        from rest_framework import serializers as drf_serializers
+        try:
+            if new_email:
+                # Basic normalize/trim
+                new_email = str(new_email).strip()
+                if new_email and new_email != instance.user.email:
+                    instance.user.email = new_email
+                    # Optionally keep username in sync if it was email-based originally
+                    if not instance.user.username:
+                        instance.user.username = new_email
+                    user_changed_fields.append('email')
+
+            if display_name_in:
+                parts = display_name_in.split(' ', 1)
+                first = parts[0].strip() if parts else ''
+                last = parts[1].strip() if len(parts) > 1 else ''
+                if first != instance.user.first_name:
+                    instance.user.first_name = first
+                    user_changed_fields.append('first_name')
+                if last != instance.user.last_name:
+                    instance.user.last_name = last
+                    user_changed_fields.append('last_name')
+
+            if user_changed_fields:
+                instance.user.save(update_fields=list(set(user_changed_fields)))
+        except Exception as e:
+            logger.warning(f"Failed updating auth user fields for user {getattr(instance.user, 'id', None)}: {e}")
+            # If attempting to change email or display name and it fails, surface a validation error
+            if 'email' in user_changed_fields or display_name_in:
+                raise drf_serializers.ValidationError({'detail': str(e) or 'Failed to update account fields'})
+
+        # Handle avatar replacement: delete old file if new one provided
         avatar = validated_data.get('avatar')
-        if avatar:
-            # Delete old avatar if it exists
-            if instance.avatar:
-                try:
-                    instance.avatar.delete(save=False)
-                except Exception as e:
-                    import logging
-                    logger = logging.getLogger(__name__)
-                    logger.warning(f"Failed to delete old avatar for user {instance.user.id}: {e}")
-        
+        if avatar and instance.avatar:
+            try:
+                instance.avatar.delete(save=False)
+            except Exception as e:
+                logger.warning(f"Failed to delete old avatar for user {instance.user.id}: {e}")
+
+        # Proceed with standard profile field updates
         return super().update(instance, validated_data)
 
 

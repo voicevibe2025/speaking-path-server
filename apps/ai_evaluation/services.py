@@ -34,13 +34,26 @@ class WhisperService:
         # Lazy-load local whisper model name (match existing implementation)
         self.model_name = "tiny.en"
 
-    async def transcribe_audio(self, audio_data: bytes, language: str = "en") -> Dict[str, Any]:
+    async def transcribe_audio(
+        self,
+        audio_data: bytes,
+        language: str = "en",
+        *,
+        prefer_faster_whisper: Optional[bool] = None,
+        disable_openai_api: Optional[bool] = None,
+        disable_whisper: Optional[bool] = None,
+        disable_faster_whisper: Optional[bool] = None,
+    ) -> Dict[str, Any]:
         """
-        Transcribe audio using Whisper API
+        Transcribe audio using Whisper engines.
 
         Args:
-            audio_data: Audio file bytes
+            audio_data: Audio file bytes (or base64 string)
             language: Target language code
+            prefer_faster_whisper: If set, overrides env to prefer faster-whisper first for this call
+            disable_openai_api: If True, do not call hosted OpenAI Whisper API for this call
+            disable_whisper: If set, overrides env to disable openai-whisper (PyTorch) for this call
+            disable_faster_whisper: If set, overrides env to disable faster-whisper for this call
 
         Returns:
             Transcription result with text and metadata
@@ -76,20 +89,24 @@ class WhisperService:
             except Exception as e:
                 logger.warning("ffmpeg conversion failed, using original: %s", e)
 
-            # Choose engine preference via env flags
+            # Choose engine preference via env flags, allowing per-call overrides.
             # - ENABLE_FASTER_WHISPER or PREFER_FASTER_WHISPER: prefer faster-whisper first
             # - DISABLE_WHISPER: skip openai-whisper entirely (use faster-whisper only)
-            prefer_fw = (
+            env_prefer_fw = (
                 os.environ.get("ENABLE_FASTER_WHISPER", "").strip().lower() in {"1", "true", "yes"}
                 or os.environ.get("PREFER_FASTER_WHISPER", "").strip().lower() in {"1", "true", "yes"}
             )
-            disable_whisper = (os.environ.get("DISABLE_WHISPER", "").strip().lower() in {"1", "true", "yes"})
+            env_disable_whisper = (os.environ.get("DISABLE_WHISPER", "").strip().lower() in {"1", "true", "yes"})
             strict_dedup = (os.environ.get("WHISPER_STRICT_DEDUP", "").strip().lower() in {"1", "true", "yes"})
-            disable_fw = (os.environ.get("DISABLE_FASTER_WHISPER", "").strip().lower() in {"1", "true", "yes"})
+            env_disable_fw = (os.environ.get("DISABLE_FASTER_WHISPER", "").strip().lower() in {"1", "true", "yes"})
             # Prefer hosted OpenAI Whisper API when an API key is present, unless explicitly disabled
-            prefer_api = (
-                os.environ.get("DISABLE_OPENAI_WHISPER_API", "").strip().lower() not in {"1", "true", "yes"}
-            ) and bool(self.api_key)
+            env_api_enabled = (os.environ.get("DISABLE_OPENAI_WHISPER_API", "").strip().lower() not in {"1", "true", "yes"}) and bool(self.api_key)
+
+            # Apply per-call overrides (None => keep env-driven behavior)
+            prefer_fw = env_prefer_fw if prefer_faster_whisper is None else bool(prefer_faster_whisper)
+            disable_fw = env_disable_fw if disable_faster_whisper is None else bool(disable_faster_whisper)
+            disable_whisper = env_disable_whisper if disable_whisper is None else bool(disable_whisper)
+            prefer_api = env_api_enabled if not disable_openai_api else False
 
             def _transcribe_with_fw(path: str, lang: str) -> Optional[str]:
                 """Best-effort faster-whisper transcription on CPU. Returns text or None on failure."""

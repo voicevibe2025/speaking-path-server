@@ -2380,8 +2380,14 @@ class SubmitFluencyRecordingView(APIView):
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
                 try:
+                    # Use faster-whisper specifically for Fluency Practice without changing env
                     transcription = loop.run_until_complete(
-                        whisper_service.transcribe_audio(audio_bytes)
+                        whisper_service.transcribe_audio(
+                            audio_bytes,
+                            prefer_faster_whisper=True,
+                            disable_openai_api=True,  # avoid hosted API so FW runs first
+                            disable_faster_whisper=False,  # ensure FW is allowed even if env disabled
+                        )
                     )
                 finally:
                     loop.close()

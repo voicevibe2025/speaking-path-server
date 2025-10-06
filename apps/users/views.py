@@ -325,3 +325,86 @@ def add_practice_time(request):
             {'error': str(e)},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def change_password(request):
+    """
+    Change user password endpoint
+    Expects: old_password, new_password
+    """
+    try:
+        old_password = request.data.get('old_password')
+        new_password = request.data.get('new_password')
+
+        if not old_password or not new_password:
+            return Response(
+                {'error': 'Both old_password and new_password are required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Check if old password is correct
+        if not request.user.check_password(old_password):
+            return Response(
+                {'error': 'Current password is incorrect'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Validate new password length
+        if len(new_password) < 6:
+            return Response(
+                {'error': 'New password must be at least 6 characters long'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Set new password
+        request.user.set_password(new_password)
+        request.user.save()
+
+        return Response({
+            'success': True,
+            'message': 'Password changed successfully'
+        }, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        return Response(
+            {'error': str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def delete_account(request):
+    """
+    Delete the current user's account and all associated data.
+    This is a permanent action that cannot be undone.
+    """
+    try:
+        user = request.user
+        
+        # Log the deletion for audit purposes
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f'User {user.id} ({user.email}) requested account deletion')
+        
+        # Delete user account (cascade will handle related data)
+        user_email = user.email
+        user.delete()
+        
+        logger.info(f'Account deleted successfully for {user_email}')
+        
+        return Response({
+            'success': True,
+            'message': 'Account deleted successfully'
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f'Error deleting account: {str(e)}')
+        return Response(
+            {'error': 'Failed to delete account'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )

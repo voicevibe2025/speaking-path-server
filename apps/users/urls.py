@@ -15,6 +15,8 @@ from .views import (
     follow_toggle,
     list_followers,
     list_following,
+    change_password,
+    delete_account,
 )
 
 app_name = 'users'
@@ -24,6 +26,8 @@ urlpatterns = [
     path('profile/', UserProfileView.as_view(), name='profile'),
     path('<int:user_id>/', UserProfileDetailView.as_view(), name='user_profile_detail'),
     path('preferences/', LearningPreferenceView.as_view(), name='preferences'),
+    path('change-password/', change_password, name='change_password'),
+    path('delete-account/', delete_account, name='delete_account'),
 
     # Search users
     path('search/', search_users, name='search_users'),

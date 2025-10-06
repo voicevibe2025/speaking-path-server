@@ -41,17 +41,23 @@ class SupabaseStorage(Storage):
             'apikey': self.supabase_key
         }
     
-    def _get_upload_headers(self, content_type='application/octet-stream'):
+    def _get_upload_headers(self, content_type='application/octet-stream', upsert=True):
         """Get headers for file upload"""
-        return {
+        headers = {
             'Authorization': f'Bearer {self.supabase_key}',
             'Content-Type': content_type,
             'apikey': self.supabase_key
         }
+        # Add x-upsert header to allow overwriting existing files
+        if upsert:
+            headers['x-upsert'] = 'true'
+        return headers
     
     def _save(self, name, content):
         """
         Save file to Supabase Storage
+        
+        Uses x-upsert header to automatically overwrite existing files.
         """
         if not self.supabase_url or not self.supabase_key:
             raise ValueError("Supabase URL and Service Role Key are required")
@@ -67,10 +73,11 @@ class SupabaseStorage(Storage):
         file_data = content.read()
         
         try:
+            # Use POST with x-upsert=true to create or update
             response = requests.post(
                 upload_url,
                 data=file_data,
-                headers=self._get_upload_headers(content_type)
+                headers=self._get_upload_headers(content_type, upsert=True)
             )
             
             if response.status_code in [200, 201]:
