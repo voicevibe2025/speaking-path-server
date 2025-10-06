@@ -2,7 +2,7 @@
 Admin configuration for user profile models
 """
 from django.contrib import admin
-from .models import UserProfile, LearningPreference, UserAchievement
+from .models import UserProfile, LearningPreference, UserAchievement, UserBlock, Report, PrivacySettings
 
 
 @admin.register(UserProfile)
@@ -168,3 +168,74 @@ class UserAchievementAdmin(admin.ModelAdmin):
         if obj:  # Editing an existing object
             return self.readonly_fields + ('achievement_type',)
         return self.readonly_fields
+
+
+@admin.register(PrivacySettings)
+class PrivacySettingsAdmin(admin.ModelAdmin):
+    """
+    Admin for PrivacySettings model
+    """
+    list_display = ('user', 'hide_avatar', 'hide_online_status', 'allow_messages_from_strangers', 'updated_at')
+    list_filter = ('hide_avatar', 'hide_online_status', 'allow_messages_from_strangers')
+    search_fields = ('user__email', 'user__username')
+    ordering = ('-updated_at',)
+    readonly_fields = ('created_at', 'updated_at')
+
+
+@admin.register(UserBlock)
+class UserBlockAdmin(admin.ModelAdmin):
+    """
+    Admin for UserBlock model
+    """
+    list_display = ('blocker', 'blocked_user', 'created_at')
+    list_filter = ('created_at',)
+    search_fields = ('blocker__email', 'blocker__username', 'blocked_user__email', 'blocked_user__username')
+    ordering = ('-created_at',)
+    readonly_fields = ('created_at',)
+
+
+@admin.register(Report)
+class ReportAdmin(admin.ModelAdmin):
+    """
+    Admin for Report model with moderation capabilities
+    """
+    list_display = ('id', 'report_type', 'reason', 'reporter', 'status', 'created_at')
+    list_filter = ('report_type', 'reason', 'status', 'created_at')
+    search_fields = ('reporter__email', 'reporter__username', 'reported_user__email', 'reported_user__username', 'description')
+    ordering = ('-created_at',)
+    readonly_fields = ('reporter', 'created_at', 'updated_at')
+    
+    fieldsets = (
+        ('Report Information', {
+            'fields': ('reporter', 'report_type', 'reason', 'description')
+        }),
+        ('Reported Entity', {
+            'fields': ('reported_user', 'reported_post_id', 'reported_comment_id')
+        }),
+        ('Moderation', {
+            'fields': ('status', 'reviewed_by', 'reviewed_at', 'moderator_notes')
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        })
+    )
+    
+    actions = ['mark_as_reviewing', 'mark_as_resolved', 'mark_as_dismissed']
+    
+    def mark_as_reviewing(self, request, queryset):
+        queryset.update(status='reviewing', reviewed_by=request.user)
+        self.message_user(request, f"{queryset.count()} report(s) marked as under review.")
+    mark_as_reviewing.short_description = "Mark selected reports as under review"
+    
+    def mark_as_resolved(self, request, queryset):
+        from django.utils import timezone
+        queryset.update(status='resolved', reviewed_by=request.user, reviewed_at=timezone.now())
+        self.message_user(request, f"{queryset.count()} report(s) marked as resolved.")
+    mark_as_resolved.short_description = "Mark selected reports as resolved"
+    
+    def mark_as_dismissed(self, request, queryset):
+        from django.utils import timezone
+        queryset.update(status='dismissed', reviewed_by=request.user, reviewed_at=timezone.now())
+        self.message_user(request, f"{queryset.count()} report(s) marked as dismissed.")
+    mark_as_dismissed.short_description = "Mark selected reports as dismissed"

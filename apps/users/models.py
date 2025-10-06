@@ -371,3 +371,159 @@ class UserFollow(models.Model):
 
     def __str__(self):
         return f"{self.follower_id} -> {self.following_id}"
+
+
+class UserBlock(models.Model):
+    """
+    User blocking relationship
+    - blocker blocks blocked_user
+    """
+    blocker = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='blocking_relations'
+    )
+    blocked_user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='blocked_by_relations'
+    )
+    reason = models.TextField(blank=True, help_text=_('Optional reason for blocking'))
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'user_blocks'
+        unique_together = ['blocker', 'blocked_user']
+        indexes = [
+            models.Index(fields=['blocker']),
+            models.Index(fields=['blocked_user']),
+        ]
+
+    def __str__(self):
+        return f"{self.blocker_id} blocked {self.blocked_user_id}"
+
+
+class Report(models.Model):
+    """
+    User reports for content or users that violate community guidelines
+    """
+    REPORT_TYPE_USER = 'user'
+    REPORT_TYPE_POST = 'post'
+    REPORT_TYPE_COMMENT = 'comment'
+
+    REPORT_TYPES = [
+        (REPORT_TYPE_USER, 'User'),
+        (REPORT_TYPE_POST, 'Post'),
+        (REPORT_TYPE_COMMENT, 'Comment'),
+    ]
+
+    REASON_SPAM = 'spam'
+    REASON_HARASSMENT = 'harassment'
+    REASON_HATE_SPEECH = 'hate_speech'
+    REASON_INAPPROPRIATE = 'inappropriate'
+    REASON_IMPERSONATION = 'impersonation'
+    REASON_OTHER = 'other'
+
+    REASON_CHOICES = [
+        (REASON_SPAM, 'Spam'),
+        (REASON_HARASSMENT, 'Harassment or Bullying'),
+        (REASON_HATE_SPEECH, 'Hate Speech'),
+        (REASON_INAPPROPRIATE, 'Inappropriate Content'),
+        (REASON_IMPERSONATION, 'Impersonation'),
+        (REASON_OTHER, 'Other'),
+    ]
+
+    STATUS_PENDING = 'pending'
+    STATUS_REVIEWING = 'reviewing'
+    STATUS_RESOLVED = 'resolved'
+    STATUS_DISMISSED = 'dismissed'
+
+    STATUS_CHOICES = [
+        (STATUS_PENDING, 'Pending'),
+        (STATUS_REVIEWING, 'Under Review'),
+        (STATUS_RESOLVED, 'Resolved'),
+        (STATUS_DISMISSED, 'Dismissed'),
+    ]
+
+    reporter = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='reports_made'
+    )
+    report_type = models.CharField(max_length=20, choices=REPORT_TYPES)
+    reason = models.CharField(max_length=30, choices=REASON_CHOICES)
+    description = models.TextField(blank=True, help_text=_('Additional details about the report'))
+
+    # Reported entities (only one should be set based on report_type)
+    reported_user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='reports_against',
+        null=True,
+        blank=True
+    )
+    reported_post_id = models.IntegerField(null=True, blank=True, help_text=_('Post ID if reporting a post'))
+    reported_comment_id = models.IntegerField(null=True, blank=True, help_text=_('Comment ID if reporting a comment'))
+
+    # Moderation
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    reviewed_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        related_name='reports_reviewed',
+        null=True,
+        blank=True
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    moderator_notes = models.TextField(blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'reports'
+        verbose_name = _('Report')
+        verbose_name_plural = _('Reports')
+        indexes = [
+            models.Index(fields=['reporter', 'created_at']),
+            models.Index(fields=['status', 'created_at']),
+            models.Index(fields=['report_type', 'status']),
+        ]
+
+    def __str__(self):
+        return f"Report({self.report_type}) by {self.reporter_id} - {self.reason}"
+
+
+class PrivacySettings(models.Model):
+    """
+    User privacy settings
+    """
+    user = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name='privacy_settings'
+    )
+
+    hide_avatar = models.BooleanField(
+        default=False,
+        help_text=_('Hide avatar from other users')
+    )
+    hide_online_status = models.BooleanField(
+        default=False,
+        help_text=_('Hide online status from other users')
+    )
+    allow_messages_from_strangers = models.BooleanField(
+        default=True,
+        help_text=_('Allow messages from users who are not following you')
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'privacy_settings'
+        verbose_name = _('Privacy Settings')
+        verbose_name_plural = _('Privacy Settings')
+
+    def __str__(self):
+        return f"Privacy settings for {self.user.email}"

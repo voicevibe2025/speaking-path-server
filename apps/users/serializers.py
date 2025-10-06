@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from calendar import monthrange
 
 from apps.authentication.models import User
-from .models import UserProfile, LearningPreference, UserAchievement, UserFollow
+from .models import UserProfile, LearningPreference, UserAchievement, UserFollow, UserBlock, Report, PrivacySettings
 from apps.gamification.serializers import UserBadgeSerializer
 from apps.speaking_sessions.models import PracticeSession
 from apps.learning_paths.models import UserProgress
@@ -49,7 +49,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
     language = serializers.CharField(source='target_language', default='English')
     isVerified = serializers.BooleanField(default=False)
     isPremium = serializers.BooleanField(default=False)
-    isOnline = serializers.BooleanField(default=False)
+    isOnline = serializers.SerializerMethodField()
     isFollowing = serializers.SerializerMethodField()
     isFollower = serializers.SerializerMethodField()
     isBlocked = serializers.BooleanField(default=False)
@@ -620,6 +620,47 @@ class UserProfileSerializer(serializers.ModelSerializer):
             return UserFollow.objects.filter(follower=obj.user, following=request.user).exists()
         except Exception:
             return False
+
+    def get_isOnline(self, obj):
+        """
+        Compute whether the user is online based on last_activity.
+        A user is considered online if their last activity was within the last 5 minutes.
+        Respects the hide_online_status privacy setting.
+        """
+        from datetime import timedelta
+        
+        request = self.context.get('request')
+        target_user = obj.user
+        
+        # If viewing own profile, always show true online status
+        try:
+            if request and request.user.is_authenticated and request.user == target_user:
+                if target_user.last_activity:
+                    now = timezone.now()
+                    threshold = now - timedelta(minutes=5)
+                    return target_user.last_activity >= threshold
+                return False
+        except Exception:
+            pass
+        
+        # Check if target user has hide_online_status enabled
+        try:
+            privacy_settings = PrivacySettings.objects.filter(user=target_user).first()
+            if privacy_settings and privacy_settings.hide_online_status:
+                return False
+        except Exception:
+            pass
+        
+        # Return online status for other viewers
+        try:
+            if target_user.last_activity:
+                now = timezone.now()
+                threshold = now - timedelta(minutes=5)
+                return target_user.last_activity >= threshold
+        except Exception:
+            pass
+        
+        return False
         
     def get_badges(self, obj):
         """Get user badges"""
@@ -867,3 +908,93 @@ class UserStatsSerializer(serializers.Serializer):
 
     class Meta:
         fields = '__all__'
+
+
+class PrivacySettingsSerializer(serializers.ModelSerializer):
+    """
+    Serializer for user privacy settings
+    """
+    class Meta:
+        model = PrivacySettings
+        fields = [
+            'id',
+            'hide_avatar',
+            'hide_online_status',
+            'allow_messages_from_strangers',
+            'created_at',
+            'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+
+class ReportSerializer(serializers.ModelSerializer):
+    """
+    Serializer for creating reports
+    """
+    reporter_name = serializers.CharField(source='reporter.username', read_only=True)
+    reported_user_name = serializers.CharField(source='reported_user.username', read_only=True, allow_null=True)
+    
+    class Meta:
+        model = Report
+        fields = [
+            'id',
+            'report_type',
+            'reason',
+            'description',
+            'reported_user',
+            'reported_post_id',
+            'reported_comment_id',
+            'status',
+            'reporter_name',
+            'reported_user_name',
+            'created_at',
+            'updated_at'
+        ]
+        read_only_fields = ['id', 'reporter', 'status', 'reporter_name', 'reported_user_name', 'created_at', 'updated_at']
+
+    def validate(self, attrs):
+        """Ensure exactly one entity is being reported based on report_type"""
+        report_type = attrs.get('report_type')
+        reported_user = attrs.get('reported_user')
+        reported_post_id = attrs.get('reported_post_id')
+        reported_comment_id = attrs.get('reported_comment_id')
+        
+        if report_type == 'user' and not reported_user:
+            raise serializers.ValidationError({'reported_user': 'User must be specified for user reports'})
+        elif report_type == 'post' and not reported_post_id:
+            raise serializers.ValidationError({'reported_post_id': 'Post ID must be specified for post reports'})
+        elif report_type == 'comment' and not reported_comment_id:
+            raise serializers.ValidationError({'reported_comment_id': 'Comment ID must be specified for comment reports'})
+            
+        return attrs
+
+
+class BlockedUserSerializer(serializers.ModelSerializer):
+    """
+    Serializer for listing blocked users
+    """
+    userId = serializers.IntegerField(source='blocked_user.id', read_only=True)
+    username = serializers.CharField(source='blocked_user.username', read_only=True)
+    displayName = serializers.SerializerMethodField()
+    avatarUrl = serializers.SerializerMethodField()
+    blockedAt = serializers.DateTimeField(source='created_at', read_only=True)
+    
+    class Meta:
+        model = UserBlock
+        fields = ['id', 'userId', 'username', 'displayName', 'avatarUrl', 'reason', 'blockedAt']
+        read_only_fields = ['id', 'userId', 'username', 'displayName', 'avatarUrl', 'blockedAt']
+    
+    def get_displayName(self, obj):
+        user = obj.blocked_user
+        if user.first_name and user.last_name:
+            return f"{user.first_name} {user.last_name}"
+        return user.username
+    
+    def get_avatarUrl(self, obj):
+        try:
+            profile = UserProfile.objects.get(user=obj.blocked_user)
+            if profile.avatar and hasattr(profile.avatar, 'url'):
+                return profile.avatar.url
+            return profile.avatar_url
+        except UserProfile.DoesNotExist:
+            return None

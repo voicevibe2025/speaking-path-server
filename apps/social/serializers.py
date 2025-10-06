@@ -1,6 +1,9 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
+from django.utils import timezone
+from datetime import timedelta
 from .models import Post, PostLike, PostComment, PostCommentLike, Notification
+from apps.users.models import PrivacySettings
 
 User = get_user_model()
 
@@ -10,6 +13,7 @@ class AuthorSerializer(serializers.Serializer):
     username = serializers.CharField()
     displayName = serializers.SerializerMethodField()
     avatarUrl = serializers.SerializerMethodField()
+    isOnline = serializers.SerializerMethodField()
 
     def get_displayName(self, obj):
         try:
@@ -30,6 +34,43 @@ class AuthorSerializer(serializers.Serializer):
             return profile.avatar_url or None
         except Exception:
             return None
+
+    def get_isOnline(self, obj):
+        """
+        Compute whether the user is online (last activity within 5 minutes).
+        Respects privacy settings.
+        """
+        request = self.context.get('request')
+        
+        # If viewing own profile, always show true online status
+        try:
+            if request and request.user.is_authenticated and request.user == obj:
+                if obj.last_activity:
+                    now = timezone.now()
+                    threshold = now - timedelta(minutes=5)
+                    return obj.last_activity >= threshold
+                return False
+        except Exception:
+            pass
+        
+        # Check privacy settings
+        try:
+            privacy_settings = PrivacySettings.objects.filter(user=obj).first()
+            if privacy_settings and privacy_settings.hide_online_status:
+                return False
+        except Exception:
+            pass
+        
+        # Return online status
+        try:
+            if obj.last_activity:
+                now = timezone.now()
+                threshold = now - timedelta(minutes=5)
+                return obj.last_activity >= threshold
+        except Exception:
+            pass
+        
+        return False
 
 
 class PostSerializer(serializers.ModelSerializer):

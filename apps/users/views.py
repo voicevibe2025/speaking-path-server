@@ -12,12 +12,15 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from apps.speaking_journey.models import TopicProgress
 
 from apps.authentication.models import User
-from .models import UserProfile, LearningPreference, UserAchievement, UserFollow
+from .models import UserProfile, LearningPreference, UserAchievement, UserFollow, UserBlock, Report, PrivacySettings
 from .serializers import (
     UserProfileSerializer,
     LearningPreferenceSerializer,
     UserAchievementSerializer,
-    UserStatsSerializer
+    UserStatsSerializer,
+    PrivacySettingsSerializer,
+    ReportSerializer,
+    BlockedUserSerializer
 )
 
 
@@ -408,3 +411,115 @@ def delete_account(request):
             {'error': 'Failed to delete account'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+
+# Privacy Settings Views
+class PrivacySettingsView(generics.RetrieveUpdateAPIView):
+    """
+    Retrieve and update user privacy settings
+    """
+    serializer_class = PrivacySettingsSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self):
+        settings, created = PrivacySettings.objects.get_or_create(user=self.request.user)
+        return settings
+
+
+# Blocking Views
+@api_view(['POST', 'DELETE'])
+@permission_classes([IsAuthenticated])
+def block_user(request, user_id):
+    """
+    POST -> Block a user
+    DELETE -> Unblock a user
+    """
+    if request.user.id == int(user_id):
+        return Response({'error': "You can't block yourself"}, status=status.HTTP_400_BAD_REQUEST)
+
+    target_user = get_object_or_404(User, id=user_id)
+
+    try:
+        if request.method == 'POST':
+            reason = request.data.get('reason', '')
+            block, created = UserBlock.objects.get_or_create(
+                blocker=request.user,
+                blocked_user=target_user,
+                defaults={'reason': reason}
+            )
+            # Also unfollow if following
+            UserFollow.objects.filter(follower=request.user, following=target_user).delete()
+            UserFollow.objects.filter(follower=target_user, following=request.user).delete()
+            
+            return Response({
+                'success': True,
+                'message': 'User blocked successfully',
+                'isBlocked': True
+            })
+        else:  # DELETE
+            UserBlock.objects.filter(blocker=request.user, blocked_user=target_user).delete()
+            return Response({
+                'success': True,
+                'message': 'User unblocked successfully',
+                'isBlocked': False
+            })
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def list_blocked_users(request):
+    """
+    List all users blocked by the current user
+    """
+    try:
+        blocks = UserBlock.objects.filter(blocker=request.user).select_related('blocked_user').order_by('-created_at')
+        serializer = BlockedUserSerializer(blocks, many=True)
+        return Response(serializer.data)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# Reporting Views
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def create_report(request):
+    """
+    Create a new report for a user, post, or comment
+    """
+    try:
+        serializer = ReportSerializer(data=request.data)
+        if serializer.is_valid():
+            # Prevent self-reporting for user reports
+            if serializer.validated_data.get('report_type') == 'user':
+                reported_user = serializer.validated_data.get('reported_user')
+                if reported_user == request.user:
+                    return Response(
+                        {'error': "You can't report yourself"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            
+            serializer.save(reporter=request.user)
+            return Response({
+                'success': True,
+                'message': 'Report submitted successfully. Our moderation team will review it.',
+                'report': serializer.data
+            }, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def list_my_reports(request):
+    """
+    List all reports created by the current user
+    """
+    try:
+        reports = Report.objects.filter(reporter=request.user).order_by('-created_at')
+        serializer = ReportSerializer(reports, many=True)
+        return Response(serializer.data)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

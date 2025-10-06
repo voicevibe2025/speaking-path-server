@@ -17,6 +17,11 @@ from .views import (
     list_following,
     change_password,
     delete_account,
+    PrivacySettingsView,
+    block_user,
+    list_blocked_users,
+    create_report,
+    list_my_reports,
 )
 
 app_name = 'users'
@@ -47,4 +52,15 @@ urlpatterns = [
     path('stats/', UserStatsView.as_view(), name='stats'),
     path('streak/update/', update_streak, name='update_streak'),
     path('practice-time/add/', add_practice_time, name='add_practice_time'),
+
+    # Privacy Settings
+    path('privacy-settings/', PrivacySettingsView.as_view(), name='privacy_settings'),
+
+    # Blocking
+    path('block/<int:user_id>/', block_user, name='block_user'),
+    path('blocked/', list_blocked_users, name='blocked_users'),
+
+    # Reporting
+    path('reports/', create_report, name='create_report'),
+    path('reports/my/', list_my_reports, name='my_reports'),
 ]

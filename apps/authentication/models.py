@@ -14,6 +14,11 @@ class User(AbstractUser):
     is_verified = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    last_activity = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=_('Last time user made an authenticated request')
+    )
 
     # Override username to use email as primary identifier
     USERNAME_FIELD = 'email'
