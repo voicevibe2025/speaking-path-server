@@ -9,6 +9,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
+from rest_framework.exceptions import PermissionDenied
 from apps.speaking_journey.models import TopicProgress
 
 from apps.authentication.models import User
@@ -54,6 +55,11 @@ class UserProfileDetailView(generics.RetrieveAPIView):
         try:
             user = User.objects.get(id=user_id)
             profile, created = UserProfile.objects.get_or_create(user=user)
+            # Block enforcement: deny viewing profiles when blocked either way
+            from .models import UserBlock
+            if UserBlock.objects.filter(blocker=self.request.user, blocked_user=user).exists() \
+               or UserBlock.objects.filter(blocker=user, blocked_user=self.request.user).exists():
+                raise PermissionDenied("You are not allowed to view this profile.")
             return profile
         except User.DoesNotExist:
             from django.http import Http404
@@ -216,6 +222,10 @@ def search_users(request):
                 | Q(user__last_name__icontains=raw)
                 | Q(user__username__icontains=raw)
             )
+
+        # Exclude users who are blocked by the requester or who have blocked the requester
+        qs = qs.exclude(user__blocked_by_relations__blocker=request.user) \
+               .exclude(user__blocking_relations__blocked_user=request.user)
 
         qs = qs.order_by('user__first_name', 'user__last_name')[:25]
         serializer = UserProfileSerializer(qs, many=True, context={'request': request})

@@ -5,8 +5,10 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.shortcuts import get_object_or_404
 from django.db import transaction
 from django.utils import timezone
+from rest_framework.exceptions import PermissionDenied
 
 from .models import Post, PostLike, PostComment, PostCommentLike, Notification
+from apps.users.models import UserBlock
 from .serializers import PostSerializer, CreatePostRequest, CommentSerializer, CreateCommentRequest, NotificationSerializer
 
 
@@ -15,6 +17,14 @@ class PostListCreateView(generics.ListCreateAPIView):
     serializer_class = PostSerializer
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    def get_queryset(self):
+        qs = Post.objects.select_related('user').all()
+        user = self.request.user
+        # Exclude posts by users the requester has blocked or who have blocked the requester
+        qs = qs.exclude(user__blocked_by_relations__blocker=user) \
+               .exclude(user__blocking_relations__blocked_user=user)
+        return qs
 
     def get_serializer_context(self):
         ctx = super().get_serializer_context()
@@ -62,6 +72,10 @@ class PostLikeView(generics.GenericAPIView):
 
     def post(self, request, post_id: int):
         post = get_object_or_404(Post, id=post_id)
+        # Block enforcement
+        if UserBlock.objects.filter(blocker=request.user, blocked_user=post.user).exists() or \
+           UserBlock.objects.filter(blocker=post.user, blocked_user=request.user).exists():
+            raise PermissionDenied("You cannot like content from this user.")
         # idempotent like
         like, created = PostLike.objects.get_or_create(post=post, user=request.user)
         # Emit notification only when a new like is created and not self-like
@@ -77,6 +91,7 @@ class PostLikeView(generics.GenericAPIView):
 
     def delete(self, request, post_id: int):
         post = get_object_or_404(Post, id=post_id)
+        # Allow unliking without block checks to let users clean up state
         PostLike.objects.filter(post=post, user=request.user).delete()
         return Response({'status': 'unliked'})
 
@@ -87,6 +102,10 @@ class PostDetailView(generics.GenericAPIView):
 
     def get(self, request, post_id: int):
         post = get_object_or_404(Post, id=post_id)
+        # Block enforcement: deny viewing posts when a block exists either way
+        if UserBlock.objects.filter(blocker=request.user, blocked_user=post.user).exists() or \
+           UserBlock.objects.filter(blocker=post.user, blocked_user=request.user).exists():
+            raise PermissionDenied("You cannot view this post.")
         serializer = PostSerializer(post, context={'request': request})
         return Response(serializer.data)
 
@@ -114,6 +133,12 @@ class PostCommentListCreateView(generics.ListCreateAPIView):
         return ctx
 
     def list(self, request, *args, **kwargs):
+        # Block enforcement: deny listing comments for blocked relationships
+        post = get_object_or_404(Post, id=self.kwargs['post_id'])
+        if UserBlock.objects.filter(blocker=request.user, blocked_user=post.user).exists() or \
+           UserBlock.objects.filter(blocker=post.user, blocked_user=request.user).exists():
+            raise PermissionDenied("You cannot view comments for this post.")
+
         # Simplify: return list without pagination for now
         queryset = self.get_queryset()
         serializer = self.get_serializer(queryset, many=True)
@@ -122,6 +147,10 @@ class PostCommentListCreateView(generics.ListCreateAPIView):
     @transaction.atomic
     def create(self, request, *args, **kwargs):
         post = get_object_or_404(Post, id=self.kwargs['post_id'])
+        # Block enforcement: deny commenting with blocked user
+        if UserBlock.objects.filter(blocker=request.user, blocked_user=post.user).exists() or \
+           UserBlock.objects.filter(blocker=post.user, blocked_user=request.user).exists():
+            raise PermissionDenied("You cannot comment on this user's post.")
         req = CreateCommentRequest(data=request.data)
         req.is_valid(raise_exception=True)
         parent_id = req.validated_data.get('parent')
@@ -162,6 +191,10 @@ class PostCommentLikeView(generics.GenericAPIView):
 
     def post(self, request, comment_id: int):
         comment = get_object_or_404(PostComment, id=comment_id)
+        # Block enforcement
+        if UserBlock.objects.filter(blocker=request.user, blocked_user=comment.user).exists() or \
+           UserBlock.objects.filter(blocker=comment.user, blocked_user=request.user).exists():
+            raise PermissionDenied("You cannot like this comment.")
         like, created = PostCommentLike.objects.get_or_create(comment=comment, user=request.user)
         # Notify comment author on new like (avoid self-notif)
         if created and comment.user_id != request.user.id:
@@ -176,6 +209,7 @@ class PostCommentLikeView(generics.GenericAPIView):
 
     def delete(self, request, comment_id: int):
         comment = get_object_or_404(PostComment, id=comment_id)
+        # Allow unliking without block checks
         PostCommentLike.objects.filter(comment=comment, user=request.user).delete()
         return Response({'status': 'unliked'})
 
