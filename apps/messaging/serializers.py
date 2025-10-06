@@ -1,5 +1,8 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
+from django.utils import timezone
+from datetime import timedelta
+from apps.users.models import PrivacySettings
 from .models import Conversation, Message
 
 User = get_user_model()
@@ -9,10 +12,11 @@ class MessageParticipantSerializer(serializers.ModelSerializer):
     """Simplified user info for message participants."""
     avatarUrl = serializers.SerializerMethodField()
     displayName = serializers.SerializerMethodField()
+    isOnline = serializers.SerializerMethodField()
     
     class Meta:
         model = User
-        fields = ['id', 'username', 'displayName', 'avatarUrl']
+        fields = ['id', 'username', 'displayName', 'avatarUrl', 'isOnline']
     
     def get_displayName(self, obj):
         """Get display name with fallbacks."""
@@ -28,6 +32,46 @@ class MessageParticipantSerializer(serializers.ModelSerializer):
         if hasattr(obj, 'profile') and obj.profile and obj.profile.avatar_url:
             return obj.profile.avatar_url
         return None
+
+    def get_isOnline(self, obj):
+        """
+        Compute online status from user's last_activity (within 5 minutes).
+        Respects the target user's hide_online_status setting.
+        Viewer sees their own true status.
+        """
+        try:
+            request = self.context.get('request')
+        except Exception:
+            request = None
+
+        target_user = obj
+
+        # If viewing own status, always compute true state
+        try:
+            if request and getattr(request, 'user', None) and request.user.is_authenticated and request.user == target_user:
+                if getattr(target_user, 'last_activity', None):
+                    threshold = timezone.now() - timedelta(minutes=5)
+                    return target_user.last_activity >= threshold
+                return False
+        except Exception:
+            pass
+
+        # Respect privacy settings of target user
+        try:
+            privacy = PrivacySettings.objects.filter(user=target_user).first()
+            if privacy and privacy.hide_online_status:
+                return False
+        except Exception:
+            pass
+
+        # Compute status for other viewers
+        try:
+            if getattr(target_user, 'last_activity', None):
+                threshold = timezone.now() - timedelta(minutes=5)
+                return target_user.last_activity >= threshold
+        except Exception:
+            pass
+        return False
 
 
 class MessageSerializer(serializers.ModelSerializer):
@@ -96,7 +140,7 @@ class ConversationSerializer(serializers.ModelSerializer):
             return None
         
         other_user = obj.get_other_participant(request.user)
-        return MessageParticipantSerializer(other_user).data
+        return MessageParticipantSerializer(other_user, context={'request': request}).data
     
     def get_lastMessage(self, obj):
         last_message = obj.messages.order_by('-created_at').first()
@@ -153,7 +197,7 @@ class ConversationDetailSerializer(serializers.ModelSerializer):
             return None
         
         other_user = obj.get_other_participant(request.user)
-        return MessageParticipantSerializer(other_user).data
+        return MessageParticipantSerializer(other_user, context={'request': request}).data
     
     def get_messages(self, obj):
         messages = obj.messages.all().order_by('created_at')
