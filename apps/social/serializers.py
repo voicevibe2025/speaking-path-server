@@ -27,6 +27,14 @@ class AuthorSerializer(serializers.Serializer):
 
     def get_avatarUrl(self, obj):
         request = self.context.get('request')
+        # Respect privacy: hide avatar from other viewers if enabled
+        try:
+            if not (request and request.user.is_authenticated and request.user == obj):
+                privacy = PrivacySettings.objects.filter(user=obj).first()
+                if privacy and privacy.hide_avatar:
+                    return None
+        except Exception:
+            pass
         try:
             profile = obj.profile  # type: ignore[attr-defined]
             if profile.avatar and hasattr(profile.avatar, 'url'):

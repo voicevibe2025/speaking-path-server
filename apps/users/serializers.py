@@ -693,6 +693,18 @@ class UserProfileSerializer(serializers.ModelSerializer):
     def get_avatar_url(self, obj):
         """Return URL to avatar from Supabase Storage if present, otherwise fallback to stored URL string.
         This ensures clients can always render a usable avatar URL."""
+        # Respect privacy: if the profile owner hides avatar, return None to other viewers
+        try:
+            request = self.context.get('request')
+        except Exception:
+            request = None
+        try:
+            if not (request and request.user.is_authenticated and request.user == obj.user):
+                privacy_settings = PrivacySettings.objects.filter(user=obj.user).first()
+                if privacy_settings and privacy_settings.hide_avatar:
+                    return None
+        except Exception:
+            pass
         try:
             if obj.avatar and hasattr(obj.avatar, 'url'):
                 # Supabase Storage returns the full URL directly

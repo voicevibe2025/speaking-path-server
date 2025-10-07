@@ -43,7 +43,7 @@ from .serializers import (
     JoinChallengeSerializer,
     UpdateStreakSerializer
 )
-from apps.users.models import UserFollow
+from apps.users.models import UserFollow, PrivacySettings
 
 logger = logging.getLogger(__name__)
 
@@ -616,6 +616,14 @@ class LeaderboardViewSet(viewsets.ReadOnlyModelViewSet):
         2) Legacy UserProfile.avatar_url
         Returns None if not available.
         """
+        # Respect privacy: if target user hides avatar, do not expose to other viewers
+        try:
+            if not (request and getattr(request, 'user', None) and request.user.is_authenticated and request.user == user):
+                privacy = PrivacySettings.objects.filter(user=user).first()
+                if privacy and privacy.hide_avatar:
+                    return None
+        except Exception:
+            pass
         try:
             profile = getattr(user, 'profile', None)
             if not profile:

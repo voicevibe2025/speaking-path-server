@@ -29,8 +29,23 @@ class MessageParticipantSerializer(serializers.ModelSerializer):
         return obj.username
     
     def get_avatarUrl(self, obj):
-        if hasattr(obj, 'profile') and obj.profile and obj.profile.avatar_url:
-            return obj.profile.avatar_url
+        request = self.context.get('request')
+        # Respect privacy: if the user hides avatar, don't expose to others
+        try:
+            if not (request and request.user.is_authenticated and request.user == obj):
+                privacy = PrivacySettings.objects.filter(user=obj).first()
+                if privacy and privacy.hide_avatar:
+                    return None
+        except Exception:
+            pass
+        try:
+            profile = getattr(obj, 'profile', None)
+            if profile and profile.avatar and hasattr(profile.avatar, 'url'):
+                return request.build_absolute_uri(profile.avatar.url) if request else profile.avatar.url
+            if profile and profile.avatar_url:
+                return profile.avatar_url
+        except Exception:
+            pass
         return None
 
     def get_isOnline(self, obj):
@@ -107,8 +122,23 @@ class MessageSerializer(serializers.ModelSerializer):
         return obj.sender.username
     
     def get_senderAvatar(self, obj):
-        if hasattr(obj.sender, 'profile') and obj.sender.profile and obj.sender.profile.avatar_url:
-            return obj.sender.profile.avatar_url
+        request = self.context.get('request')
+        # Respect privacy: hide sender's avatar from other viewers if enabled
+        try:
+            if not (request and request.user.is_authenticated and request.user == obj.sender):
+                privacy = PrivacySettings.objects.filter(user=obj.sender).first()
+                if privacy and privacy.hide_avatar:
+                    return None
+        except Exception:
+            pass
+        try:
+            profile = getattr(obj.sender, 'profile', None)
+            if profile and profile.avatar and hasattr(profile.avatar, 'url'):
+                return request.build_absolute_uri(profile.avatar.url) if request else profile.avatar.url
+            if profile and profile.avatar_url:
+                return profile.avatar_url
+        except Exception:
+            pass
         return None
     
     def get_isRead(self, obj):
@@ -145,7 +175,7 @@ class ConversationSerializer(serializers.ModelSerializer):
     def get_lastMessage(self, obj):
         last_message = obj.messages.order_by('-created_at').first()
         if last_message:
-            return MessageSerializer(last_message).data
+            return MessageSerializer(last_message, context=self.context).data
         return None
     
     def get_unreadCount(self, obj):
@@ -201,4 +231,4 @@ class ConversationDetailSerializer(serializers.ModelSerializer):
     
     def get_messages(self, obj):
         messages = obj.messages.all().order_by('created_at')
-        return MessageSerializer(messages, many=True).data
+        return MessageSerializer(messages, many=True, context=self.context).data
