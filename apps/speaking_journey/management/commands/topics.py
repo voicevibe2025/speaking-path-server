@@ -32,9 +32,13 @@ TOPICS = [
         "description": "Talk about your daily routine, including mornings, commute, work or school, and evening activities.",
         "material": [
             "I usually wake up around 6:30.",
+            "I brush my teeth and get dressed.",
             "I grab a quick breakfast before work.",
+            "I check my emails.",
             "I take the bus to the office every day.",
+            "I usually have lunch at noon.",
             "After work, I sometimes hang out with friends.",
+            "I go to bed around 10 PM.",
             "On weekends, I like to sleep in and spend time with my family."
         ],
         "conversation": [
