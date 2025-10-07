@@ -697,14 +697,23 @@ class UserProfileSerializer(serializers.ModelSerializer):
             if obj.avatar and hasattr(obj.avatar, 'url'):
                 # Supabase Storage returns the full URL directly
                 avatar_url = obj.avatar.url
+                # Append deterministic cache-busting parameter based on profile update time
+                try:
+                    ts = int((obj.updated_at or timezone.now()).timestamp())
+                except Exception:
+                    ts = int(timezone.now().timestamp())
                 # Ensure it's a valid URL
                 if avatar_url and ('http://' in avatar_url or 'https://' in avatar_url):
-                    return avatar_url
+                    sep = '&' if '?' in avatar_url else '?'
+                    return f"{avatar_url}{sep}t={ts}"
                 # Fallback for relative URLs (shouldn't happen with Supabase but safety first)
                 request = self.context.get('request')
                 if request is not None:
-                    return request.build_absolute_uri(avatar_url)
-                return avatar_url
+                    abs_url = request.build_absolute_uri(avatar_url)
+                    sep = '&' if '?' in abs_url else '?'
+                    return f"{abs_url}{sep}t={ts}"
+                sep = '&' if '?' in avatar_url else '?'
+                return f"{avatar_url}{sep}t={ts}"
         except Exception as e:
             # Log the error for debugging
             import logging
@@ -712,7 +721,15 @@ class UserProfileSerializer(serializers.ModelSerializer):
             logger.error(f"Error getting avatar URL for user {obj.user.id}: {e}")
         
         # Fallback to legacy avatar_url field (might be external URL)
-        return obj.avatar_url or None
+        fallback = obj.avatar_url or None
+        if not fallback:
+            return None
+        try:
+            ts = int((obj.updated_at or timezone.now()).timestamp())
+        except Exception:
+            ts = int(timezone.now().timestamp())
+        sep = '&' if '?' in fallback else '?'
+        return f"{fallback}{sep}t={ts}"
 
     def _get_relative_time(self, timestamp):
         """Convert timestamp to relative time string"""
