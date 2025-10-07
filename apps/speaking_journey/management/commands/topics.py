@@ -21,8 +21,9 @@ TOPICS = [
             {"speaker": "B", "text": "Pretty good, thanks for asking."}
         ],
         "vocabulary": [
-            "greeting", "introduction", "meet", "hello", "hi", "name", 
-            "from", "country", "city", "nice", "pleasure", "acquaintance"
+            "introduce", "introduction", "meet", "hello", "hi", "formal", "informal",
+            "greeting", "acquaintance", "colleague", "classmate", "stranger", "farewell",
+            "address", "title", "name", "country", "city", "pleasure"
         ],
         "fluency_practice_prompt": "Introduce yourself to a new classmate. Include your name, where you're from, what you do, and one hobby."
     },
@@ -33,7 +34,7 @@ TOPICS = [
             "I usually wake up around 6:30.",
             "I grab a quick breakfast before work.",
             "I take the bus to the office every day.",
-            "After work, I sometimes hang out with friends or just relax at home.",
+            "After work, I sometimes hang out with friends.",
             "On weekends, I like to sleep in and spend time with my family."
         ],
         "conversation": [
@@ -49,8 +50,10 @@ TOPICS = [
             {"speaker": "B", "text": "I relax, study, and sometimes go to Barelang."}
         ],
         "vocabulary": [
-            "routine", "wake up", "breakfast", "commute", "transportation", "bus", 
-            "work", "office", "relax", "weekend", "chores", "family", "schedule"
+            "routine", "wake up", "get dressed", "brush teeth", "shower", "breakfast", "lunch",
+            "dinner", "snack", "meal", "commute", "study", "work", "office", "relax",
+            "hobby", "leisure", "exercise", "sleep", "morning", "afternoon", "evening",
+            "night", "weekday", "weekend", "errand", "task", "habit", "schedule"
         ],
         "fluency_practice_prompt": "Describe your weekday routine from morning to evening. Mention times and how you commute."
     },
@@ -76,8 +79,12 @@ TOPICS = [
             {"speaker": "B", "text": "Oh wow! Happy early birthday then."}
         ],
         "vocabulary": [
-            "time", "clock", "hour", "minute", "day", "week", "month", 
-            "year", "birthday", "holiday", "date", "calendar", "schedule"
+            "time", "second", "minute", "hour", "day", "week", "month", "year",
+            "decade", "century", "millennium", "calendar", "date", "o'clock",
+            "half past", "quarter past", "quarter to", "AM", "PM", "noon", "midnight",
+            "morning", "afternoon", "evening", "night", "today", "tomorrow", "yesterday",
+            "holiday", "birthday", "anniversary", "event", "appointment", "schedule",
+            "duration", "period"
         ],
         "fluency_practice_prompt": "Describe your weekly schedule. Mention classes or work, and important times."
     },
@@ -103,8 +110,11 @@ TOPICS = [
             {"speaker": "B", "text": "Cool! Cooking must be relaxing after school or work."}
         ],
         "vocabulary": [
-            "hobby", "interest", "photography", "cooking", "reading", "hiking", 
-            "guitar", "movies", "free time", "relax", "weekend", "activity", "passion"
+            "hobby", "interest", "pastime", "leisure activity", "free time", "enjoy",
+            "like", "dislike", "passion", "enthusiasm", "collecting", "reading",
+            "writing", "painting", "drawing", "music", "sports", "gardening",
+            "cooking", "baking", "traveling", "photography", "gaming", "crafts",
+            "volunteer", "club", "group"
         ],
         "fluency_practice_prompt": "Talk about a hobby you love. Explain why you enjoy it and how you got started."
     },
@@ -130,8 +140,12 @@ TOPICS = [
             {"speaker": "B", "text": "Yes, we do. Please come to the cashier."}
         ],
         "vocabulary": [
-            "shopping", "price", "size", "try on", "expensive", "purchase", 
-            "credit card", "cash", "store", "market", "clothing", "accessory", "sale"
+            "shop", "store", "market", "mall", "supermarket", "boutique", "customer",
+            "salesperson", "cashier", "item", "product", "price", "cost", "discount",
+            "sale", "bargain", "receipt", "cash", "credit card", "debit card", "payment",
+            "currency", "size", "fit", "try on", "purchase", "buy", "sell", "expensive",
+            "cheap", "affordable", "return", "exchange", "refund", "clothing",
+            "accessories", "electronics", "groceries"
         ],
         "fluency_practice_prompt": "Role-play buying clothes. Ask about price, size, and payment options."
 
@@ -160,7 +174,12 @@ TOPICS = [
             {"speaker": "B", "text": "Thanks a lot. Talk to you later."},
             {"speaker": "A", "text": "No problem. Bye."}
         ],
-        "vocabulary": ["telephone", "call", "speak", "message", "number", "call back", "ring", "answer", "hang up"],
+        "vocabulary": [
+            "phone call", "mobile phone", "landline", "dial", "ring", "answer",
+            "hang up", "speaker", "receiver", "voicemail", "missed call",
+            "busy signal", "message", "take a message", "call back", "contact",
+            "reach", "speak to", "on the line", "hold on", "connection", "signal"
+        ],
         "fluency_practice_prompt": "Role-play making a phone call to a friend to make plans for the weekend."
     },
     {
@@ -183,8 +202,11 @@ TOPICS = [
             {"speaker": "B", "text": "Great, I’ll take the Mie Lendir for my friend."}
         ],
         "vocabulary": [
-            "menu", "order", "recommend", "cheeseburger", "fries", "water", 
-            "vegetarian", "bill", "waiter", "restaurant", "café", "food", "drink"
+            "restaurant", "cafe", "diner", "waiter", "waitress", "host", "hostess",
+            "menu", "order", "appetizer", "main course", "dessert", "drink", "beverage",
+            "vegetarian", "vegan", "allergy", "recommend", "special", "bill", "check",
+            "tip", "reservation", "table", "takeout", "delivery", "cuisine", "dish",
+            "ingredient"
         ],
         "fluency_practice_prompt": "Role-play ordering dinner at a restaurant. Ask for a recommendation and mention any dietary preferences."
     },
@@ -207,7 +229,12 @@ TOPICS = [
             {"speaker": "A", "text": "No, it was in my wallet. Can I use yours?"},
             {"speaker": "B", "text": "Of course, here you go."}
         ],
-        "vocabulary": ["help", "emergency", "accident", "doctor", "police", "ambulance", "lost", "stolen", "danger"],
+        "vocabulary": [
+            "help", "emergency", "accident", "doctor", "police", "ambulance",
+            "emergency services", "first aid", "injury", "illness", "lost",
+            "stolen", "danger", "safety", "urgent", "assistance", "report",
+            "witness", "victim", "rescue"
+        ],
         "fluency_practice_prompt": "Explain what you would do if you got lost in a foreign city."
     },
     {
@@ -234,7 +261,12 @@ TOPICS = [
             {"speaker": "B", "text": "Yeah, that would be smart. It might even rain later in the evening."},
             {"speaker": "A", "text": "Thanks for the heads up!"}
         ],
-        "vocabulary": ["weather", "sunny", "rainy", "cloudy", "windy", "snowy", "warm", "cold", "hot", "cool", "forecast", "temperature"],
+        "vocabulary": [
+            "weather", "sunny", "rainy", "cloudy", "windy", "snowy", "warm", "cold",
+            "hot", "cool", "forecast", "temperature", "climate", "season", "humidity",
+            "precipitation", "storm", "breeze", "gale", "blizzard", "drought", "flood",
+            "degree", "Celsius", "Fahrenheit"
+        ],
         "fluency_practice_prompt": "Talk about your favorite type of weather and why you like it."
     },
     {
@@ -258,8 +290,10 @@ TOPICS = [
             {"speaker": "B", "text": "No problem. Enjoy your time in Batam!"}
         ],
         "vocabulary": [
-            "directions", "location", "station", "distance", "straight", "turn", 
-            "left", "right", "corner", "traffic light", "block", "walking", "bus"
+            "directions", "location", "station", "distance", "straight", "turn",
+            "left", "right", "corner", "traffic light", "block", "walking", "bus",
+            "landmark", "intersection", "crosswalk", "pedestrian", "destination",
+            "route", "map", "GPS", "sign", "avenue", "street", "road", "highway"
         ],
         "fluency_practice_prompt": "Give clear directions from a train station to your favorite café."
     },
@@ -283,7 +317,12 @@ TOPICS = [
             {"speaker": "B", "text": "About 7 to 10 business days."},
             {"speaker": "A", "text": "Okay, I'll take it."}
         ],
-        "vocabulary": ["post office", "mail", "letter", "package", "stamp", "envelope", "shipping", "tracking number", "address"],
+        "vocabulary": [
+            "post office", "mail", "letter", "package", "parcel", "stamp", "envelope",
+            "shipping", "tracking number", "address", "postage", "delivery",
+            "express mail", "registered mail", "international", "domestic",
+            "customs", "form", "sender", "recipient"
+        ],
         "fluency_practice_prompt": "Explain the process of mailing a package at the post office."
     },
     {
@@ -307,7 +346,12 @@ TOPICS = [
             {"speaker": "A", "text": "Maybe some eggs if they’re not too expensive."},
             {"speaker": "B", "text": "No problem. I’ll bring them over later this evening."}
         ],
-        "vocabulary": ["errands", "grocery store", "bank", "post office", "pharmacy", "dry cleaning", "shopping list", "chores"],
+        "vocabulary": [
+            "errands", "grocery store", "bank", "post office", "pharmacy",
+            "dry cleaning", "laundry", "supermarket", "convenience store",
+            "shopping list", "appointment", "task", "to-do list", "chore",
+            "duty", "obligation"
+        ],
         "fluency_practice_prompt": "Describe the errands you usually run on a weekend."
     },
     {
@@ -331,7 +375,12 @@ TOPICS = [
             {"speaker": "A", "text": "Sure, and if we’re still confused, we can ask the teacher tomorrow."},
             {"speaker": "B", "text": "Deal. See you later!"}
         ],
-        "vocabulary": ["class", "lecture", "notes", "study", "exam", "library", "classmate", "weekend", "coffee"],
+        "vocabulary": [
+            "class", "lecture", "notes", "study", "exam", "library", "classmate",
+            "weekend", "coffee", "homework", "assignment", "project", "quiz",
+            "study group", "campus", "dorm", "professor", "instructor", "deadline",
+            "grade", "feedback"
+        ],
         "fluency_practice_prompt": "Role-play a conversation with a classmate after a difficult lecture."
     },
     {
@@ -357,7 +406,12 @@ TOPICS = [
             {"speaker": "A", "text": "Got it. Thanks a lot!"},
             {"speaker": "B", "text": "You’re welcome. Have a safe trip!"}
         ],
-        "vocabulary": ["transportation", "bus", "train", "taxi", "subway", "ticket", "fare", "schedule", "platform", "station"],
+        "vocabulary": [
+            "transportation", "bus", "train", "taxi", "subway", "car", "bicycle",
+            "motorcycle", "airplane", "ship", "ferry", "public transport",
+            "private transport", "ticket", "fare", "schedule", "platform", "station",
+            "driver", "passenger", "terminal", "airport", "port", "route", "destination"
+        ],
         "fluency_practice_prompt": "Compare the advantages and disadvantages of public transportation versus driving a car."
     },
     {
@@ -380,7 +434,11 @@ TOPICS = [
             {"speaker": "B", "text": "Cool, mine’s in November. So we’re only a year apart."},
             {"speaker": "A", "text": "Yeah, pretty much the same age."}
         ],
-        "vocabulary": ["age", "old", "young", "birthday", "born", "years old", "twenties", "thirties"],
+        "vocabulary": [
+            "age", "old", "young", "birthday", "born", "years old", "twenties",
+            "thirties", "infant", "toddler", "child", "teenager", "adult", "senior",
+            "generation", "birthdate", "milestone", "youth", "elderly"
+        ],
         "fluency_practice_prompt": "Talk about the different stages of life (e.g., childhood, adolescence, adulthood)."
     },
     {
@@ -405,7 +463,12 @@ TOPICS = [
             {"speaker": "B", "text": "Thank you. Enjoy the movie!"},
             {"speaker": "A", "text": "Thanks!"}
         ],
-        "vocabulary": ["movie", "cinema", "ticket", "seat", "showtime", "row", "comedy", "action", "drama", "popcorn"],
+        "vocabulary": [
+            "movie", "cinema", "theater", "film", "screen", "ticket", "seat",
+            "showtime", "row", "director", "actor", "actress", "genre", "plot",
+            "character", "review", "critique", "premiere", "box office", "popcorn",
+            "soda", "comedy", "action", "drama", "thriller", "horror", "romance"
+        ],
         "fluency_practice_prompt": "Describe your favorite movie and why you like it."
     },
     {
@@ -429,7 +492,11 @@ TOPICS = [
             {"speaker": "A", "text": "Probably basketball. I play almost every weekend."},
             {"speaker": "B", "text": "No wonder you’re good at it. You get a lot of practice."}
         ],
-        "vocabulary": ["good at", "skill", "talent", "ability", "strength", "knack", "expert", "gifted"],
+        "vocabulary": [
+            "good at", "skill", "talent", "ability", "strength", "knack", "expert",
+            "gifted", "expertise", "proficiency", "competence", "mastery", "aptitude",
+            "potential", "weakness", "challenge", "improve", "practice", "develop", "learn"
+        ],
         "fluency_practice_prompt": "Talk about a skill you are proud of and how you developed it."
     },
     {
@@ -452,7 +519,12 @@ TOPICS = [
             {"speaker": "B", "text": "Nice. Any favorite player?"},
             {"speaker": "A", "text": "LeBron James, for sure. He's a legend."}
         ],
-        "vocabulary": ["sport", "fan", "team", "player", "game", "match", "score", "win", "lose", "soccer", "basketball"],
+        "vocabulary": [
+            "sport", "fan", "team", "player", "game", "match", "score", "win", "lose",
+            "soccer", "basketball", "athlete", "coach", "referee", "umpire", "stadium",
+            "arena", "court", "field", "pitch", "goal", "point", "championship",
+            "tournament", "medal", "trophy"
+        ],
         "fluency_practice_prompt": "Discuss the benefits of playing sports for physical and mental health."
     },
     {
@@ -475,7 +547,11 @@ TOPICS = [
             {"speaker": "B", "text": "Row G, seats 14 and 15. Wow, these seats have a great view of the stage."},
             {"speaker": "A", "text": "Perfect. The curtain’s going up—let’s be quiet."}
         ],
-        "vocabulary": ["theater", "play", "musical", "performance", "ticket", "seat", "row", "stage", "actor", "actress", "intermission"],
+        "vocabulary": [
+            "theater", "play", "musical", "opera", "ballet", "performance", "stage",
+            "curtain", "audience", "ticket", "box office", "usher", "program", "act",
+            "scene", "dialogue", "applause", "actor", "actress", "intermission"
+        ],
         "fluency_practice_prompt": "Describe a memorable theater performance you have seen."
     },
     {
@@ -499,7 +575,12 @@ TOPICS = [
             {"speaker": "A", "text": "That sounds amazing. Don’t forget to try the seafood and the famous layer cake."},
             {"speaker": "B", "text": "For sure. I’m just really looking forward to a break from work."}
         ],
-        "vocabulary": ["vacation", "trip", "travel", "hotel", "resort", "booking", "flight", "beach", "tourist", "souvenir"],
+        "vocabulary": [
+            "vacation", "trip", "travel", "hotel", "resort", "booking", "flight",
+            "beach", "tourist", "souvenir", "holiday", "getaway", "destination",
+            "itinerary", "passport", "visa", "luggage", "suitcase", "backpack",
+            "sightseeing", "excursion", "adventure", "relaxation", "travel agency"
+        ],
         "fluency_practice_prompt": "Describe your dream vacation. Where would you go and what would you do?"
     },
     {
@@ -525,7 +606,12 @@ TOPICS = [
             {"speaker": "A", "text": "Awesome, I’ll take a look after I grab the food. Thanks for your help!"},
             {"speaker": "B", "text": "No problem. Let me know if you need anything else."}
         ],
-        "vocabulary": ["pet", "dog", "cat", "hamster", "fish", "puppy", "kitten", "food", "cage", "leash", "toy", "vet"],
+        "vocabulary": [
+            "pet", "dog", "cat", "hamster", "fish", "puppy", "kitten", "animal",
+            "breed", "cage", "aquarium", "terrarium", "food", "treat", "toy",
+            "bedding", "grooming", "veterinarian", "vet", "leash", "collar",
+            "adoption", "rescue", "shelter", "pet owner"
+        ],
         "fluency_practice_prompt": "Describe your pet or a pet you would like to have."
     },
     {
@@ -549,7 +635,12 @@ TOPICS = [
             {"speaker": "A", "text": "I get that. Personally, I prefer the new place because it’s less crowded."},
             {"speaker": "B", "text": "Fair point. I guess it depends on what you’re looking for—coffee or comfort."}
         ],
-        "vocabulary": ["opinion", "think", "agree", "disagree", "point of view", "believe", "suggest", "recommend", "idea"],
+        "vocabulary": [
+            "opinion", "think", "agree", "disagree", "point of view", "believe",
+            "suggest", "recommend", "idea", "viewpoint", "perspective", "stance",
+            "conviction", "support", "oppose", "propose", "evaluate", "analyze",
+            "critique", "feedback"
+        ],
         "fluency_practice_prompt": "Express your opinion on a current event or a popular topic."
     },
     {
@@ -573,7 +664,12 @@ TOPICS = [
             {"speaker": "A", "text": "Nice! I’m really looking forward to the food and the dancing."},
             {"speaker": "B", "text": "Same here. And of course, seeing Sarah walk down the aisle will be the highlight."}
         ],
-        "vocabulary": ["wedding", "marriage", "bride", "groom", "ceremony", "reception", "honeymoon", "engagement", "congratulations"],
+        "vocabulary": [
+            "wedding", "marriage", "bride", "groom", "ceremony", "reception",
+            "honeymoon", "engagement", "congratulations", "proposal", "fiancé",
+            "fiancée", "vows", "ring", "bouquet", "anniversary", "celebration",
+            "guest", "invitation", "toast"
+        ],
         "fluency_practice_prompt": "Talk about your ideal wedding. What would it be like?"
     },
     {
@@ -597,7 +693,12 @@ TOPICS = [
             {"speaker": "A", "text": "True. Thanks for the advice—I’ll give it a try."},
             {"speaker": "B", "text": "No problem. Don’t worry, you’ll get better with practice."}
         ],
-        "vocabulary": ["advice", "suggest", "recommend", "should", "ought to", "if I were you", "problem", "solution", "help"],
+        "vocabulary": [
+            "advice", "suggest", "recommend", "should", "ought to", "if I were you",
+            "problem", "solution", "help", "guidance", "counsel", "recommendation",
+            "suggestion", "dilemma", "support", "encourage", "warn", "caution",
+            "insight", "perspective"
+        ],
         "fluency_practice_prompt": "Give advice to someone who wants to learn a new language."
     }
 ]

@@ -22,6 +22,8 @@ from .views import (
     list_blocked_users,
     create_report,
     list_my_reports,
+    admin_list_reports,
+    admin_resolve_report,
 )
 
 app_name = 'users'
@@ -63,4 +65,7 @@ urlpatterns = [
     # Reporting
     path('reports/', create_report, name='create_report'),
     path('reports/my/', list_my_reports, name='my_reports'),
+    # Staff moderation
+    path('reports/admin/', admin_list_reports, name='admin_list_reports'),
+    path('reports/admin/<int:report_id>/resolve/', admin_resolve_report, name='admin_resolve_report'),
 ]

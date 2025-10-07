@@ -6,11 +6,12 @@ from django.shortcuts import get_object_or_404
 from django.db.models import Sum, Count, Q
 from rest_framework import generics, status
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.exceptions import PermissionDenied
 from apps.speaking_journey.models import TopicProgress
+from django.utils import timezone
 
 from apps.authentication.models import User
 from .models import UserProfile, LearningPreference, UserAchievement, UserFollow, UserBlock, Report, PrivacySettings
@@ -21,7 +22,7 @@ from .serializers import (
     UserStatsSerializer,
     PrivacySettingsSerializer,
     ReportSerializer,
-    BlockedUserSerializer
+    BlockedUserSerializer,
 )
 
 
@@ -232,6 +233,114 @@ def search_users(request):
         return Response(serializer.data)
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated, IsAdminUser])
+def admin_list_reports(request):
+    """
+    Staff-only: list reports with optional filters (status, type, reporter, reported_user).
+    Query params: status, report_type, reporter_id, reported_user_id
+    """
+    try:
+        qs = Report.objects.all().order_by('-created_at')
+        status_param = request.query_params.get('status')
+        if status_param:
+            qs = qs.filter(status=status_param)
+        rtype = request.query_params.get('report_type')
+        if rtype:
+            qs = qs.filter(report_type=rtype)
+        reporter_id = request.query_params.get('reporter_id')
+        if reporter_id:
+            qs = qs.filter(reporter_id=reporter_id)
+        reported_user_id = request.query_params.get('reported_user_id')
+        if reported_user_id:
+            qs = qs.filter(reported_user_id=reported_user_id)
+        serializer = ReportSerializer(qs, many=True)
+        return Response(serializer.data)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated, IsAdminUser])
+def admin_resolve_report(request, report_id: int):
+    """
+    Staff-only: resolve/dismiss a report and optionally apply an action.
+    Body: {
+      status: 'resolved' | 'dismissed' | 'reviewing',
+      moderator_notes: str,
+      action: 'none' | 'delete_post' | 'delete_comment' | 'deactivate_user'
+    }
+    """
+    from apps.social.models import Notification, Post, PostComment
+    report = get_object_or_404(Report, id=report_id)
+
+    status_new = request.data.get('status')
+    if status_new not in (Report.STATUS_PENDING, Report.STATUS_REVIEWING, Report.STATUS_RESOLVED, Report.STATUS_DISMISSED):
+        return Response({'error': 'Invalid status value'}, status=status.HTTP_400_BAD_REQUEST)
+
+    notes = request.data.get('moderator_notes', '')
+    action = request.data.get('action', 'none')
+    action_result = None
+
+    # Apply action
+    try:
+        if action == 'delete_post' and report.report_type == Report.REPORT_TYPE_POST and report.reported_post_id:
+            Post.objects.filter(id=report.reported_post_id).delete()
+            action_result = 'post_deleted'
+        elif action == 'delete_comment' and report.report_type == Report.REPORT_TYPE_COMMENT and report.reported_comment_id:
+            PostComment.objects.filter(id=report.reported_comment_id).delete()
+            action_result = 'comment_deleted'
+        elif action == 'deactivate_user' and report.report_type == Report.REPORT_TYPE_USER and report.reported_user:
+            report.reported_user.is_active = False
+            report.reported_user.save(update_fields=['is_active'])
+            action_result = 'user_deactivated'
+        elif action == 'none':
+            action_result = 'no_action'
+        else:
+            # Unsupported action-report combination
+            action_result = 'ignored'
+    except Exception as e:
+        return Response({'error': f'Failed to apply action: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    # Update report fields
+    report.status = status_new
+    report.moderator_notes = notes
+    report.reviewed_by = request.user
+    report.reviewed_at = timezone.now()
+    report.save()
+
+    # Notify reporter
+    try:
+        Notification.objects.create(
+            recipient=report.reporter,
+            actor=request.user,
+            type=Notification.TYPE_REPORT_RESOLVED,
+            post=None,
+            comment=None,
+        )
+    except Exception:
+        pass
+
+    # Notify reported user if any action taken
+    try:
+        if action_result in ('post_deleted', 'comment_deleted', 'user_deactivated') and report.reported_user:
+            Notification.objects.create(
+                recipient=report.reported_user,
+                actor=request.user,
+                type=Notification.TYPE_MODERATION_ACTION,
+                post=None,
+                comment=None,
+            )
+    except Exception:
+        pass
+
+    return Response({
+        'success': True,
+        'action_result': action_result,
+        'report': ReportSerializer(report).data,
+    })
 
 
 @api_view(['POST', 'DELETE'])

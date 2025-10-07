@@ -85,6 +85,8 @@ class Notification(models.Model):
     TYPE_COMMENT_LIKE = 'comment_like'
     TYPE_COMMENT_REPLY = 'comment_reply'
     TYPE_USER_FOLLOW = 'user_follow'
+    TYPE_REPORT_RESOLVED = 'report_resolved'
+    TYPE_MODERATION_ACTION = 'moderation_action'
 
     NOTIF_TYPES = [
         (TYPE_POST_LIKE, 'Post liked'),
@@ -92,6 +94,8 @@ class Notification(models.Model):
         (TYPE_COMMENT_LIKE, 'Comment liked'),
         (TYPE_COMMENT_REPLY, 'New reply to your comment'),
         (TYPE_USER_FOLLOW, 'New follower'),
+        (TYPE_REPORT_RESOLVED, 'Report resolved'),
+        (TYPE_MODERATION_ACTION, 'Moderation action applied'),
     ]
 
     recipient = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notifications')

@@ -7,6 +7,7 @@ from django.http import JsonResponse
 from django.conf import settings
 from django.conf.urls.static import static
 from django.views.static import serve as static_serve
+from core.views import system_status_view
 from django.db import connection
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
 
@@ -39,6 +40,7 @@ urlpatterns = [
     path('api/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
 
     # API v1 endpoints
+    path(f'{API_V1_PREFIX}system/status/', system_status_view),
     path(f'{API_V1_PREFIX}auth/', include('apps.authentication.urls')),
     path(f'{API_V1_PREFIX}users/', include('apps.users.urls')),
     path(f'{API_V1_PREFIX}learning/', include('apps.learning_paths.urls')),

@@ -66,6 +66,7 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'corsheaders.middleware.CorsMiddleware',
+    'core.middleware.MaintenanceModeMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -106,6 +107,14 @@ CHANNEL_LAYERS = {
         },
     },
 }
+
+# Maintenance Mode
+MAINTENANCE_MODE = env.bool('MAINTENANCE_MODE', default=False)
+MAINTENANCE_MESSAGE = env(
+    'MAINTENANCE_MESSAGE',
+    default='We are performing scheduled maintenance. Please try again later.'
+)
+MAINTENANCE_RETRY_AFTER = env.int('MAINTENANCE_RETRY_AFTER', default=0)  # seconds; 0 disables header
 
 # Database
 DATABASES = {
