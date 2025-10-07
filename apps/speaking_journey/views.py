@@ -2278,11 +2278,8 @@ class CompleteTopicView(APIView):
         else:
             message = 'Topic already completed'
         progress.save()
-        try:
-            if not was_completed and progress.completed:
-                _refresh_coach_cache_for_user(request.user)
-        except Exception:
-            pass
+        # Note: Coach cache refresh removed to avoid timeout on slow Gemini calls.
+        # Coach analysis has its own endpoint (CoachAnalysisView) with proper caching.
 
         # Determine next topic to unlock
         next_topic = (
