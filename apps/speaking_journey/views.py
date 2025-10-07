@@ -939,12 +939,8 @@ class CompleteListeningPracticeView(APIView):
             tp.completed = True
             tp.completed_at = timezone.now()
         tp.save()
-        # If the topic has just become completed, refresh AI Coach immediately
-        try:
-            if not was_completed and tp.completed:
-                _refresh_coach_cache_for_user(request.user)
-        except Exception:
-            pass
+        # Note: Coach cache refresh removed to avoid timeout on slow Gemini calls.
+        # Coach analysis has its own endpoint (CoachAnalysisView) with proper caching.
 
         session.completed = True
         session.save(update_fields=['total_score', 'completed', 'updated_at'])
@@ -2690,11 +2686,8 @@ class SubmitFluencyPromptView(APIView):
             tp.completed = True
             tp.completed_at = timezone.now()
         tp.save()
-        try:
-            if not was_completed and tp.completed:
-                _refresh_coach_cache_for_user(request.user)
-        except Exception:
-            pass
+        # Note: Coach cache refresh removed to avoid timeout on slow Gemini calls.
+        # Coach analysis has its own endpoint (CoachAnalysisView) with proper caching.
 
         # For single prompt, next is always None (no more prompts after the first)
         new_next = None
@@ -3101,11 +3094,8 @@ class CompleteVocabularyPracticeView(APIView):
             tp.completed = True
             tp.completed_at = timezone.now()
         tp.save()
-        try:
-            if not was_completed and tp.completed:
-                _refresh_coach_cache_for_user(request.user)
-        except Exception:
-            pass
+        # Note: Coach cache refresh removed to avoid timeout on slow Gemini calls.
+        # Coach analysis has its own endpoint (CoachAnalysisView) with proper caching.
 
         # Award +20 XP for completion of this practice (Option A)
         xp_awarded += _award_xp(
@@ -3981,6 +3971,13 @@ def _call_gemini_coach(user) -> dict:
 
 
 class CoachAnalysisView(APIView):
+    """AI Coach analysis endpoint with 12-hour cache and graceful degradation.
+    
+    - Always serves cached data if available (even if expired) to avoid timeouts
+    - Only computes fresh analysis if no cache exists (first-time users)
+    - Cache TTL is 12 hours to align with 6am/6pm refresh pattern
+    - Use POST /coach/analysis/refresh for manual refresh
+    """
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
@@ -3988,25 +3985,39 @@ class CoachAnalysisView(APIView):
         key = str(user.id)
         now = timezone.now()
         cached = _COACH_CACHE.get(key)
-        if cached:
+        
+        # Always serve cached data if it exists (even if expired) to prevent timeout
+        if cached and cached.get('data'):
             try:
-                if cached.get('expires_at') and cached['expires_at'] > now:
-                    ser = CoachAnalysisSerializer(cached['data'])
-                    return Response(ser.data, status=status.HTTP_200_OK)
+                ser = CoachAnalysisSerializer(cached['data'])
+                is_stale = cached.get('expires_at') and cached['expires_at'] <= now
+                response_data = ser.data.copy() if hasattr(ser.data, 'copy') else dict(ser.data)
+                if is_stale:
+                    response_data['_cache_stale'] = True  # Optional metadata for client
+                return Response(response_data, status=status.HTTP_200_OK)
             except Exception:
                 pass
-        # Miss or expired: compute with a short default TTL (~15 minutes)
+        
+        # Only compute if no cache exists (first-time user)
+        # This should rarely happen after initial use
         data = _call_gemini_coach(user)
-        ttl_minutes = min(int((data.get('cacheForHours', 12) or 12) * 60), 15)
+        # 12-hour TTL (720 minutes) aligns with 6am/6pm refresh windows
+        ttl_hours = 12
         _COACH_CACHE[key] = {
             'data': data,
-            'expires_at': now + timedelta(minutes=max(5, ttl_minutes))
+            'expires_at': now + timedelta(hours=ttl_hours)
         }
         ser = CoachAnalysisSerializer(data)
         return Response(ser.data, status=status.HTTP_200_OK)
 
 
 class CoachAnalysisRefreshView(APIView):
+    """Manual refresh endpoint for AI Coach analysis.
+    
+    This endpoint performs a synchronous Gemini call and may take 10-30 seconds.
+    Only call this when the user explicitly requests a refresh.
+    For scheduled refreshes (6am/6pm), implement a Celery task or cron job.
+    """
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
@@ -4014,13 +4025,11 @@ class CoachAnalysisRefreshView(APIView):
         key = str(user.id)
         data = _call_gemini_coach(user)
         now = timezone.now()
-        ttl_minutes = min(int((data.get('cacheForHours', 12) or 12) * 60), 15)
+        # 12-hour cache TTL
+        ttl_hours = 12
         _COACH_CACHE[key] = {
             'data': data,
-            'expires_at': now + timedelta(minutes=max(5, ttl_minutes))
+            'expires_at': now + timedelta(hours=ttl_hours)
         }
         ser = CoachAnalysisSerializer(data)
         return Response(ser.data, status=status.HTTP_200_OK)
-
-
-
