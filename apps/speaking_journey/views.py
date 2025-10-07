@@ -3998,9 +3998,10 @@ class CoachAnalysisView(APIView):
             except Exception:
                 pass
         
-        # Only compute if no cache exists (first-time user)
-        # This should rarely happen after initial use
-        data = _call_gemini_coach(user)
+        # Cache miss (first-time user or server restart): return heuristic response immediately
+        # NEVER call Gemini synchronously from GET endpoint to avoid timeout
+        # Use POST /coach/analysis/refresh for AI-powered analysis
+        data = _heuristic_coach(user)
         # 12-hour TTL (720 minutes) aligns with 6am/6pm refresh windows
         ttl_hours = 12
         _COACH_CACHE[key] = {
