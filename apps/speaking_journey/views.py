@@ -2466,7 +2466,7 @@ class SubmitFluencyRecordingView(APIView):
         if not api_key:
             # Fallback to simple scoring
             logger.warning(f"🚨 GEMINI FALLBACK: No API key available, using simple scoring")
-            return 75, "Basic evaluation completed.", ["Keep practicing!"]
+            return 80, "Basic evaluation completed.", ["Keep practicing!"]
         
         genai.configure(api_key=api_key)
         
@@ -2481,7 +2481,7 @@ class SubmitFluencyRecordingView(APIView):
         pause_indicators = transcription.count('...') + transcription.count('um') + transcription.count('uh')
         stutter_indicators = len([w for w in transcription.split() if '-' in w or w.count(w[0] if w else '') > 2])
         
-        prompt_text = f"""You are an English fluency evaluation AI. Analyze this speaking performance and provide a comprehensive score (0-100).
+        prompt_text = f"""You are an encouraging English fluency coach AI. Analyze this speaking performance and provide a supportive score (0-100). Be generous and focus on what the user did well.
 
 FLUENCY PROMPT: "{prompt}"
 
@@ -2495,10 +2495,12 @@ PERFORMANCE METRICS:
 - Potential Stutters: {stutter_indicators}
 - Timing Score: {timing_score}/25 (based on how close to {target_duration}s target)
 
-EVALUATION CRITERIA:
-1. RELEVANCE (0-35 points): How well does the response address the prompt?
-2. FLUENCY (0-40 points): Natural flow, minimal pauses, appropriate pace, clear pronunciation
-3. TIMING (0-25 points): Optimal duration close to {target_duration} seconds
+EVALUATION CRITERIA (be lenient and encouraging):
+1. RELEVANCE (0-35 points): Award points generously if the response relates to the prompt in any way. Even partial relevance deserves 25+ points.
+2. FLUENCY (0-40 points): Focus on effort and attempt. Natural attempts at speaking deserve 30+ points. Only severe issues should score below 25.
+3. TIMING (0-25 points): Optimal duration close to {target_duration} seconds. Any reasonable attempt (10+ seconds) deserves at least 15 points.
+
+IMPORTANT: Your goal is to encourage learners. Most genuine attempts should score 75-85. Only obviously poor attempts should score below 70.
 
 Provide your response in this JSON format:
 {{
@@ -2506,11 +2508,11 @@ Provide your response in this JSON format:
   "fluency_score": <0-40>, 
   "timing_score": <0-25>,
   "total_score": <0-100>,
-  "feedback": "<brief overall feedback>",
-  "suggestions": ["<suggestion 1>", "<suggestion 2>", "<suggestion 3>"]
+  "feedback": "<encouraging, positive feedback highlighting strengths>",
+  "suggestions": ["<gentle suggestion 1>", "<gentle suggestion 2>", "<gentle suggestion 3>"]
 }}
 
-Focus on constructive, specific feedback that helps the user improve."""
+Be encouraging and supportive to help build the user's confidence!"""
 
         try:
             logger.info(f"🤖 GEMINI EVALUATION: Starting evaluation for {word_count} words, {recording_duration:.1f}s duration")
@@ -2582,22 +2584,34 @@ Focus on constructive, specific feedback that helps the user improve."""
                 response_text = response_text.split('```')[1].strip()
             
             result = json.loads(response_text)
-            score = int(result.get('total_score', 75))
-            logger.info(f"✅ GEMINI SUCCESS: Score {score}, Relevance: {result.get('relevance_score')}, Fluency: {result.get('fluency_score')}, Timing: {result.get('timing_score')}")
+            raw_score = int(result.get('total_score', 75))
+            
+            # Apply a gentle boost to make scoring more achievable (10-15% boost)
+            # This helps users feel more encouraged and motivated
+            boost_percentage = 0.12  # 12% boost
+            boosted_score = min(100, int(raw_score * (1 + boost_percentage)))
+            
+            # Ensure minimum score of 65 for genuine attempts (word_count > 5)
+            if word_count > 5 and boosted_score < 65:
+                boosted_score = 65
+            
+            logger.info(f"✅ GEMINI SUCCESS: Raw score {raw_score} -> Boosted score {boosted_score}, Relevance: {result.get('relevance_score')}, Fluency: {result.get('fluency_score')}, Timing: {result.get('timing_score')}")
             
             return (
-                score,
+                boosted_score,
                 result.get('feedback', 'Good effort! Keep practicing.'),
                 result.get('suggestions', ['Keep practicing regularly', 'Focus on speaking clearly', 'Try to speak for the full 30 seconds'])
             )
             
         except Exception as e:
             logger.warning(f"🚨 GEMINI FALLBACK: Evaluation failed: {e}")
-            # Fallback scoring
-            base_score = 60
+            # Fallback scoring - more generous to encourage users
+            base_score = 70  # Increased from 60
             if word_count > 5:  # Basic relevance check
-                base_score += 20
-            base_score += min(timing_score, 20)  # Add timing bonus
+                base_score += 15
+            if word_count > 20:  # Extra bonus for longer responses
+                base_score += 5
+            base_score += min(timing_score, 15)  # Add timing bonus
             fallback_score = min(base_score, 100)
             logger.info(f"⚠️ FALLBACK SCORE: {fallback_score} (base={base_score}, words={word_count}, timing={timing_score})")
             
