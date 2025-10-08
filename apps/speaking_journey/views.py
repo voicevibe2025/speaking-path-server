@@ -1970,6 +1970,23 @@ class SpeakingTopicsView(APIView):
                     pass
             vocabulary_score = int(tp.vocabulary_total_score or 0)
 
+            # Grammar total score (optional mode). Prefer persisted field if present; otherwise
+            # fall back to latest completed GrammarPracticeSession to avoid schema dependency during rollout.
+            try:
+                grammar_score = int(getattr(tp, 'grammar_total_score', 0) or 0)
+                if grammar_score <= 0:
+                    from .models import GrammarPracticeSession
+                    latest_gram = (
+                        GrammarPracticeSession.objects
+                        .filter(user=request.user, topic=t, completed=True)
+                        .order_by('-created_at')
+                        .first()
+                    )
+                    if latest_gram:
+                        grammar_score = int(latest_gram.total_score or 0)
+            except Exception:
+                grammar_score = int(getattr(tp, 'grammar_total_score', 0) or 0)
+
             # Compute per-practice maxima (normalized 0â€“100)
             pron_max = 100
             flu_max = 100
@@ -1997,13 +2014,13 @@ class SpeakingTopicsView(APIView):
             combined_threshold_score = int(math.ceil(0.75 * total_max)) if total_max > 0 else 0
 
             meets_requirement = bool(pron_met and flu_met and vocab_met)
-
             practice_scores_data = {
                 'pronunciation': pronunciation_score,
                 'fluency': fluency_total_score,
                 'vocabulary': vocabulary_score,
-                # Listening practice (optional; not part of unlock criteria yet)
+                # Listening and Grammar practice (optional; not part of unlock criteria)
                 'listening': int(getattr(tp, 'listening_total_score', 0) or 0),
+                'grammar': grammar_score,
                 # Keep average as a normalized combined percent for clearer UI
                 'average': combined_percent,
                 'meetsRequirement': meets_requirement,
@@ -2012,10 +2029,12 @@ class SpeakingTopicsView(APIView):
                 'maxFluency': flu_max,
                 'maxVocabulary': vocab_max,
                 'maxListening': 100,
+                'maxGrammar': 100,
                 'pronunciationMet': pron_met,
                 'fluencyMet': flu_met,
                 'vocabularyMet': vocab_met,
                 'listeningMet': False,
+                'grammarMet': False,
                 'totalScore': total_score,
                 'totalMaxScore': total_max,
                 'combinedThresholdScore': combined_threshold_score,

@@ -58,6 +58,8 @@ class TopicProgress(models.Model):
     vocabulary_total_score = models.IntegerField(default=0)
     # Listening total score across generated listening quiz sessions (latest completed, normalized 0-100)
     listening_total_score = models.IntegerField(default=0)
+    # Grammar total score across generated grammar quiz sessions (latest completed, normalized 0-100)
+    grammar_total_score = models.IntegerField(default=0)
     # Per-prompt scores recorded in order; length up to number of prompts (typically 3)
     fluency_prompt_scores = models.JSONField(default=list, blank=True)
     # Conversation practice (bonus mode) aggregate score and completion flag
