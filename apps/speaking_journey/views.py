@@ -1255,7 +1255,7 @@ def _generate_grammar_questions(topic: Topic, n: int) -> list[dict]:
     # Build context-aware prompt
     topic_title = topic.title or 'General English'
     topic_desc = topic.description or ''
-    conversation_examples = [turn.get('text', '') for turn in (topic.conversation or []) if isinstance(turn, dict)]
+    conversation_examples = [turn.get('text', '') for turn in (topic.conversation_example or []) if isinstance(turn, dict)]
     conversation_text = ' '.join(conversation_examples[:3]) if conversation_examples else ''
     
     prompt = f"""You are an expert English grammar tutor creating challenging multiple-choice fill-in-the-blank questions.
