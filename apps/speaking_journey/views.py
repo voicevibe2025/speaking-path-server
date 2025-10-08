@@ -934,7 +934,9 @@ class CompleteListeningPracticeView(APIView):
         was_completed = bool(tp.completed)
         tp.listening_total_score = int(session.total_score or 0)
         tp.listening_completed = True
-        # Do not change unlocking rules here (listening not required for unlock yet)
+        
+        # Listening is an optional bonus practice that doesn't block topic unlocking
+        # Mark topic completed if core modes (pronunciation, fluency, vocabulary) are done
         if not tp.completed and tp.all_modes_completed:
             tp.completed = True
             tp.completed_at = timezone.now()
@@ -956,6 +958,235 @@ class CompleteListeningPracticeView(APIView):
         }
         out = CompleteListeningPracticeResponseSerializer(payload)
         return Response(out.data, status=status.HTTP_200_OK)
+
+
+class StartGrammarPracticeView(APIView):
+    """Start a grammar practice session for a topic.
+    
+    Generates ~8 challenging fill-in-the-blank questions via Gemini AI.
+    Response: { sessionId, totalQuestions, questions: [{id, sentence, options}] }
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def post(self, request, topic_id):
+        from .models import GrammarPracticeSession
+        
+        topic = get_object_or_404(Topic, id=topic_id, is_active=True)
+        
+        # Generate 8 questions (can adjust based on topic complexity)
+        q_count = 8
+        questions = _generate_grammar_questions(topic, q_count)
+        
+        if not questions:
+            return Response({'detail': 'Could not generate grammar questions'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        session = GrammarPracticeSession.objects.create(
+            user=request.user,
+            topic=topic,
+            questions=questions,
+            total_questions=len(questions),
+            current_index=0,
+            correct_count=0,
+            total_score=0,
+            completed=False,
+        )
+        
+        payload = {
+            'sessionId': str(session.session_id),
+            'totalQuestions': session.total_questions,
+            'questions': [
+                {
+                    'id': q.get('id'),
+                    'sentence': q.get('sentence') or '',
+                    'options': q.get('options') or [],
+                }
+                for q in session.questions
+            ],
+        }
+        from .serializers import StartGrammarPracticeResponseSerializer
+        out = StartGrammarPracticeResponseSerializer(payload)
+        return Response(out.data, status=status.HTTP_200_OK)
+
+
+class SubmitGrammarAnswerView(APIView):
+    """Submit an answer for a grammar question.
+    
+    Request: { sessionId, questionId, selected }
+    Response: { correct, xpAwarded, nextIndex, completed, totalScore }
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def post(self, request, topic_id):
+        from .models import GrammarPracticeSession
+        from .serializers import SubmitGrammarAnswerRequestSerializer, SubmitGrammarAnswerResponseSerializer
+        
+        topic = get_object_or_404(Topic, id=topic_id, is_active=True)
+        ser = SubmitGrammarAnswerRequestSerializer(data=request.data)
+        if not ser.is_valid():
+            return Response(ser.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        data = ser.validated_data
+        session_id = data.get('sessionId')
+        question_id = data.get('questionId')
+        selected = (data.get('selected') or '').strip()
+        
+        session = get_object_or_404(GrammarPracticeSession, session_id=session_id, user=request.user, topic=topic)
+        
+        if session.completed:
+            next_idx = None
+            return Response({
+                'correct': False,
+                'xpAwarded': 0,
+                'nextIndex': next_idx,
+                'completed': True,
+                'totalScore': session.total_score
+            }, status=status.HTTP_200_OK)
+        
+        # Find question
+        questions = list(session.questions or [])
+        idx = next((i for i, q in enumerate(questions) if str(q.get('id')) == str(question_id)), None)
+        
+        if idx is None:
+            return Response({'detail': 'Invalid questionId'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        q = questions[idx]
+        
+        if q.get('answered'):
+            # Idempotent: already answered
+            next_index = None
+            for j, item in enumerate(questions):
+                if not item.get('answered'):
+                    next_index = j
+                    break
+            return Response({
+                'correct': bool(q.get('correct')),
+                'xpAwarded': 0,
+                'nextIndex': next_index,
+                'completed': next_index is None,
+                'totalScore': session.total_score
+            }, status=status.HTTP_200_OK)
+        
+        correct_answer = q.get('answer')
+        is_correct = (selected == correct_answer)
+        
+        # Update question state
+        q['answered'] = True
+        q['correct'] = bool(is_correct)
+        questions[idx] = q
+        
+        xp_awarded = 0
+        if is_correct:
+            session.correct_count = int(session.correct_count or 0) + 1
+            # Award +5 XP for correct answer
+            xp_awarded = _award_xp(
+                user=request.user,
+                amount=5,
+                source='grammar',
+                context={'topicId': str(topic.id), 'questionId': str(question_id), 'type': 'answer'}
+            )
+        
+        # Update session
+        session.questions = questions
+        
+        # Move to next unanswered question index
+        next_index = None
+        for j, item in enumerate(questions):
+            if not item.get('answered'):
+                next_index = j
+                break
+        
+        session.current_index = next_index if next_index is not None else len(questions)
+        session.completed = next_index is None
+        
+        # Recompute total score as percentage (0–100)
+        try:
+            total = int(session.total_questions or 0)
+            corr = int(session.correct_count or 0)
+            session.total_score = int(round((corr / total) * 100.0)) if total > 0 else 0
+        except Exception:
+            pass
+        
+        session.save(update_fields=['questions', 'correct_count', 'total_score', 'current_index', 'completed', 'updated_at'])
+        
+        resp = {
+            'correct': is_correct,
+            'xpAwarded': xp_awarded,
+            'nextIndex': next_index,
+            'completed': session.completed,
+            'totalScore': int(session.total_score or 0),
+        }
+        out = SubmitGrammarAnswerResponseSerializer(resp)
+        return Response(out.data, status=status.HTTP_200_OK)
+
+
+class CompleteGrammarPracticeView(APIView):
+    """Complete grammar session, persist progress and award completion XP.
+    
+    Request: { sessionId }
+    Response: totals and XP, plus whether the topic is now completed.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def post(self, request, topic_id):
+        from .models import GrammarPracticeSession
+        from .serializers import CompleteGrammarPracticeRequestSerializer, CompleteGrammarPracticeResponseSerializer
+        
+        topic = get_object_or_404(Topic, id=topic_id, is_active=True)
+        ser = CompleteGrammarPracticeRequestSerializer(data=request.data)
+        if not ser.is_valid():
+            return Response(ser.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        session_id = ser.validated_data.get('sessionId')
+        session = get_object_or_404(GrammarPracticeSession, session_id=session_id, user=request.user, topic=topic)
+        
+        # Check if all questions answered
+        all_answered = all(bool(q.get('answered')) for q in (session.questions or [])) if session.questions else True
+        
+        xp_awarded = 0
+        
+        # Persist to TopicProgress
+        tp, _ = TopicProgress.objects.get_or_create(user=request.user, topic=topic)
+        tp.grammar_total_score = int(session.total_score or 0)
+        tp.grammar_completed = True
+        
+        # Grammar is an optional bonus practice that doesn't block topic unlocking
+        # Mark topic completed if core modes (pronunciation, fluency, vocabulary) are done
+        was_completed = bool(tp.completed)
+        if not tp.completed and tp.all_modes_completed:
+            tp.completed = True
+            tp.completed_at = timezone.now()
+        tp.save()
+        
+        # Award +20 XP for completion
+        xp_awarded += _award_xp(
+            user=request.user,
+            amount=20,
+            source='grammar',
+            context={'topicId': str(topic.id), 'type': 'complete', 'allAnswered': all_answered}
+        )
+        
+        # If topic became completed, award mastery once
+        try:
+            if tp.completed and not was_completed:
+                xp_awarded += _award_topic_mastery_once(request.user, topic)
+        except Exception:
+            pass
+        
+        session.completed = True
+        session.save(update_fields=['completed', 'updated_at'])
+        
+        payload = {
+            'success': True,
+            'totalQuestions': int(session.total_questions or 0),
+            'correctCount': int(session.correct_count or 0),
+            'totalScore': int(session.total_score or 0),
+            'xpAwarded': xp_awarded,
+            'grammarTotalScore': int(tp.grammar_total_score or 0),
+            'topicCompleted': bool(tp.completed),
+        }
+        out = CompleteGrammarPracticeResponseSerializer(payload)
+        return Response(out.data, status=status.HTTP_200_OK)
+
 
 def _sample_vocabulary_questions(topic: Topic, n: int) -> list[dict]:
     """Build n questions from topic.vocabulary with AI definitions and 3 distractors each.
@@ -998,6 +1229,197 @@ def _sample_vocabulary_questions(topic: Topic, n: int) -> list[dict]:
             'correct': None,
         }
         qs.append(q)
+    return qs
+
+
+def _generate_grammar_questions(topic: Topic, n: int) -> list[dict]:
+    """Generate n challenging grammar fill-in-the-blank questions using Gemini AI.
+    
+    Questions are based on the topic context but do NOT use actual conversation examples.
+    Each question has a sentence with a blank (____) and 4 options, one correct.
+    Returns a list of dict questions with id, sentence, options, answer, answered, correct.
+    """
+    import random
+    
+    api_key = (
+        getattr(settings, 'GEMINI_API_KEY', '') or 
+        os.environ.get('GEMINI_API_KEY', '') or 
+        os.environ.get('GOOGLE_API_KEY', '')
+    )
+    
+    if not api_key:
+        # Fallback: generate simple dummy questions
+        logger.warning('No Gemini API key; returning fallback grammar questions')
+        return _fallback_grammar_questions(topic, n)
+    
+    # Build context-aware prompt
+    topic_title = topic.title or 'General English'
+    topic_desc = topic.description or ''
+    conversation_examples = [turn.get('text', '') for turn in (topic.conversation or []) if isinstance(turn, dict)]
+    conversation_text = ' '.join(conversation_examples[:3]) if conversation_examples else ''
+    
+    prompt = f"""You are an expert English grammar tutor creating challenging multiple-choice fill-in-the-blank questions.
+
+Topic: {topic_title}
+Description: {topic_desc}
+
+Generate {n} grammar questions related to this topic context. Each question should:
+1. Test a specific grammar point (verb tenses, prepositions, articles, conditionals, modals, etc.)
+2. Be challenging and slightly tricky to make users think carefully
+3. NOT use any sentences from the actual conversation examples
+4. Have exactly 4 options: one correct answer and 3 plausible distractors
+5. Use realistic, natural English sentences
+
+IMPORTANT: Do NOT copy or closely paraphrase these conversation examples:
+{conversation_text}
+
+Format your response as valid JSON array ONLY (no markdown, no code blocks):
+[
+  {{
+    "sentence": "I ____ to Paris three times last year.",
+    "options": ["go", "went", "have gone", "had gone"],
+    "answer": "went"
+  }}
+]
+
+Generate {n} questions now:"""
+    
+    candidates = [
+        'gemini-2.5-flash',
+        'gemini-2.5-pro',
+        'gemini-1.5-flash',
+        'gemini-1.5-pro',
+    ]
+    
+    try:
+        genai.configure(api_key=api_key)
+    except Exception as e:
+        logger.error(f'Gemini configure failed: {e}')
+        return _fallback_grammar_questions(topic, n)
+    
+    for model_name in candidates:
+        try:
+            model = genai.GenerativeModel(model_name)
+            resp = model.generate_content(prompt)
+            txt = getattr(resp, 'text', None)
+            
+            if txt:
+                # Clean markdown code blocks if present
+                txt = txt.strip()
+                if txt.startswith('```'):
+                    lines = txt.split('\n')
+                    txt = '\n'.join(lines[1:-1]) if len(lines) > 2 else txt
+                txt = txt.strip()
+                
+                # Parse JSON
+                import json
+                questions_data = json.loads(txt)
+                
+                if not isinstance(questions_data, list):
+                    continue
+                
+                # Build structured questions
+                qs = []
+                for q_data in questions_data[:n]:
+                    if not isinstance(q_data, dict):
+                        continue
+                    
+                    sentence = q_data.get('sentence', '').strip()
+                    options = q_data.get('options', [])
+                    answer = q_data.get('answer', '').strip()
+                    
+                    if not sentence or not options or not answer:
+                        continue
+                    
+                    if '____' not in sentence and '__' not in sentence:
+                        # Try to insert blank at answer position if format is wrong
+                        if answer in sentence:
+                            sentence = sentence.replace(answer, '____', 1)
+                        else:
+                            continue
+                    
+                    # Normalize blank to ____
+                    sentence = sentence.replace('__', '____')
+                    
+                    # Ensure 4 options
+                    if len(options) < 4:
+                        continue
+                    options = options[:4]
+                    
+                    # Shuffle options
+                    random.shuffle(options)
+                    
+                    q = {
+                        'id': str(uuid.uuid4()),
+                        'sentence': sentence,
+                        'options': options,
+                        'answer': answer,
+                        'answered': False,
+                        'correct': None,
+                    }
+                    qs.append(q)
+                
+                if len(qs) >= n:
+                    logger.info(f'Generated {len(qs)} grammar questions via {model_name}')
+                    return qs[:n]
+                    
+        except Exception as e:
+            logger.warning(f'Gemini grammar generation via {model_name} failed: {e}')
+            continue
+    
+    # All models failed, use fallback
+    logger.warning('All Gemini models failed; using fallback grammar questions')
+    return _fallback_grammar_questions(topic, n)
+
+
+def _fallback_grammar_questions(topic: Topic, n: int) -> list[dict]:
+    """Generate simple fallback grammar questions when Gemini is unavailable."""
+    import random
+    
+    templates = [
+        {
+            'sentence': 'I ____ to the market yesterday.',
+            'options': ['go', 'went', 'have gone', 'will go'],
+            'answer': 'went'
+        },
+        {
+            'sentence': 'She ____ English for three years.',
+            'options': ['studies', 'studied', 'has studied', 'will study'],
+            'answer': 'has studied'
+        },
+        {
+            'sentence': 'They ____ arrive by 6 PM tomorrow.',
+            'options': ['will', 'would', 'can', 'must'],
+            'answer': 'will'
+        },
+        {
+            'sentence': 'If I ____ more time, I would travel more.',
+            'options': ['have', 'had', 'will have', 'would have'],
+            'answer': 'had'
+        },
+        {
+            'sentence': 'He ____ been waiting for an hour.',
+            'options': ['have', 'has', 'had', 'is'],
+            'answer': 'has'
+        },
+    ]
+    
+    selected = random.sample(templates, min(n, len(templates)))
+    
+    qs = []
+    for tmpl in selected:
+        options = tmpl['options'][:]
+        random.shuffle(options)
+        q = {
+            'id': str(uuid.uuid4()),
+            'sentence': tmpl['sentence'],
+            'options': options,
+            'answer': tmpl['answer'],
+            'answered': False,
+            'correct': None,
+        }
+        qs.append(q)
+    
     return qs
 
 
@@ -1810,11 +2232,10 @@ class SubmitPhraseRecordingView(APIView):
         phrase_progress.mark_phrase_completed(phrase_index)
         next_phrase_index = phrase_progress.current_phrase_index
 
-        # If all phrases completed, mark pronunciation as completed and auto-complete listening/grammar (test)
+        # If all phrases completed, mark pronunciation as completed
+        # (Listening and Grammar are optional bonus practices that users can do separately)
         if phrase_progress.is_all_phrases_completed:
             topic_progress.pronunciation_completed = True
-            topic_progress.listening_completed = True
-            topic_progress.grammar_completed = True
 
         # If now all modes are completed, mark topic completed and award mastery later
         if not topic_progress.completed and topic_progress.all_modes_completed:
@@ -2265,9 +2686,10 @@ class CompleteTopicView(APIView):
         progress.pronunciation_completed = True
         progress.fluency_completed = True
         progress.vocabulary_completed = True
+        # Listening and Grammar are optional, but set them for testing purposes
         progress.listening_completed = True
         progress.grammar_completed = True
-        message = 'Topic marked as completed'
+        message = 'Topic marked as completed (including optional practices)'
         if not progress.completed:
             progress.completed = True
             progress.completed_at = timezone.now()
@@ -3249,6 +3671,7 @@ class SeedPerfectScoresView(APIView):
         tp.pronunciation_completed = True
         tp.fluency_completed = True
         tp.vocabulary_completed = True
+        # Listening and Grammar are optional bonus practices
         tp.listening_completed = True
         tp.grammar_completed = True
         

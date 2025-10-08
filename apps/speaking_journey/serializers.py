@@ -225,6 +225,47 @@ class CompleteListeningPracticeResponseSerializer(serializers.Serializer):
     topicCompleted = serializers.BooleanField()
 
 
+# --- Grammar Practice Serializers ---
+class GrammarQuestionSerializer(serializers.Serializer):
+    id = serializers.CharField()
+    sentence = serializers.CharField()
+    options = serializers.ListField(child=serializers.CharField())
+
+
+class StartGrammarPracticeResponseSerializer(serializers.Serializer):
+    sessionId = serializers.CharField()
+    totalQuestions = serializers.IntegerField()
+    questions = GrammarQuestionSerializer(many=True)
+
+
+class SubmitGrammarAnswerRequestSerializer(serializers.Serializer):
+    sessionId = serializers.CharField()
+    questionId = serializers.CharField()
+    selected = serializers.CharField()
+
+
+class SubmitGrammarAnswerResponseSerializer(serializers.Serializer):
+    correct = serializers.BooleanField()
+    xpAwarded = serializers.IntegerField()
+    nextIndex = serializers.IntegerField(allow_null=True)
+    completed = serializers.BooleanField()
+    totalScore = serializers.IntegerField()
+
+
+class CompleteGrammarPracticeRequestSerializer(serializers.Serializer):
+    sessionId = serializers.CharField()
+
+
+class CompleteGrammarPracticeResponseSerializer(serializers.Serializer):
+    success = serializers.BooleanField()
+    totalQuestions = serializers.IntegerField()
+    correctCount = serializers.IntegerField()
+    totalScore = serializers.IntegerField()
+    xpAwarded = serializers.IntegerField()
+    grammarTotalScore = serializers.IntegerField()
+    topicCompleted = serializers.BooleanField()
+
+
 class JourneyActivitySerializer(serializers.Serializer):
     id = serializers.CharField()
     type = serializers.CharField()
