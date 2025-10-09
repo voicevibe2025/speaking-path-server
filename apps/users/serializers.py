@@ -335,7 +335,38 @@ class UserProfileSerializer(serializers.ModelSerializer):
         return 0.0
 
     def get_grammar_score(self, obj):
-        """Grammar not implemented yet; return 0."""
+        """Grammar score averaged from TopicProgress.grammar_total_score across topics (0-100).
+        Falls back to latest completed GrammarPracticeSession totals if TP field is missing.
+        """
+        user = obj.user
+        try:
+            # Primary: average per-topic grammar total score
+            tp_scores = list(
+                TopicProgress.objects.filter(user=user).values_list('grammar_total_score', flat=True)
+            )
+            vals = [float(s or 0.0) for s in tp_scores]
+            nonzero = [v for v in vals if v > 0.0]
+            if nonzero:
+                avg = sum(nonzero) / len(nonzero)
+                return round(max(0.0, min(100.0, avg)), 1)
+        except Exception:
+            # If TP field is missing or query fails, proceed to fallback
+            pass
+
+        # Fallback: use latest completed GrammarPracticeSession scores
+        try:
+            from apps.speaking_journey.models import GrammarPracticeSession
+            sess_vals = list(
+                GrammarPracticeSession.objects
+                .filter(user=user, completed=True)
+                .values_list('total_score', flat=True)
+            )
+            sess_nonzero = [float(s or 0.0) for s in sess_vals if (s or 0.0) > 0.0]
+            if sess_nonzero:
+                avg = sum(sess_nonzero) / len(sess_nonzero)
+                return round(max(0.0, min(100.0, avg)), 1)
+        except Exception:
+            pass
         return 0.0
 
     def get_recent_achievements(self, obj):
