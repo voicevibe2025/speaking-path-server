@@ -238,6 +238,31 @@ def search_users(request):
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def delete_group_message(request, message_id: int):
+    """
+    Delete a single group message by ID.
+    Only the sender (or staff) can delete a message.
+    DELETE /api/v1/users/groups/messages/{message_id}/
+    DELETE /api/v1/users/groups/messages/{message_id}/delete/
+    """
+    try:
+        msg = get_object_or_404(GroupMessage, id=message_id)
+
+        # Ensure requester is the sender or staff
+        if msg.sender_id != request.user.id and not request.user.is_staff:
+            return Response({'error': 'You do not have permission to delete this message'}, status=status.HTTP_403_FORBIDDEN)
+
+        # Optional: ensure user belongs to same group (normally guaranteed for sender)
+        if request.user.group_id and msg.group_id != request.user.group_id and not request.user.is_staff:
+            return Response({'error': 'You are not a member of this group'}, status=status.HTTP_403_FORBIDDEN)
+
+        msg.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated, IsAdminUser])
 def admin_list_reports(request):

@@ -30,6 +30,7 @@ from .views import (
     list_group_members,
     list_group_messages,
     send_group_message,
+    delete_group_message,
 )
 
 app_name = 'users'
@@ -84,4 +85,6 @@ urlpatterns = [
     path('groups/messages/', list_group_messages, name='my_group_messages'),
     path('groups/<int:group_id>/messages/', list_group_messages, name='group_messages'),
     path('groups/messages/send/', send_group_message, name='send_group_message'),
+    path('groups/messages/<int:message_id>/', delete_group_message, name='delete_group_message'),
+    path('groups/messages/<int:message_id>/delete/', delete_group_message, name='delete_group_message_alt'),
 ]
