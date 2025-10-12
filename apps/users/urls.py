@@ -24,6 +24,12 @@ from .views import (
     list_my_reports,
     admin_list_reports,
     admin_resolve_report,
+    list_groups,
+    join_group,
+    check_group_status,
+    list_group_members,
+    list_group_messages,
+    send_group_message,
 )
 
 app_name = 'users'
@@ -68,4 +74,14 @@ urlpatterns = [
     # Staff moderation
     path('reports/admin/', admin_list_reports, name='admin_list_reports'),
     path('reports/admin/<int:report_id>/resolve/', admin_resolve_report, name='admin_resolve_report'),
+    
+    # Group endpoints
+    path('groups/', list_groups, name='list_groups'),
+    path('groups/check/', check_group_status, name='check_group_status'),
+    path('groups/<int:group_id>/join/', join_group, name='join_group'),
+    path('groups/members/', list_group_members, name='my_group_members'),
+    path('groups/<int:group_id>/members/', list_group_members, name='group_members'),
+    path('groups/messages/', list_group_messages, name='my_group_messages'),
+    path('groups/<int:group_id>/messages/', list_group_messages, name='group_messages'),
+    path('groups/messages/send/', send_group_message, name='send_group_message'),
 ]

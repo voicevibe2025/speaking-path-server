@@ -19,6 +19,16 @@ class User(AbstractUser):
         blank=True,
         help_text=_('Last time user made an authenticated request')
     )
+    
+    # Group membership for collectivism feature (nullable for existing users)
+    group = models.ForeignKey(
+        'users.Group',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='members',
+        help_text=_('Batam cultural group the user belongs to')
+    )
 
     # Override username to use email as primary identifier
     USERNAME_FIELD = 'email'

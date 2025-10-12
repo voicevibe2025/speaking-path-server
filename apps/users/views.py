@@ -14,7 +14,7 @@ from apps.speaking_journey.models import TopicProgress
 from django.utils import timezone
 
 from apps.authentication.models import User
-from .models import UserProfile, LearningPreference, UserAchievement, UserFollow, UserBlock, Report, PrivacySettings
+from .models import UserProfile, LearningPreference, UserAchievement, UserFollow, UserBlock, Report, PrivacySettings, Group, GroupMessage
 from .serializers import (
     UserProfileSerializer,
     LearningPreferenceSerializer,
@@ -23,6 +23,9 @@ from .serializers import (
     PrivacySettingsSerializer,
     ReportSerializer,
     BlockedUserSerializer,
+    GroupSerializer,
+    GroupMemberSerializer,
+    GroupMessageSerializer,
 )
 
 
@@ -640,5 +643,191 @@ def list_my_reports(request):
         reports = Report.objects.filter(reporter=request.user).order_by('-created_at')
         serializer = ReportSerializer(reports, many=True)
         return Response(serializer.data)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# Group Views
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def list_groups(request):
+    """
+    List all available Batam cultural groups
+    """
+    try:
+        groups = Group.objects.all().order_by('name')
+        serializer = GroupSerializer(groups, many=True)
+        return Response(serializer.data)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def join_group(request, group_id):
+    """
+    Join a group (one-time selection for users without a group)
+    POST /api/v1/users/groups/{group_id}/join/
+    """
+    try:
+        # Check if user already has a group
+        if request.user.group is not None:
+            return Response(
+                {'error': 'You have already joined a group. Group membership is permanent.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Get the group
+        group = get_object_or_404(Group, id=group_id)
+        
+        # Assign user to group
+        request.user.group = group
+        request.user.save(update_fields=['group'])
+        
+        # Return updated profile with group info
+        profile, created = UserProfile.objects.get_or_create(user=request.user)
+        serializer = UserProfileSerializer(profile, context={'request': request})
+        
+        return Response({
+            'success': True,
+            'message': f'Successfully joined {group.display_name}!',
+            'profile': serializer.data
+        })
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def check_group_status(request):
+    """
+    Check if the current user has selected a group
+    Returns: { hasGroup: boolean, group: {...} | null }
+    """
+    try:
+        has_group = request.user.group is not None
+        group_data = None
+        
+        if has_group:
+            group_data = GroupSerializer(request.user.group).data
+        
+        return Response({
+            'hasGroup': has_group,
+            'group': group_data
+        })
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def list_group_members(request, group_id=None):
+    """
+    List all members of a group
+    If group_id is None, list members of current user's group
+    """
+    try:
+        if group_id is None:
+            if request.user.group is None:
+                return Response(
+                    {'error': 'You are not a member of any group'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            group = request.user.group
+        else:
+            group = get_object_or_404(Group, id=group_id)
+        
+        # Get all members of the group
+        members = User.objects.filter(group=group).select_related('level_profile').order_by('-level_profile__experience_points')
+        serializer = GroupMemberSerializer(members, many=True)
+        
+        return Response({
+            'group': GroupSerializer(group).data,
+            'members': serializer.data,
+            'totalMembers': members.count()
+        })
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def list_group_messages(request, group_id=None):
+    """
+    List messages in a group chat
+    If group_id is None, use current user's group
+    Query params: limit (default 50), offset (default 0)
+    """
+    try:
+        if group_id is None:
+            if request.user.group is None:
+                return Response(
+                    {'error': 'You are not a member of any group'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            group = request.user.group
+        else:
+            group = get_object_or_404(Group, id=group_id)
+            # Verify user is a member of this group
+            if request.user.group != group:
+                return Response(
+                    {'error': 'You are not a member of this group'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+        
+        # Get pagination params
+        limit = int(request.query_params.get('limit', 50))
+        offset = int(request.query_params.get('offset', 0))
+        limit = min(limit, 100)  # Cap at 100 messages per request
+        
+        # Get messages (newest first)
+        messages = GroupMessage.objects.filter(group=group).select_related('sender').order_by('-created_at')[offset:offset+limit]
+        serializer = GroupMessageSerializer(messages, many=True)
+        
+        # Reverse to show oldest first in the response
+        data = list(reversed(serializer.data))
+        
+        return Response({
+            'group': GroupSerializer(group).data,
+            'messages': data,
+            'hasMore': GroupMessage.objects.filter(group=group).count() > (offset + limit)
+        })
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def send_group_message(request):
+    """
+    Send a message to user's group chat
+    POST body: { message: string }
+    """
+    try:
+        if request.user.group is None:
+            return Response(
+                {'error': 'You are not a member of any group'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        message_text = request.data.get('message', '').strip()
+        if not message_text:
+            return Response(
+                {'error': 'Message cannot be empty'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Create message
+        message = GroupMessage.objects.create(
+            group=request.user.group,
+            sender=request.user,
+            message=message_text
+        )
+        
+        serializer = GroupMessageSerializer(message)
+        return Response({
+            'success': True,
+            'message': serializer.data
+        }, status=status.HTTP_201_CREATED)
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from calendar import monthrange
 
 from apps.authentication.models import User
-from .models import UserProfile, LearningPreference, UserAchievement, UserFollow, UserBlock, Report, PrivacySettings
+from .models import UserProfile, LearningPreference, UserAchievement, UserFollow, UserBlock, Report, PrivacySettings, Group, GroupMessage
 from apps.gamification.serializers import UserBadgeSerializer
 from apps.speaking_sessions.models import PracticeSession
 from apps.learning_paths.models import UserProgress
@@ -106,6 +106,12 @@ class UserProfileSerializer(serializers.ModelSerializer):
     # Learning Progress (for Overview tab)
     practice_count = serializers.SerializerMethodField()
     words_learned = serializers.SerializerMethodField()
+    
+    # Group membership
+    groupId = serializers.IntegerField(source='user.group.id', read_only=True, allow_null=True)
+    groupName = serializers.CharField(source='user.group.name', read_only=True, allow_null=True)
+    groupDisplayName = serializers.CharField(source='user.group.display_name', read_only=True, allow_null=True)
+    hasGroup = serializers.SerializerMethodField()
 
     def get_total_practice_hours(self, obj):
         """
@@ -403,6 +409,13 @@ class UserProfileSerializer(serializers.ModelSerializer):
             return int(max(0, words))
         except Exception:
             return 0
+    
+    def get_hasGroup(self, obj):
+        """Check if user has selected a group"""
+        try:
+            return obj.user.group is not None
+        except Exception:
+            return False
 
     def get_monthly_days_active(self, obj):
         """Get the number of days the user was active in the current month"""
@@ -822,7 +835,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'recent_activities', 'membership_status',
             'last_practice_date',
             'created_at', 'updated_at', 'recent_achievements',
-            'practice_count', 'words_learned'
+            'practice_count', 'words_learned',
+            'groupId', 'groupName', 'groupDisplayName', 'hasGroup'
         ]
         read_only_fields = ['id', 'user', 'total_practice_time', 'created_at', 'updated_at']
 
@@ -1053,6 +1067,103 @@ class BlockedUserSerializer(serializers.ModelSerializer):
     def get_avatarUrl(self, obj):
         try:
             profile = UserProfile.objects.get(user=obj.blocked_user)
+            if profile.avatar and hasattr(profile.avatar, 'url'):
+                return profile.avatar.url
+            return profile.avatar_url
+        except UserProfile.DoesNotExist:
+            return None
+
+
+class GroupSerializer(serializers.ModelSerializer):
+    """
+    Serializer for Batam cultural groups
+    """
+    memberCount = serializers.IntegerField(source='member_count', read_only=True)
+    displayName = serializers.CharField(source='display_name', read_only=True)
+    
+    class Meta:
+        model = Group
+        fields = [
+            'id',
+            'name',
+            'displayName',
+            'description',
+            'icon',
+            'color',
+            'memberCount',
+            'created_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'memberCount']
+
+
+class GroupMemberSerializer(serializers.ModelSerializer):
+    """
+    Serializer for group members (simplified user info)
+    """
+    userId = serializers.IntegerField(source='id', read_only=True)
+    username = serializers.CharField(read_only=True)
+    displayName = serializers.SerializerMethodField()
+    avatarUrl = serializers.SerializerMethodField()
+    level = serializers.IntegerField(source='level_profile.current_level', read_only=True, default=1)
+    xp = serializers.IntegerField(source='level_profile.experience_points', read_only=True, default=0)
+    streakDays = serializers.IntegerField(source='level_profile.streak_days', read_only=True, default=0)
+    
+    class Meta:
+        model = User
+        fields = ['userId', 'username', 'displayName', 'avatarUrl', 'level', 'xp', 'streakDays']
+        read_only_fields = fields
+    
+    def get_displayName(self, obj):
+        if obj.first_name and obj.last_name:
+            return f"{obj.first_name} {obj.last_name}"
+        return obj.username or "User"
+    
+    def get_avatarUrl(self, obj):
+        try:
+            profile = UserProfile.objects.get(user=obj)
+            if profile.avatar and hasattr(profile.avatar, 'url'):
+                return profile.avatar.url
+            return profile.avatar_url
+        except UserProfile.DoesNotExist:
+            return None
+
+
+class GroupMessageSerializer(serializers.ModelSerializer):
+    """
+    Serializer for group chat messages
+    """
+    senderId = serializers.IntegerField(source='sender.id', read_only=True)
+    senderName = serializers.SerializerMethodField()
+    senderAvatar = serializers.SerializerMethodField()
+    groupId = serializers.IntegerField(source='group.id', read_only=True)
+    groupName = serializers.CharField(source='group.display_name', read_only=True)
+    timestamp = serializers.DateTimeField(source='created_at', read_only=True)
+    
+    class Meta:
+        model = GroupMessage
+        fields = [
+            'id',
+            'groupId',
+            'groupName',
+            'senderId',
+            'senderName',
+            'senderAvatar',
+            'message',
+            'timestamp',
+            'created_at',
+            'updated_at'
+        ]
+        read_only_fields = ['id', 'senderId', 'senderName', 'senderAvatar', 'groupId', 'groupName', 'timestamp', 'created_at', 'updated_at']
+    
+    def get_senderName(self, obj):
+        user = obj.sender
+        if user.first_name and user.last_name:
+            return f"{user.first_name} {user.last_name}"
+        return user.username or "User"
+    
+    def get_senderAvatar(self, obj):
+        try:
+            profile = UserProfile.objects.get(user=obj.sender)
             if profile.avatar and hasattr(profile.avatar, 'url'):
                 return profile.avatar.url
             return profile.avatar_url

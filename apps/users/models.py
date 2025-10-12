@@ -11,6 +11,99 @@ from core.storage import AvatarSupabaseStorage
 User = get_user_model()
 
 
+class Group(models.Model):
+    """
+    Batam cultural groups for collectivism feature.
+    Each user belongs to one group.
+    """
+    GROUP_CHOICES = [
+        ('gonggong', 'Gonggong'),
+        ('pantun', 'Pantun'),
+        ('zapin', 'Zapin'),
+        ('hang_nadim', 'Hang Nadim'),
+        ('barelang', 'Barelang'),
+        ('bulan_serindit', 'Bulan Serindit'),
+        ('selayar', 'Selayar'),
+        ('tanjung_ulma', 'Tanjung Ulma'),
+        ('pulau_putri', 'Pulau Putri'),
+        ('temiang', 'Temiang'),
+    ]
+    
+    name = models.CharField(
+        max_length=50,
+        unique=True,
+        choices=GROUP_CHOICES,
+        help_text=_('Batam cultural group name')
+    )
+    display_name = models.CharField(
+        max_length=100,
+        help_text=_('Display name for the group')
+    )
+    description = models.TextField(
+        blank=True,
+        help_text=_('Description of the group and its cultural significance')
+    )
+    icon = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text=_('Icon or emoji representing the group')
+    )
+    color = models.CharField(
+        max_length=7,
+        default='#1976D2',
+        help_text=_('Hex color code for the group theme')
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        db_table = 'groups'
+        verbose_name = _('Group')
+        verbose_name_plural = _('Groups')
+        ordering = ['name']
+    
+    def __str__(self):
+        return self.display_name
+    
+    @property
+    def member_count(self):
+        """Return the number of members in this group"""
+        return self.members.count()
+
+
+class GroupMessage(models.Model):
+    """
+    Messages sent in group chats
+    """
+    group = models.ForeignKey(
+        Group,
+        on_delete=models.CASCADE,
+        related_name='messages'
+    )
+    sender = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='group_messages'
+    )
+    message = models.TextField(
+        help_text=_('Message content')
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'group_messages'
+        verbose_name = _('Group Message')
+        verbose_name_plural = _('Group Messages')
+        ordering = ['created_at']
+        indexes = [
+            models.Index(fields=['group', '-created_at']),
+            models.Index(fields=['sender', '-created_at']),
+        ]
+    
+    def __str__(self):
+        return f"{self.sender.username} in {self.group.display_name}: {self.message[:50]}"
+
+
 def user_avatar_path(instance, filename):
     """
     Generate upload path for user avatars
