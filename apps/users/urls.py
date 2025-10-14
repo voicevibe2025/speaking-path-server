@@ -12,7 +12,6 @@ from .views import (
     update_streak,
     add_practice_time,
     search_users,
-    unified_search,
     follow_toggle,
     list_followers,
     list_following,
@@ -46,7 +45,6 @@ urlpatterns = [
 
     # Search users
     path('search/', search_users, name='search_users'),
-    path('search/unified/', unified_search, name='unified_search'),
 
     # Social: follow/unfollow and lists
     path('follow/<int:user_id>/', follow_toggle, name='follow_toggle'),

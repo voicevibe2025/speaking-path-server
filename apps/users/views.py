@@ -10,7 +10,7 @@ from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.exceptions import PermissionDenied
-from apps.speaking_journey.models import TopicProgress, Topic
+from apps.speaking_journey.models import TopicProgress
 from django.utils import timezone
 
 from apps.authentication.models import User
@@ -854,79 +854,5 @@ def send_group_message(request):
             'success': True,
             'message': serializer.data
         }, status=status.HTTP_201_CREATED)
-    except Exception as e:
-        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def unified_search(request):
-    """
-    Unified search across users, groups, and speaking journey topics.
-    Accepts 'q' or 'query' query params. Returns categorized results.
-    """
-    try:
-        raw = (request.query_params.get('q') or request.query_params.get('query') or '').strip()
-        if not raw:
-            return Response({
-                'users': [],
-                'groups': [],
-                'materials': []
-            }, status=status.HTTP_200_OK)
-
-        # Search Users
-        user_qs = UserProfile.objects.select_related('user')
-        user_q = Q()
-        for term in raw.split():
-            if term:
-                user_q |= Q(user__first_name__icontains=term)
-                user_q |= Q(user__last_name__icontains=term)
-                user_q |= Q(user__username__icontains=term)
-        
-        if user_q:
-            user_qs = user_qs.filter(user_q)
-        else:
-            user_qs = user_qs.filter(
-                Q(user__first_name__icontains=raw)
-                | Q(user__last_name__icontains=raw)
-                | Q(user__username__icontains=raw)
-            )
-        
-        # Exclude blocked users
-        user_qs = user_qs.exclude(user__blocked_by_relations__blocker=request.user) \
-                         .exclude(user__blocking_relations__blocked_user=request.user)
-        user_qs = user_qs.order_by('user__first_name', 'user__last_name')[:15]
-        
-        # Search Groups
-        group_qs = Group.objects.filter(
-            Q(display_name__icontains=raw) | Q(description__icontains=raw)
-        ).order_by('display_name')[:15]
-        
-        # Search Topics (Materials)
-        topic_qs = Topic.objects.filter(
-            Q(title__icontains=raw) | Q(description__icontains=raw),
-            is_active=True
-        ).order_by('sequence')[:15]
-        
-        # Serialize results
-        users_data = UserProfileSerializer(user_qs, many=True, context={'request': request}).data
-        groups_data = GroupSerializer(group_qs, many=True, context={'request': request}).data
-        
-        # Serialize topics with custom structure
-        materials_data = []
-        for topic in topic_qs:
-            materials_data.append({
-                'id': str(topic.id),
-                'title': topic.title,
-                'description': topic.description,
-                'sequence': topic.sequence,
-                'type': 'topic'
-            })
-        
-        return Response({
-            'users': users_data,
-            'groups': groups_data,
-            'materials': materials_data
-        })
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

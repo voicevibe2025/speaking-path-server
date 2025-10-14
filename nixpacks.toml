@@ -4,7 +4,7 @@
 # - Starts Daphne ASGI server
 
 [phases.setup]
-nixPkgs = ["...", "ffmpeg-full", "pkg-config"]
+nixPkgs = ["...", "ffmpeg"]
 
 [phases.install]
 # Install strictly from the Django requirements to avoid conflicting root requirements
