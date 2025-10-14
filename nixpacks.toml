@@ -4,12 +4,12 @@
 # - Starts Daphne ASGI server
 
 [phases.setup]
-nixPkgs = ["...", "ffmpeg"]
+nixPkgs = ["...", "ffmpeg", "pkg-config", "python311"]
 
 [phases.install]
 # Install strictly from the Django requirements to avoid conflicting root requirements
 cmds = [
-  "python -m venv --copies /opt/venv && . /opt/venv/bin/activate && pip install --upgrade pip setuptools wheel && ( [ -f django/requirements.txt ] && pip install -r django/requirements.txt || pip install -r requirements.txt )"
+  "python3.11 -m venv --copies /opt/venv && . /opt/venv/bin/activate && pip install --upgrade pip setuptools wheel && ( [ -f django/requirements.txt ] && pip install -r django/requirements.txt || pip install -r requirements.txt )"
 ]
 
 [start]
