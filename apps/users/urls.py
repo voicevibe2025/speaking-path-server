@@ -32,6 +32,7 @@ from .views import (
     send_group_message,
     delete_group_message,
 )
+from .search import unified_search
 
 app_name = 'users'
 
@@ -43,8 +44,11 @@ urlpatterns = [
     path('change-password/', change_password, name='change_password'),
     path('delete-account/', delete_account, name='delete_account'),
 
-    # Search users
+    # Search users (legacy)
     path('search/', search_users, name='search_users'),
+    
+    # Unified search (users, groups, materials)
+    path('search/unified/', unified_search, name='unified_search'),
 
     # Social: follow/unfollow and lists
     path('follow/<int:user_id>/', follow_toggle, name='follow_toggle'),
