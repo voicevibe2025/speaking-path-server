@@ -272,21 +272,17 @@ class UserProfileSerializer(serializers.ModelSerializer):
         return 0.0
 
     def get_pronunciation_score(self, obj):
-        """Pronunciation score from TopicProgress.pronunciation_total_score normalized by phrase count across topics (0-100)."""
+        """Pronunciation score from TopicProgress.pronunciation_total_score (0-100), averaged across topics with non-zero values.
+        Note: pronunciation_total_score is already an average per topic, so we just average across topics."""
         user = obj.user
         try:
-            total_sum = 0.0
-            total_count = 0
-            for tp in TopicProgress.objects.filter(user=user).select_related('topic').only('pronunciation_total_score', 'topic__material_lines'):
-                try:
-                    phrase_count = len(tp.topic.material_lines or [])
-                except Exception:
-                    phrase_count = 0
-                if phrase_count > 0 and (tp.pronunciation_total_score or 0) > 0:
-                    total_sum += float(tp.pronunciation_total_score or 0.0)
-                    total_count += phrase_count
-            if total_count > 0:
-                avg = total_sum / total_count  # 0..100
+            tp_scores = list(
+                TopicProgress.objects.filter(user=user).values_list('pronunciation_total_score', flat=True)
+            )
+            vals = [float(s or 0.0) for s in tp_scores]
+            nonzero = [v for v in vals if v > 0.0]
+            if nonzero:
+                avg = sum(nonzero) / len(nonzero)
                 return round(max(0.0, min(100.0, avg)), 1)
         except Exception:
             pass
