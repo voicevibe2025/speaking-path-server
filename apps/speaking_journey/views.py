@@ -4158,91 +4158,75 @@ class LingoLeagueView(APIView):
         return Response(data, status=status.HTTP_200_OK)
 
 # ---------------------------
-# AI Coach (Gemini-as-GRU)
+# AI Coach - LLM-based Adaptive Learning System
+# Uses Gemini to simulate GRU-like temporal modeling for personalized recommendations
 # ---------------------------
 _COACH_CACHE: dict[str, dict] = {}
 
 def _refresh_coach_cache_for_user(user, ttl_minutes: int = 15) -> dict:
-    """Recompute coach analysis for user and store in in-process cache with a short TTL.
-
-    Returns the computed data for optional reuse by callers.
-    """
+    """Recompute coach analysis for user and store in in-process cache with a short TTL."""
     data = _call_gemini_coach(user)
-    now = timezone.now()
-    ttl_minutes = max(5, min(int(ttl_minutes or 15), 60))  # clamp between 5 and 60 minutes
-    _COACH_CACHE[str(user.id)] = {
-        'data': data,
-        'expires_at': now + timedelta(minutes=ttl_minutes),
-    }
+    key = str(user.id)
+    expires_at = timezone.now() + timedelta(minutes=ttl_minutes)
+    _COACH_CACHE[key] = {'data': data, 'expires_at': expires_at}
     return data
-
-def _collapse_repeats_text(s: str) -> str:
-    """Collapse short repeated n-grams to reduce transcription noise, preserving original casing.
-    Mirrors the helper used in faster-whisper paths but exposed as a reusable function.
-    """
-    try:
-        import re as _re
-        words = (_re.sub(r"\s+", " ", s or "").strip()).split(" ")
-        norm = [
-            _re.sub(r"[^A-Za-z0-9']+", "", w.replace("â€™", "'").replace("`", "'"))
-            .lower()
-            for w in words
-        ]
-        n = len(words)
-        if n <= 3:
-            return " ".join(words)
-        i = 0
-        out_words: list[str] = []
-        while i < n:
-            max_w = min(5, n - i)
-            collapsed = False
-            for w in range(max_w, 1, -1):
-                chunk_norm = norm[i:i+w]
-                if any(t == "" for t in chunk_norm):
-                    continue
-                repeats = 1
-                while (
-                    i + (repeats * w) + w <= n
-                    and norm[i + repeats*w:i + (repeats+1)*w] == chunk_norm
-                ):
-                    repeats += 1
-                if repeats >= 2:
-                    out_words.extend(words[i:i+w])
-                    i += repeats * w
-                    collapsed = True
-                    break
-            if not collapsed:
-                out_words.append(words[i])
-                i += 1
-        return " ".join(out_words)
-    except Exception:
-        return s
 
 
 def _build_coach_features(user) -> dict:
-    """Aggregate compact features for the AI Coach. Keep token budget small.
+    """Aggregate temporal features for the LLM-based Adaptive Coach.
+    
+    Simulates GRU-like sequential state tracking by including:
+      - Current skill levels (perTopic, totals)
+      - Historical trends (improvement rates over time)
+      - Temporal context (recency weights, session patterns)
+      - User engagement metrics (streaks, session history)
 
     Returns a dict with:
       - perTopic: [{title, pron, flu, vocab, completed}]
       - totals: {pronunciation, fluency, vocabulary, topicsCompleted, recencyLatest}
-      - recentTranscripts: [{type:"phrase"|"conversation", text, topic, accuracy}]
+      - historicalTrends: {pronunciation, fluency, vocabulary} with recent progression
+      - recentTranscripts: [{type, text, topic, accuracy, daysAgo, recencyWeight}]
+      - sessionHistory: Last 10 practice sessions with timestamps and XP
+      - streakData: {current, longest, daysSinceBreak}
     """
+    from apps.gamification.models import UserLevel, PointsTransaction
+    from datetime import timedelta as td
+    from statistics import mean
+    
     features: dict = {
         'perTopic': [],
         'totals': {
             'pronunciation': 0,
             'fluency': 0,
             'vocabulary': 0,
+            'listening': 0,
+            'grammar': 0,
             'topicsCompleted': 0,
             'recencyLatest': None,
         },
+        'historicalTrends': {
+            'pronunciation': [],
+            'fluency': [],
+            'vocabulary': [],
+            'listening': [],
+            'grammar': [],
+        },
         'recentTranscripts': [],
+        'sessionHistory': [],
+        'streakData': {
+            'current': 0,
+            'longest': 0,
+            'daysSinceBreak': 0,
+        },
     }
     try:
         tps = TopicProgress.objects.select_related('topic').filter(user=user)
+        logger.info(f"Coach features: Found {tps.count()} TopicProgress records for user {user.id}")
         pron_total = 0
         flu_total = 0
         vocab_total = 0
+        listen_total = 0
+        grammar_total = 0
         count = 0
         completed_cnt = 0
         latest_dt = None
@@ -4251,16 +4235,23 @@ def _build_coach_features(user) -> dict:
                 pron = int(tp.pronunciation_total_score or 0)
                 flu = int(tp.fluency_total_score or 0)
                 vocab = int(tp.vocabulary_total_score or 0)
+                listen = int(tp.listening_total_score or 0)
+                grammar = int(tp.grammar_total_score or 0)
+                logger.info(f"Topic {tp.topic.title}: pron={pron}, flu={flu}, vocab={vocab}, listen={listen}, grammar={grammar}")
                 features['perTopic'].append({
                     'title': tp.topic.title,
                     'pron': pron,
                     'flu': flu,
                     'vocab': vocab,
+                    'listen': listen,
+                    'grammar': grammar,
                     'completed': bool(tp.completed),
                 })
                 pron_total += pron
                 flu_total += flu
                 vocab_total += vocab
+                listen_total += listen
+                grammar_total += grammar
                 count += 1
                 if tp.completed and tp.completed_at:
                     completed_cnt += 1
@@ -4272,12 +4263,141 @@ def _build_coach_features(user) -> dict:
             features['totals']['pronunciation'] = int(round(pron_total / count))
             features['totals']['fluency'] = int(round(flu_total / count))
             features['totals']['vocabulary'] = int(round(vocab_total / count))
+            features['totals']['listening'] = int(round(listen_total / count))
+            features['totals']['grammar'] = int(round(grammar_total / count))
+        logger.info(f"Coach totals: pron={features['totals']['pronunciation']}, flu={features['totals']['fluency']}, vocab={features['totals']['vocabulary']}, count={count}")
         features['totals']['topicsCompleted'] = completed_cnt
         features['totals']['recencyLatest'] = (latest_dt.isoformat() if latest_dt else None)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error(f"Error building coach features: {e}", exc_info=True)
 
-    # Recent transcripts (limit small)
+    # Historical trends: Calculate improvement rates over time windows
+    # Compare recent (7 days) vs older (8-14 days) averages to detect learning velocity
+    try:
+        now = timezone.now()
+        cutoff_recent = now - td(days=7)
+        cutoff_older = now - td(days=14)
+        
+        # Recent pronunciation scores (last 7 days)
+        recent_pron = list(
+            UserPhraseRecording.objects.filter(user=user, created_at__gte=cutoff_recent)
+            .values_list('accuracy', flat=True)
+        )
+        older_pron = list(
+            UserPhraseRecording.objects.filter(
+                user=user, created_at__gte=cutoff_older, created_at__lt=cutoff_recent
+            ).values_list('accuracy', flat=True)
+        )
+        
+        if recent_pron:
+            features['historicalTrends']['pronunciation'].append({
+                'period': 'recent_7d',
+                'avgScore': int(round(mean(recent_pron))),
+                'count': len(recent_pron)
+            })
+        if older_pron:
+            features['historicalTrends']['pronunciation'].append({
+                'period': 'prior_7d',
+                'avgScore': int(round(mean(older_pron))),
+                'count': len(older_pron)
+            })
+        
+        # Same for fluency (conversation recordings as proxy)
+        recent_flu = list(
+            UserConversationRecording.objects.filter(user=user, created_at__gte=cutoff_recent)
+            .values_list('accuracy', flat=True)
+        )
+        older_flu = list(
+            UserConversationRecording.objects.filter(
+                user=user, created_at__gte=cutoff_older, created_at__lt=cutoff_recent
+            ).values_list('accuracy', flat=True)
+        )
+        
+        if recent_flu:
+            features['historicalTrends']['fluency'].append({
+                'period': 'recent_7d',
+                'avgScore': int(round(mean(recent_flu))),
+                'count': len(recent_flu)
+            })
+        if older_flu:
+            features['historicalTrends']['fluency'].append({
+                'period': 'prior_7d',
+                'avgScore': int(round(mean(older_flu))),
+                'count': len(older_flu)
+            })
+        
+        # Vocabulary trends from sessions
+        recent_vocab_sessions = VocabularyPracticeSession.objects.filter(
+            user=user, completed=True, updated_at__gte=cutoff_recent
+        )
+        older_vocab_sessions = VocabularyPracticeSession.objects.filter(
+            user=user, completed=True, updated_at__gte=cutoff_older, updated_at__lt=cutoff_recent
+        )
+        
+        if recent_vocab_sessions.exists():
+            recent_vocab_scores = [s.total_score for s in recent_vocab_sessions]
+            features['historicalTrends']['vocabulary'].append({
+                'period': 'recent_7d',
+                'avgScore': int(round(mean(recent_vocab_scores))),
+                'count': len(recent_vocab_scores)
+            })
+        if older_vocab_sessions.exists():
+            older_vocab_scores = [s.total_score for s in older_vocab_sessions]
+            features['historicalTrends']['vocabulary'].append({
+                'period': 'prior_7d',
+                'avgScore': int(round(mean(older_vocab_scores))),
+                'count': len(older_vocab_scores)
+            })
+        
+        # Listening trends from sessions
+        recent_listen_sessions = ListeningPracticeSession.objects.filter(
+            user=user, completed=True, updated_at__gte=cutoff_recent
+        )
+        older_listen_sessions = ListeningPracticeSession.objects.filter(
+            user=user, completed=True, updated_at__gte=cutoff_older, updated_at__lt=cutoff_recent
+        )
+        
+        if recent_listen_sessions.exists():
+            recent_listen_scores = [s.total_score for s in recent_listen_sessions]
+            features['historicalTrends']['listening'].append({
+                'period': 'recent_7d',
+                'avgScore': int(round(mean(recent_listen_scores))),
+                'count': len(recent_listen_scores)
+            })
+        if older_listen_sessions.exists():
+            older_listen_scores = [s.total_score for s in older_listen_sessions]
+            features['historicalTrends']['listening'].append({
+                'period': 'prior_7d',
+                'avgScore': int(round(mean(older_listen_scores))),
+                'count': len(older_listen_scores)
+            })
+        
+        # Grammar trends from sessions
+        recent_grammar_sessions = GrammarPracticeSession.objects.filter(
+            user=user, completed=True, updated_at__gte=cutoff_recent
+        )
+        older_grammar_sessions = GrammarPracticeSession.objects.filter(
+            user=user, completed=True, updated_at__gte=cutoff_older, updated_at__lt=cutoff_recent
+        )
+        
+        if recent_grammar_sessions.exists():
+            recent_grammar_scores = [s.total_score for s in recent_grammar_sessions]
+            features['historicalTrends']['grammar'].append({
+                'period': 'recent_7d',
+                'avgScore': int(round(mean(recent_grammar_scores))),
+                'count': len(recent_grammar_scores)
+            })
+        if older_grammar_sessions.exists():
+            older_grammar_scores = [s.total_score for s in older_grammar_sessions]
+            features['historicalTrends']['grammar'].append({
+                'period': 'prior_7d',
+                'avgScore': int(round(mean(older_grammar_scores))),
+                'count': len(older_grammar_scores)
+            })
+    except Exception as e:
+        logger.debug(f'Historical trends calculation failed: {e}')
+
+    # Recent transcripts with temporal weighting (limit small for token budget)
     try:
         pr = list(
             UserPhraseRecording.objects.select_related('topic')
@@ -4287,8 +4407,16 @@ def _build_coach_features(user) -> dict:
             try:
                 txt = _collapse_repeats_text((r.transcription or '').strip())[:220]
                 if txt:
+                    days_ago = (now - r.created_at).days
+                    # Recency weight: more recent = higher weight (exponential decay)
+                    recency_weight = round(1.0 / (1.0 + days_ago * 0.2), 2)
                     features['recentTranscripts'].append({
-                        'type': 'phrase', 'text': txt, 'topic': r.topic.title, 'accuracy': int(round(float(r.accuracy or 0)))
+                        'type': 'phrase',
+                        'text': txt,
+                        'topic': r.topic.title,
+                        'accuracy': int(round(float(r.accuracy or 0))),
+                        'daysAgo': days_ago,
+                        'recencyWeight': recency_weight
                     })
             except Exception:
                 continue
@@ -4303,44 +4431,124 @@ def _build_coach_features(user) -> dict:
             try:
                 txt = _collapse_repeats_text((r.transcription or '').strip())[:220]
                 if txt:
+                    days_ago = (now - r.created_at).days
+                    recency_weight = round(1.0 / (1.0 + days_ago * 0.2), 2)
                     features['recentTranscripts'].append({
-                        'type': 'conversation', 'text': txt, 'topic': r.topic.title, 'accuracy': int(round(float(r.accuracy or 0)))
+                        'type': 'conversation',
+                        'text': txt,
+                        'topic': r.topic.title,
+                        'accuracy': int(round(float(r.accuracy or 0))),
+                        'daysAgo': days_ago,
+                        'recencyWeight': recency_weight
                     })
             except Exception:
                 continue
     except Exception:
         pass
 
+    # Session history: Last 10 practice sessions from PointsTransaction
+    try:
+        recent_xp_txns = PointsTransaction.objects.filter(
+            user=user,
+            amount__gt=0,  # Only positive XP gains
+            source__in=['pronunciation_practice', 'fluency_practice', 'vocabulary_practice', 
+                       'listening_practice', 'grammar_practice', 'conversation_practice', 
+                       'topic_completion']
+        ).order_by('-created_at')[:10]
+        
+        for txn in recent_xp_txns:
+            features['sessionHistory'].append({
+                'date': txn.created_at.isoformat(),
+                'source': txn.source,
+                'xpEarned': txn.amount,
+                'daysAgo': (now - txn.created_at).days
+            })
+    except Exception as e:
+        logger.debug(f'Session history failed: {e}')
+
+    # Streak data from UserLevel
+    try:
+        level_profile = UserLevel.objects.filter(user=user).first()
+        if level_profile:
+            days_since_break = 0
+            if level_profile.last_activity_date:
+                days_since_break = (now.date() - level_profile.last_activity_date).days
+            
+            features['streakData'] = {
+                'current': level_profile.streak_days,
+                'longest': level_profile.longest_streak,
+                'daysSinceBreak': days_since_break,
+            }
+    except Exception as e:
+        logger.debug(f'Streak data failed: {e}')
+
     return features
 
 
 def _heuristic_coach(user) -> dict:
-    """Build a minimal coach analysis without LLM based on topic progress averages."""
+    """Build a minimal coach analysis without LLM based on topic progress averages for all 5 skills."""
     feats = _build_coach_features(user)
     pron = int(feats.get('totals', {}).get('pronunciation') or 0)
     flu = int(feats.get('totals', {}).get('fluency') or 0)
     vocab = int(feats.get('totals', {}).get('vocabulary') or 0)
+    listen = int(feats.get('totals', {}).get('listening') or 0)
+    grammar = int(feats.get('totals', {}).get('grammar') or 0)
+    
     skills = [
         {'id': 'pronunciation', 'name': 'Pronunciation', 'mastery': pron, 'confidence': 0.6, 'trend': 'flat', 'evidence': []},
-        {'id': 'fluency', 'name': 'Fluency', 'mastery': flu, 'confidence': 0.6, 'trend': 'flat', 'evidence': []},
+        {'id': 'fluency', 'name': 'Fluency & Coherence', 'mastery': flu, 'confidence': 0.6, 'trend': 'flat', 'evidence': []},
         {'id': 'vocabulary', 'name': 'Vocabulary', 'mastery': vocab, 'confidence': 0.6, 'trend': 'flat', 'evidence': []},
+        {'id': 'listening', 'name': 'Comprehension (Listening)', 'mastery': listen, 'confidence': 0.6, 'trend': 'flat', 'evidence': []},
+        {'id': 'grammar', 'name': 'Grammar', 'mastery': grammar, 'confidence': 0.6, 'trend': 'flat', 'evidence': []},
     ]
-    # strengths/weaknesses by sorting
-    ordered = sorted(skills, key=lambda s: s['mastery'], reverse=True)
-    strengths = [s['id'] for s in ordered[:2]]
-    weaknesses = [s['id'] for s in ordered[-2:]]
-    # Recommend next best action on weakest area
-    weakest = weaknesses[0] if weaknesses else 'pronunciation'
+    
+    # Detect new user (all scores are 0)
+    total_score = pron + flu + vocab + listen + grammar
+    is_new_user = total_score == 0
+    
+    # strengths/weaknesses by sorting (only if user has data)
+    if is_new_user:
+        # New users: suggest starting with pronunciation (foundation skill)
+        strengths = []
+        weaknesses = []
+        weakest = 'pronunciation'
+        coach_msg = 'Welcome! Let\'s start your English learning journey. Begin with pronunciation basics to build a strong foundation.'
+    else:
+        ordered = sorted(skills, key=lambda s: s['mastery'], reverse=True)
+        # Only show as strength if score > 60
+        strengths = [s['id'] for s in ordered if s['mastery'] > 60][:2]
+        # Only show as weakness if score < 50
+        weaknesses = [s['id'] for s in ordered if s['mastery'] < 50][-2:]
+        weakest = weaknesses[0] if weaknesses else ordered[-1]['id']
+        
+        # Dynamic coach message based on performance
+        avg_score = total_score // 5
+        if avg_score >= 75:
+            coach_msg = f'Excellent progress! Your average score is {avg_score}%. Keep pushing to maintain your momentum.'
+        elif avg_score >= 50:
+            coach_msg = f'You\'re making steady progress (avg: {avg_score}%). Let\'s focus on your weaker areas to level up faster.'
+        else:
+            coach_msg = f'Good start! Your average is {avg_score}%. Consistent practice will help you improve quickly.'
+    
     nba_title = {
         'pronunciation': 'Practice Pronunciation Now',
         'fluency': 'Do a Fluency Prompt',
         'vocabulary': 'Study Vocabulary Lesson',
+        'listening': 'Practice Listening Comprehension',
+        'grammar': 'Complete Grammar Exercise',
     }.get(weakest, 'Master Current Topic')
+    
     # Choose current/first unlocked topic for deeplink context (best-effort)
     topic = Topic.objects.filter(is_active=True).order_by('sequence').first()
-    deeplink = f"app://voicevibe/speaking/topic/{topic.id if topic else 'current'}/" + (
-        'master' if weakest == 'pronunciation' else ('conversation' if weakest == 'fluency' else 'vocab')
-    )
+    mode_map = {
+        'pronunciation': 'master',
+        'fluency': 'conversation',
+        'vocabulary': 'vocab',
+        'listening': 'listening',
+        'grammar': 'grammar',
+    }
+    deeplink = f"app://voicevibe/speaking/topic/{topic.id if topic else 'current'}/" + mode_map.get(weakest, 'master')
+    
     out = {
         'currentVersion': 1,
         'generatedAt': timezone.now(),
@@ -4360,15 +4568,18 @@ def _heuristic_coach(user) -> dict:
             'pronunciation': 'baseline',
             'fluency': 'baseline',
             'vocabulary': 'baseline',
+            'listening': 'baseline',
+            'grammar': 'baseline',
         },
         'schedule': [],
-        'coachMessage': 'You are doing well! Let\'s target one area this week and keep your streak.',
+        'coachMessage': coach_msg,
         'cacheForHours': 12,
     }
     return out
 
 
 def _call_gemini_coach(user) -> dict:
+    """Call Gemini LLM to generate adaptive learning recommendations simulating GRU behavior."""
     api_key = (
         getattr(settings, 'GEMINI_API_KEY', '') or os.environ.get('GEMINI_API_KEY', '') or os.environ.get('GOOGLE_API_KEY', '')
     )
@@ -4376,20 +4587,62 @@ def _call_gemini_coach(user) -> dict:
         return _heuristic_coach(user)
     feats = _build_coach_features(user)
     prompt = (
-        "You are an AI Coach for an English speaking app. Analyze the user's compact features and return STRICT JSON only.\n"
-        "Schema: {\n"
-        "  currentVersion: int, generatedAt: isoDateTime,\n"
-        "  skills: [{id: string, name: string, mastery: 0-100, confidence: 0-1, trend: 'up'|'down'|'flat', evidence: string[]}],\n"
-        "  strengths: string[], weaknesses: string[],\n"
+        "You are an LLM-based Adaptive Coach simulating a Gated Recurrent Unit (GRU) for personalized English learning.\n\n"
+        "ANALYZE ALL 5 CORE ENGLISH SKILLS:\n"
+        "1. Pronunciation - clear articulation and accent\n"
+        "2. Fluency & Coherence - speaking smoothly and logically\n"
+        "3. Vocabulary - word choice and lexical resource\n"
+        "4. Grammar - sentence structure and accuracy\n"
+        "5. Comprehension (Listening) - understanding spoken English\n\n"
+        "GRU BEHAVIOR REQUIREMENTS:\n"
+        "1. Temporal Awareness: Weight recent performance (historicalTrends.recent_7d) MORE heavily than older data (prior_7d)\n"
+        "2. Learning Velocity Detection: Compare recent vs prior scores to identify if user is improving, plateauing, or declining\n"
+        "3. Recency Bias: Use recencyWeight in recentTranscripts - higher weight = more influence on recommendations\n"
+        "4. Skill Dependencies (Cascade Model):\n"
+        "   - Pronunciation affects Fluency (poor pronunciation blocks fluent speech)\n"
+        "   - Vocabulary affects both Fluency and Comprehension (limited vocab limits understanding)\n"
+        "   - Grammar affects Fluency (poor grammar disrupts coherence)\n"
+        "   - If pronunciation < 50, ALWAYS prioritize it over other skills regardless of their scores\n"
+        "   - If grammar < 40, prioritize it alongside pronunciation\n"
+        "5. Adaptive Difficulty: Calibrate based on mastery levels:\n"
+        "   - If skill mastery > 75: suggest 'harder' difficulty\n"
+        "   - If skill mastery < 45: suggest 'easier' difficulty\n"
+        "   - Otherwise: 'baseline'\n"
+        "6. Confidence Calculation: Higher variance in recent scores = lower confidence\n"
+        "7. Evidence-Based: Always cite specific examples from recentTranscripts in evidence[] arrays\n"
+        "8. Actionable Schedule: Generate 3-5 day practice plan in schedule[] using spaced repetition\n"
+        "   - Alternate skill focus (don't practice same skill 2 days in a row)\n"
+        "   - Include microSkills like 'th sound', 'past tense', 'question forms'\n"
+        "9. Streak Reinforcement: Acknowledge current streak in coachMessage if streakData.current > 0\n\n"
+        "SCHEMA (return STRICT JSON only):\n"
+        "{\n"
+        "  currentVersion: int,\n"
+        "  generatedAt: isoDateTime,\n"
+        "  skills: [\n"
+        "    {id: 'pronunciation', name: 'Pronunciation', mastery: 0-100, confidence: 0-1, trend: 'up'|'down'|'flat', evidence: string[]},\\n"
+        "    {id: 'fluency', name: 'Fluency and Coherence', mastery: 0-100, confidence: 0-1, trend: 'up'|'down'|'flat', evidence: string[]},\\n"
+        "    {id: 'vocabulary', name: 'Vocabulary', mastery: 0-100, confidence: 0-1, trend: 'up'|'down'|'flat', evidence: string[]},\\n"
+        "    {id: 'grammar', name: 'Grammar', mastery: 0-100, confidence: 0-1, trend: 'up'|'down'|'flat', evidence: string[]},\\n"
+        "    {id: 'listening', name: 'Comprehension Listening', mastery: 0-100, confidence: 0-1, trend: 'up'|'down'|'flat', evidence: string[]}\\n"
+        "  ],\n"
+        "  strengths: string[],  // skill IDs of top performers\n"
+        "  weaknesses: string[],  // skill IDs needing improvement\n"
         "  nextBestActions: [{id: string, title: string, rationale: string, deeplink: string, expectedGain: 'small'|'medium'|'large'}],\n"
-        "  difficultyCalibration: {pronunciation: 'easier'|'baseline'|'harder', fluency: 'slower'|'baseline'|'faster', vocabulary: 'fewer_terms'|'baseline'|'more_terms'},\n"
+        "  difficultyCalibration: {\n"
+        "    pronunciation: 'easier'|'baseline'|'harder',\n"
+        "    fluency: 'slower'|'baseline'|'faster',\n"
+        "    vocabulary: 'fewer_terms'|'baseline'|'more_terms',\n"
+        "    listening: 'easier'|'baseline'|'harder',\n"
+        "    grammar: 'easier'|'baseline'|'harder'\n"
+        "  },\n"
         "  schedule: [{date: 'YYYY-MM-DD', focus: string, microSkills: string[], reason: string}],\n"
-        "  coachMessage: string, cacheForHours: int\n"
-        "}\n"
-        "Return JSON only.\n"
-        f"FEATURES: {json.dumps(feats, ensure_ascii=False)}\n"
-        "Prefer short evidence quotes from recentTranscripts.\n"
-        "Build deeplinks like app://voicevibe/speaking/topic/<topicId>/(master|conversation|vocab). If no topicId, use 'current'.\n"
+        "  coachMessage: string,\n"
+        "  cacheForHours: int\n"
+        "}\n\n"
+        "Deeplink format: app://voicevibe/speaking/topic/<topicId>/(master|conversation|vocab|listening|grammar)\n"
+        "If no specific topic, use 'current' as topicId.\n\n"
+        f"USER FEATURES:\n{json.dumps(feats, ensure_ascii=False, indent=2)}\n\n"
+        "Return ONLY valid JSON matching the schema above. Ensure all 5 skills are analyzed.\n"
     )
     candidates = [
         getattr(settings, 'GEMINI_TEXT_MODEL', None) or os.environ.get('GEMINI_MODEL') or 'gemini-2.5-pro',
@@ -4427,13 +4680,7 @@ def _call_gemini_coach(user) -> dict:
 
 
 class CoachAnalysisView(APIView):
-    """AI Coach analysis endpoint with 12-hour cache and graceful degradation.
-    
-    - Always serves cached data if available (even if expired) to avoid timeouts
-    - Only computes fresh analysis if no cache exists (first-time users)
-    - Cache TTL is 12 hours to align with 6am/6pm refresh pattern
-    - Use POST /coach/analysis/refresh for manual refresh
-    """
+    """AI Coach analysis endpoint with 12-hour cache and graceful degradation."""
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
@@ -4473,7 +4720,7 @@ class CoachAnalysisRefreshView(APIView):
     
     This endpoint performs a synchronous Gemini call and may take 10-30 seconds.
     Only call this when the user explicitly requests a refresh.
-    For scheduled refreshes (6am/6pm), implement a Celery task or cron job.
+    For scheduled refreshes, implement a Celery task or cron job.
     """
     permission_classes = [permissions.IsAuthenticated]
 
