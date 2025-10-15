@@ -30,7 +30,8 @@ CSRF_TRUSTED_ORIGINS = env.list(
 )
 
 # Static files (served by WhiteNoise)
-STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+# Temporarily using simpler storage to fix admin 500 error
+STATICFILES_STORAGE = "whitenoise.storage.CompressedStaticFilesStorage"
 
 # --- Database ---
 # Prefer a single DATABASE_URL if provided (Railway Postgres) and require SSL

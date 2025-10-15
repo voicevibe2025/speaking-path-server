@@ -78,6 +78,41 @@ class Command(BaseCommand):
                 'part_of_speech': 'noun',
                 'example_sentence': 'The journey to the mountains was long but beautiful.'
             },
+            {
+                'word': 'kind',
+                'definition': 'Having a friendly, generous, and considerate nature.',
+                'difficulty': 'beginner',
+                'part_of_speech': 'adjective',
+                'example_sentence': 'It was very kind of you to help me.'
+            },
+            {
+                'word': 'laugh',
+                'definition': 'Make the spontaneous sounds and movements of the face and body that are the instinctive expressions of lively amusement and sometimes also of derision.',
+                'difficulty': 'beginner',
+                'part_of_speech': 'verb',
+                'example_sentence': 'She started to laugh uncontrollably.'
+            },
+            {
+                'word': 'music',
+                'definition': 'Vocal or instrumental sounds (or both) combined in such a way as to produce beauty of form, harmony, and expression of emotion.',
+                'difficulty': 'beginner',
+                'part_of_speech': 'noun',
+                'example_sentence': 'The music was playing softly in the background.'
+            },
+            {
+                'word': 'ocean',
+                'definition': 'A very large expanse of sea, in particular each of the main areas into which the sea is divided geographically.',
+                'difficulty': 'beginner',
+                'part_of_speech': 'noun',
+                'example_sentence': 'The ocean waves crashed against the shore.'
+            },
+            {
+                'word': 'quiet',
+                'definition': 'Making little or no noise.',
+                'difficulty': 'beginner',
+                'part_of_speech': 'adjective',
+                'example_sentence': 'The library was a quiet place to study.'
+            },
             # Intermediate words
             {
                 'word': 'ambiguous',
@@ -149,6 +184,41 @@ class Command(BaseCommand):
                 'part_of_speech': 'verb',
                 'example_sentence': 'It was difficult to navigate through the dense fog.'
             },
+            {
+                'word': 'nostalgia',
+                'definition': 'A sentimental longing or wistful affection for the past, typically for a period or place with happy personal associations.',
+                'difficulty': 'intermediate',
+                'part_of_speech': 'noun',
+                'example_sentence': 'He was filled with nostalgia for his college days.'
+            },
+            {
+                'word': 'obsolete',
+                'definition': 'No longer produced or used; out of date.',
+                'difficulty': 'intermediate',
+                'part_of_speech': 'adjective',
+                'example_sentence': 'The typewriter has become obsolete with the advent of computers.'
+            },
+            {
+                'word': 'pragmatic',
+                'definition': 'Dealing with things sensibly and realistically in a way that is based on practical rather than theoretical considerations.',
+                'difficulty': 'intermediate',
+                'part_of_speech': 'adjective',
+                'example_sentence': 'She took a pragmatic approach to solving the problem.'
+            },
+            {
+                'word': 'resilient',
+                'definition': 'Able to withstand or recover quickly from difficult conditions.',
+                'difficulty': 'intermediate',
+                'part_of_speech': 'adjective',
+                'example_sentence': 'Children are often more resilient than adults.'
+            },
+            {
+                'word': 'skeptical',
+                'definition': 'Not easily convinced; having doubts or reservations.',
+                'difficulty': 'intermediate',
+                'part_of_speech': 'adjective',
+                'example_sentence': 'He was skeptical about the claims made in the advertisement.'
+            },
             # Advanced words
             {
                 'word': 'aberration',
@@ -219,6 +289,41 @@ class Command(BaseCommand):
                 'difficulty': 'advanced',
                 'part_of_speech': 'noun',
                 'example_sentence': 'Meeting her was pure serendipity; it changed my life for the better.'
+            },
+            {
+                'word': 'sycophant',
+                'definition': 'A person who acts obsequiously toward someone important in order to gain advantage.',
+                'difficulty': 'advanced',
+                'part_of_speech': 'noun',
+                'example_sentence': 'The king was surrounded by sycophants who praised his every decision.'
+            },
+            {
+                'word': 'taciturn',
+                'definition': 'Reserved or uncommunicative in speech; saying little.',
+                'difficulty': 'advanced',
+                'part_of_speech': 'adjective',
+                'example_sentence': 'He was a taciturn man who rarely spoke about his feelings.'
+            },
+            {
+                'word': 'unctuous',
+                'definition': 'Excessively flattering or ingratiating; oily.',
+                'difficulty': 'advanced',
+                'part_of_speech': 'adjective',
+                'example_sentence': 'His unctuous praise made her feel uncomfortable.'
+            },
+            {
+                'word': 'veracity',
+                'definition': 'Conformity to facts; accuracy.',
+                'difficulty': 'advanced',
+                'part_of_speech': 'noun',
+                'example_sentence': 'The veracity of his story was questionable.'
+            },
+            {
+                'word': 'zenith',
+                'definition': 'The time at which something is most powerful or successful.',
+                'difficulty': 'advanced',
+                'part_of_speech': 'noun',
+                'example_sentence': 'The Roman Empire reached its zenith in the 2nd century AD.'
             },
         ]
 
