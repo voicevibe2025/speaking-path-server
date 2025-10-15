@@ -13,5 +13,5 @@ cmds = [
 ]
 
 [start]
-# Start from django directory to ensure correct BASE_DIR resolution
-cmd = "cd django && daphne -b 0.0.0.0 -p ${PORT:-8000} core.asgi:application"
+# Ensure Python can import the Django project when started from /app
+cmd = "PYTHONPATH=django:. daphne -b 0.0.0.0 -p ${PORT:-8000} core.asgi:application"
