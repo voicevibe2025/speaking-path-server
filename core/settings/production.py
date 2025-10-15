@@ -39,6 +39,11 @@ STORAGES = {
     },
 }
 
+# Fallback: allow WhiteNoise to use Django's staticfiles finders at runtime.
+# This ensures admin CSS/JS are served even if collectstatic didn't populate STATIC_ROOT.
+# You can turn this off later by setting WHITENOISE_USE_FINDERS=false in Railway env.
+WHITENOISE_USE_FINDERS = env.bool("WHITENOISE_USE_FINDERS", default=True)
+
 # --- Database ---
 # Prefer a single DATABASE_URL if provided (Railway Postgres) and require SSL
 # Guard against an empty string value (which can cause invalid engine warnings)
