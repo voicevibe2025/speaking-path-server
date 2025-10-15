@@ -53,6 +53,7 @@ urlpatterns = [
     path(f'{API_V1_PREFIX}practice/', include('apps.practice.urls')),
     path(f'{API_V1_PREFIX}social/', include('apps.social.urls')),
     path(f'{API_V1_PREFIX}messaging/', include('apps.messaging.urls')),
+    path(f'{API_V1_PREFIX}wordup/', include('apps.wordup.urls')),
 ]
 
 # Serve media files in development
