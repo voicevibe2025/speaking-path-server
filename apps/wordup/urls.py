@@ -4,6 +4,7 @@ from .views import (
     EvaluateExampleView,
     MasteredWordsView,
     WordProgressStatsView,
+    WordTTSView,
 )
 
 app_name = 'wordup'
@@ -13,4 +14,5 @@ urlpatterns = [
     path('evaluate/', EvaluateExampleView.as_view(), name='evaluate'),
     path('mastered-words/', MasteredWordsView.as_view(), name='mastered-words'),
     path('stats/', WordProgressStatsView.as_view(), name='stats'),
+    path('tts/', WordTTSView.as_view(), name='tts'),
 ]

@@ -41,7 +41,7 @@ class UserWordProgressSerializer(serializers.ModelSerializer):
 class EvaluateExampleRequest(serializers.Serializer):
     """Request serializer for evaluating example sentences."""
     word_id = serializers.IntegerField()
-    example_sentence = serializers.CharField(max_length=500)
+    example_sentence = serializers.CharField(max_length=500, required=False, allow_blank=True, allow_null=True)
     audio_base64 = serializers.CharField(required=False, allow_blank=True)
 
 

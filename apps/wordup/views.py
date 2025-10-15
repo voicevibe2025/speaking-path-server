@@ -4,6 +4,7 @@ import tempfile
 import logging
 from django.utils import timezone
 from django.db.models import Q
+from django.http import HttpResponse
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -22,6 +23,14 @@ from apps.ai_evaluation.services import WhisperService
 from apps.gamification.models import PointsTransaction
 
 logger = logging.getLogger(__name__)
+
+# Try to import gTTS, but make it optional
+try:
+    from gtts import gTTS
+    GTTS_AVAILABLE = True
+except ImportError:
+    GTTS_AVAILABLE = False
+    logger.warning("gTTS not installed. Word pronunciation will not be available.")
 
 
 class GetRandomWordView(APIView):
@@ -84,8 +93,7 @@ class EvaluateExampleView(APIView):
             whisper_service = WhisperService()
             
             result = await whisper_service.transcribe_audio(
-                audio_bytes,
-                prefer_faster_whisper=True
+                audio_bytes
             )
             
             return result.get('text', '').strip()
@@ -187,8 +195,8 @@ Be encouraging and supportive. Focus on whether they understand the word, not pe
         
         data = serializer.validated_data
         word_id = data['word_id']
-        example_sentence = data.get('example_sentence', '').strip()
-        audio_base64 = data.get('audio_base64', '')
+        example_sentence = (data.get('example_sentence') or '').strip()
+        audio_base64 = data.get('audio_base64') or ''
         
         # Get the word
         try:
@@ -321,3 +329,57 @@ class WordProgressStatsView(APIView):
             'in_progress_count': in_progress_count,
             'completion_percentage': round((mastered_count / total_words * 100) if total_words > 0 else 0, 2)
         })
+
+
+class WordTTSView(APIView):
+    """
+    GET /api/v1/wordup/tts/?text=word
+    Returns MP3 audio pronunciation of a word using gTTS.
+    Fast, simple TTS specifically for WordUp feature.
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        if not GTTS_AVAILABLE:
+            return Response(
+                {"error": "TTS service not available"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
+        
+        text = request.query_params.get('text', '').strip()
+        if not text:
+            return Response(
+                {"error": "Text parameter is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            # Generate TTS audio using gTTS
+            tts = gTTS(text=text, lang='en', slow=False)
+            
+            # Save to temporary file
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.mp3') as tmp_file:
+                tmp_path = tmp_file.name
+                tts.save(tmp_path)
+            
+            # Read the audio file
+            with open(tmp_path, 'rb') as audio_file:
+                audio_data = audio_file.read()
+            
+            # Clean up temp file
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
+            
+            # Return audio as MP3
+            response = HttpResponse(audio_data, content_type='audio/mpeg')
+            response['Content-Disposition'] = f'inline; filename="word_pronunciation.mp3"'
+            return response
+            
+        except Exception as e:
+            logger.error(f"TTS generation error: {e}")
+            return Response(
+                {"error": "Failed to generate pronunciation"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
