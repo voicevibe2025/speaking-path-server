@@ -38,7 +38,7 @@ from django.db.models import Avg, Count, Sum
 import requests
 from .models import (
     Topic, PhraseProgress, UserPhraseRecording, TopicProgress,
-    VocabularyPracticeSession, ListeningPracticeSession,
+    VocabularyPracticeSession, ListeningPracticeSession, GrammarPracticeSession,
     UserConversationRecording, UserProfile
 )
 from apps.gamification.models import UserLevel, PointsTransaction
@@ -231,10 +231,17 @@ def _unlock_all_for_user(user) -> bool:
 def _meets_completion_criteria(topic_progress):
     """
     Check if a topic meets the completion criteria:
-    - All 3 main practices (pronunciation, fluency, vocabulary) must be completed
+    - All 4 main practices (pronunciation, fluency, vocabulary, grammar) must be completed
     - For EACH practice, user must reach at least 75% of that practice's maximum score for the topic
+    
+    GRANDFATHER CLAUSE: If a topic is already marked as completed, honor that status
+    to preserve existing student progress when new requirements are added.
     """
-    # Check if all 3 main practices are completed (robust: accept phrase progress as pronunciation completion)
+    # Grandfather clause: honor existing completions (preserve student progress)
+    if getattr(topic_progress, 'completed', False):
+        return True
+    
+    # Check if all 4 main practices are completed (robust: accept phrase progress as pronunciation completion)
     try:
         topic = getattr(topic_progress, 'topic', None)
         user = getattr(topic_progress, 'user', None)
@@ -270,17 +277,26 @@ def _meets_completion_criteria(topic_progress):
     except Exception:
         pass
 
-    if not (pron_complete_effective and fluency_complete_effective and vocabulary_complete_effective):
+    # Grammar completion: require at least one completed session (ignore flags)
+    grammar_complete_effective = False
+    try:
+        if topic and user:
+            grammar_complete_effective = GrammarPracticeSession.objects.filter(user=user, topic=topic, completed=True).exists()
+    except Exception:
+        pass
+
+    if not (pron_complete_effective and fluency_complete_effective and vocabulary_complete_effective and grammar_complete_effective):
         return False
 
     topic = getattr(topic_progress, 'topic', None)
     if not topic:
         return False
 
-    # Compute per-practice maxima (normalized 0â€“100 scale per practice)
+    # Compute per-practice maxima (normalized 0–100 scale per practice)
     pron_max = 100
     flu_max = 100
     vocab_max = 100
+    grammar_max = 100
 
     # Effective (clamped) totals to avoid exceeding maxima
     pron_total = int(topic_progress.pronunciation_total_score or 0)
@@ -309,12 +325,15 @@ def _meets_completion_criteria(topic_progress):
             pass
     flu_total = int(topic_progress.fluency_total_score or 0)
     vocab_total = int(topic_progress.vocabulary_total_score or 0)
+    grammar_total = int(topic_progress.grammar_total_score or 0)
     if pron_max > 0:
         pron_total = min(pron_total, pron_max)
     if flu_max > 0:
         flu_total = min(flu_total, flu_max)
     if vocab_max > 0:
         vocab_total = min(vocab_total, vocab_max)
+    if grammar_max > 0:
+        grammar_total = min(grammar_total, grammar_max)
 
     # Require each practice to reach >= 75% of its max
     def meets(score, mx):
@@ -327,6 +346,7 @@ def _meets_completion_criteria(topic_progress):
         meets(pron_total, pron_max),
         meets(flu_total, flu_max),
         meets(vocab_total, vocab_max),
+        meets(grammar_total, grammar_max),
     ])
 
 
@@ -2060,11 +2080,13 @@ class SpeakingTopicsView(APIView):
             pron_max = 100
             flu_max = 100
             vocab_max = 100
+            grammar_max = 100
 
             # Clamp totals to maxima for fair percentage/progress
             eff_pron = min(pronunciation_score, pron_max) if pron_max > 0 else 0
             eff_flu = min(fluency_total_score, flu_max) if flu_max > 0 else 0
             eff_vocab = min(vocabulary_score, vocab_max) if vocab_max > 0 else 0
+            eff_grammar = min(grammar_score, grammar_max) if grammar_max > 0 else 0
 
             # Per-practice 75% thresholds
             def met(score, mx):
@@ -2075,21 +2097,23 @@ class SpeakingTopicsView(APIView):
             pron_met = met(eff_pron, pron_max)
             flu_met = met(eff_flu, flu_max)
             vocab_met = met(eff_vocab, vocab_max)
+            grammar_met = met(eff_grammar, grammar_max)
 
-            # Combined progress
-            total_max = int(pron_max + flu_max + vocab_max)
-            total_score = int(eff_pron + eff_flu + eff_vocab)
+            # Combined progress (now includes grammar as 4th required practice)
+            total_max = int(pron_max + flu_max + vocab_max + grammar_max)
+            total_score = int(eff_pron + eff_flu + eff_vocab + eff_grammar)
             combined_percent = round((total_score / total_max) * 100.0, 1) if total_max > 0 else 0.0
             combined_threshold_score = int(math.ceil(0.75 * total_max)) if total_max > 0 else 0
 
-            meets_requirement = bool(pron_met and flu_met and vocab_met)
+            meets_requirement = bool(pron_met and flu_met and vocab_met and grammar_met)
             practice_scores_data = {
                 'pronunciation': pronunciation_score,
                 'fluency': fluency_total_score,
                 'vocabulary': vocabulary_score,
-                # Listening and Grammar practice (optional; not part of unlock criteria)
-                'listening': int(getattr(tp, 'listening_total_score', 0) or 0),
+                # Grammar is now part of unlock criteria (4th required practice)
                 'grammar': grammar_score,
+                # Listening practice (optional; not part of unlock criteria)
+                'listening': int(getattr(tp, 'listening_total_score', 0) or 0),
                 # Keep average as a normalized combined percent for clearer UI
                 'average': combined_percent,
                 'meetsRequirement': meets_requirement,
@@ -2097,13 +2121,13 @@ class SpeakingTopicsView(APIView):
                 'maxPronunciation': pron_max,
                 'maxFluency': flu_max,
                 'maxVocabulary': vocab_max,
+                'maxGrammar': grammar_max,
                 'maxListening': 100,
-                'maxGrammar': 100,
                 'pronunciationMet': pron_met,
                 'fluencyMet': flu_met,
                 'vocabularyMet': vocab_met,
+                'grammarMet': grammar_met,
                 'listeningMet': False,
-                'grammarMet': False,
                 'totalScore': total_score,
                 'totalMaxScore': total_max,
                 'combinedThresholdScore': combined_threshold_score,
