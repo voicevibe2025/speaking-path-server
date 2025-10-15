@@ -9,7 +9,8 @@ from .views import (
     LearningProgressViewSet,
     ErrorPatternViewSet,
     SkillAssessmentViewSet,
-    AnalyticsDashboardViewSet
+    AnalyticsDashboardViewSet,
+    ChatModeUsageViewSet
 )
 
 # Create router and register viewsets
@@ -20,6 +21,7 @@ router.register(r'progress', LearningProgressViewSet, basename='learning-progres
 router.register(r'error-patterns', ErrorPatternViewSet, basename='error-patterns')
 router.register(r'assessments', SkillAssessmentViewSet, basename='skill-assessments')
 router.register(r'dashboard', AnalyticsDashboardViewSet, basename='analytics-dashboard')
+router.register(r'chat-mode-usage', ChatModeUsageViewSet, basename='chat-mode-usage')
 
 app_name = 'analytics'
 

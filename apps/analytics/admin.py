@@ -11,7 +11,8 @@ from .models import (
     SessionAnalytics,
     LearningProgress,
     ErrorPattern,
-    SkillAssessment
+    SkillAssessment,
+    ChatModeUsage
 )
 
 
@@ -849,3 +850,228 @@ class SkillAssessmentAdmin(admin.ModelAdmin):
         html += '</div>'
         return format_html(html)
     display_recommendations.short_description = 'Recommendations'
+
+
+@admin.register(ChatModeUsage)
+class ChatModeUsageAdmin(admin.ModelAdmin):
+    """Admin for ChatModeUsage - Track Text vs Voice chat usage"""
+    list_display = [
+        'user',
+        'display_mode',
+        'display_status',
+        'started_at',
+        'display_duration',
+        'message_count',
+        'device_info'
+    ]
+    list_filter = [
+        'mode',
+        'is_active',
+        'started_at',
+        'device_info'
+    ]
+    search_fields = ['user__username', 'user__email', 'user__display_name', 'session_id']
+    readonly_fields = [
+        'usage_id',
+        'session_id',
+        'started_at',
+        'created_at',
+        'updated_at',
+        'display_session_info'
+    ]
+    date_hierarchy = 'started_at'
+    
+    fieldsets = (
+        ('User & Session', {
+            'fields': (
+                'user',
+                'usage_id',
+                'session_id',
+                'display_session_info'
+            )
+        }),
+        ('Chat Mode', {
+            'fields': (
+                'mode',
+                'is_active',
+                'message_count'
+            )
+        }),
+        ('Timing', {
+            'fields': (
+                'started_at',
+                'ended_at',
+                'duration_seconds'
+            )
+        }),
+        ('Device Info', {
+            'fields': (
+                'device_info',
+                'app_version'
+            ),
+            'classes': ('collapse',)
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        })
+    )
+    
+    actions = ['mark_as_ended', 'export_stats']
+    
+    def display_mode(self, obj):
+        """Display mode with icon"""
+        icons = {
+            'text': '💬',
+            'voice': '🎤'
+        }
+        colors = {
+            'text': '#3498db',
+            'voice': '#e74c3c'
+        }
+        return format_html(
+            '<span style="color: {}; font-weight: bold;">{} {}</span>',
+            colors.get(obj.mode, '#000'),
+            icons.get(obj.mode, ''),
+            obj.get_mode_display()
+        )
+    display_mode.short_description = 'Mode'
+    display_mode.admin_order_field = 'mode'
+    
+    def display_status(self, obj):
+        """Display active status"""
+        if obj.is_active:
+            return format_html(
+                '<span style="color: #28a745; font-weight: bold;">● ACTIVE</span>'
+            )
+        else:
+            return format_html(
+                '<span style="color: #6c757d;">● Ended</span>'
+            )
+    display_status.short_description = 'Status'
+    display_status.admin_order_field = 'is_active'
+    
+    def display_duration(self, obj):
+        """Display session duration"""
+        duration = obj.calculate_duration()
+        minutes = int(duration // 60)
+        seconds = int(duration % 60)
+        
+        if obj.is_active:
+            return format_html(
+                '<span style="color: #28a745;">{}m {}s (ongoing)</span>',
+                minutes, seconds
+            )
+        else:
+            return f'{minutes}m {seconds}s'
+    display_duration.short_description = 'Duration'
+    
+    def display_session_info(self, obj):
+        """Display comprehensive session information"""
+        duration = obj.calculate_duration()
+        minutes = int(duration // 60)
+        seconds = int(duration % 60)
+        
+        html = '<div style="padding: 15px; background: #f8f9fa; border-radius: 8px;">'
+        html += '<table style="width: 100%; border-collapse: collapse;">'
+        
+        rows = [
+            ('👤 User', f'{obj.user.display_name or obj.user.username} ({obj.user.email})'),
+            ('💬/🎤 Mode', f'<strong>{obj.get_mode_display()}</strong>'),
+            ('🆔 Session ID', str(obj.session_id)),
+            ('⏰ Started', obj.started_at.strftime('%Y-%m-%d %H:%M:%S')),
+        ]
+        
+        if obj.ended_at:
+            rows.append(('🏁 Ended', obj.ended_at.strftime('%Y-%m-%d %H:%M:%S')))
+        
+        rows.extend([
+            ('⏱️ Duration', f'{minutes} min {seconds} sec'),
+            ('💬 Messages', str(obj.message_count)),
+            ('📱 Device', obj.device_info or 'Not specified'),
+            ('📲 App Version', obj.app_version or 'Not specified'),
+            ('✅ Status', '<span style="color: green;">Active</span>' if obj.is_active else '<span style="color: gray;">Ended</span>')
+        ])
+        
+        for label, value in rows:
+            html += f'<tr><td style="padding: 5px; font-weight: bold;">{label}:</td><td style="padding: 5px;">{value}</td></tr>'
+        
+        html += '</table></div>'
+        return format_html(html)
+    display_session_info.short_description = 'Session Details'
+    
+    def mark_as_ended(self, request, queryset):
+        """Mark selected sessions as ended"""
+        count = 0
+        for usage in queryset.filter(is_active=True):
+            usage.end_session()
+            count += 1
+        
+        self.message_user(
+            request,
+            f'{count} session(s) marked as ended.',
+            'success'
+        )
+    mark_as_ended.short_description = 'Mark selected as ended'
+    
+    def export_stats(self, request, queryset):
+        """Export statistics for selected sessions"""
+        from django.http import HttpResponse
+        import csv
+        
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="chat_mode_stats.csv"'
+        
+        writer = csv.writer(response)
+        writer.writerow([
+            'User Email', 'Username', 'Mode', 'Started At', 'Ended At',
+            'Duration (seconds)', 'Messages', 'Device', 'App Version', 'Status'
+        ])
+        
+        for usage in queryset:
+            writer.writerow([
+                usage.user.email,
+                usage.user.username,
+                usage.mode,
+                usage.started_at,
+                usage.ended_at if usage.ended_at else 'Active',
+                usage.calculate_duration(),
+                usage.message_count,
+                usage.device_info,
+                usage.app_version,
+                'Active' if usage.is_active else 'Ended'
+            ])
+        
+        return response
+    export_stats.short_description = 'Export stats to CSV'
+    
+    def changelist_view(self, request, extra_context=None):
+        """Add summary statistics to the change list view"""
+        extra_context = extra_context or {}
+        
+        # Calculate aggregate stats
+        total_sessions = ChatModeUsage.objects.count()
+        active_sessions = ChatModeUsage.objects.filter(is_active=True).count()
+        text_sessions = ChatModeUsage.objects.filter(mode='text').count()
+        voice_sessions = ChatModeUsage.objects.filter(mode='voice').count()
+        
+        # Get unique users
+        unique_users = ChatModeUsage.objects.values('user').distinct().count()
+        
+        # Get currently active users
+        active_users = ChatModeUsage.objects.filter(
+            is_active=True
+        ).values('user').distinct().count()
+        
+        extra_context['summary_stats'] = {
+            'total_sessions': total_sessions,
+            'active_sessions': active_sessions,
+            'text_sessions': text_sessions,
+            'voice_sessions': voice_sessions,
+            'text_percentage': round((text_sessions / total_sessions * 100) if total_sessions > 0 else 0, 1),
+            'voice_percentage': round((voice_sessions / total_sessions * 100) if total_sessions > 0 else 0, 1),
+            'unique_users': unique_users,
+            'active_users': active_users
+        }
+        
+        return super().changelist_view(request, extra_context)

@@ -483,3 +483,77 @@ class SkillAssessment(models.Model):
         )
 
         return round(total, 2)
+
+
+class ChatModeUsage(models.Model):
+    """
+    Track usage of Text vs Voice chat modes with Vivi
+    """
+    usage_id = models.UUIDField(
+        default=uuid.uuid4,
+        editable=False,
+        unique=True
+    )
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='chat_mode_usage'
+    )
+    
+    # Chat Mode
+    mode = models.CharField(
+        max_length=10,
+        choices=[
+            ('text', 'Text Chat'),
+            ('voice', 'Voice Chat'),
+        ]
+    )
+    
+    # Session Details
+    session_id = models.UUIDField(default=uuid.uuid4)  # Group related chat interactions
+    started_at = models.DateTimeField(auto_now_add=True)
+    ended_at = models.DateTimeField(null=True, blank=True)
+    duration_seconds = models.IntegerField(default=0)
+    
+    # Usage Metrics
+    message_count = models.IntegerField(default=0)  # Number of messages/turns
+    is_active = models.BooleanField(default=True)  # Currently active session
+    
+    # Metadata
+    device_info = models.CharField(max_length=100, blank=True)  # Optional device/platform info
+    app_version = models.CharField(max_length=20, blank=True)
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = "Chat Mode Usage"
+        verbose_name_plural = "Chat Mode Usages"
+        ordering = ['-started_at']
+        indexes = [
+            models.Index(fields=['user', '-started_at']),
+            models.Index(fields=['mode', '-started_at']),
+            models.Index(fields=['is_active']),
+        ]
+    
+    def __str__(self):
+        return f"{self.user.email} - {self.get_mode_display()} - {self.started_at}"
+    
+    def calculate_duration(self):
+        """Calculate session duration in seconds"""
+        if self.ended_at:
+            return (self.ended_at - self.started_at).total_seconds()
+        elif not self.is_active:
+            return self.duration_seconds
+        else:
+            # Still active, calculate current duration
+            return (timezone.now() - self.started_at).total_seconds()
+    
+    def end_session(self):
+        """Mark session as ended"""
+        if self.is_active:
+            self.ended_at = timezone.now()
+            self.duration_seconds = int(self.calculate_duration())
+            self.is_active = False
+            self.save()

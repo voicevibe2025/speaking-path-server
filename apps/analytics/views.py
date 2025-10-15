@@ -13,7 +13,8 @@ from .models import (
     SessionAnalytics,
     LearningProgress,
     ErrorPattern,
-    SkillAssessment
+    SkillAssessment,
+    ChatModeUsage
 )
 from .serializers import (
     UserAnalyticsSerializer,
@@ -23,7 +24,11 @@ from .serializers import (
     ErrorPatternSerializer,
     SkillAssessmentSerializer,
     ProgressSummarySerializer,
-    AnalyticsDashboardSerializer
+    AnalyticsDashboardSerializer,
+    ChatModeUsageSerializer,
+    ChatModeUsageCreateSerializer,
+    ChatModeStatsSerializer,
+    ChatModeUserStatsSerializer
 )
 
 
@@ -697,3 +702,244 @@ class AnalyticsDashboardViewSet(viewsets.ViewSet):
             'top_skills': top_skills,
             'areas_to_improve': areas_to_improve
         }
+
+
+class ChatModeUsageViewSet(viewsets.ModelViewSet):
+    """ViewSet for tracking Text/Voice chat mode usage"""
+    serializer_class = ChatModeUsageSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        """Get chat mode usage records"""
+        return ChatModeUsage.objects.filter(user=self.request.user)
+
+    def get_serializer_class(self):
+        """Use different serializer for creation"""
+        if self.action == 'create':
+            return ChatModeUsageCreateSerializer
+        return ChatModeUsageSerializer
+
+    def create(self, request, *args, **kwargs):
+        """Start a new chat mode session"""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        # End any existing active sessions for this user
+        ChatModeUsage.objects.filter(
+            user=request.user,
+            is_active=True
+        ).update(
+            is_active=False,
+            ended_at=timezone.now(),
+            duration_seconds=F('duration_seconds')
+        )
+        
+        # Create new session
+        usage = serializer.save(user=request.user)
+        
+        return Response(
+            ChatModeUsageSerializer(usage).data,
+            status=status.HTTP_201_CREATED
+        )
+
+    @action(detail=True, methods=['post'])
+    def end_session(self, request, pk=None):
+        """End a chat mode session"""
+        usage = self.get_object()
+        
+        if not usage.is_active:
+            return Response(
+                {'error': 'Session is already ended'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        usage.end_session()
+        
+        return Response(
+            ChatModeUsageSerializer(usage).data
+        )
+
+    @action(detail=True, methods=['post'])
+    def increment_messages(self, request, pk=None):
+        """Increment message count for active session"""
+        usage = self.get_object()
+        
+        if not usage.is_active:
+            return Response(
+                {'error': 'Session is not active'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        increment_by = request.data.get('count', 1)
+        usage.message_count += increment_by
+        usage.save()
+        
+        return Response(
+            ChatModeUsageSerializer(usage).data
+        )
+
+    @action(detail=False, methods=['get'])
+    def stats(self, request):
+        """Get overall chat mode usage statistics"""
+        now = timezone.now()
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        week_start = now - timedelta(days=now.weekday())
+        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        
+        # Overall stats
+        all_sessions = ChatModeUsage.objects.all()
+        
+        total_sessions = all_sessions.count()
+        active_sessions = all_sessions.filter(is_active=True).count()
+        
+        text_sessions = all_sessions.filter(mode='text')
+        voice_sessions = all_sessions.filter(mode='voice')
+        
+        text_count = text_sessions.count()
+        voice_count = voice_sessions.count()
+        
+        # Percentages
+        text_percentage = (text_count / total_sessions * 100) if total_sessions > 0 else 0
+        voice_percentage = (voice_count / total_sessions * 100) if total_sessions > 0 else 0
+        
+        # Average duration
+        avg_duration = all_sessions.exclude(
+            is_active=True
+        ).aggregate(
+            avg=Avg('duration_seconds')
+        )['avg'] or 0
+        
+        # Total messages
+        total_messages = all_sessions.aggregate(
+            total=Sum('message_count')
+        )['total'] or 0
+        
+        # Unique users
+        unique_users = all_sessions.values('user').distinct().count()
+        
+        # Active users now
+        active_users_now = all_sessions.filter(
+            is_active=True
+        ).values('user').distinct().count()
+        
+        # Mode-specific stats
+        text_mode_stats = {
+            'total_sessions': text_count,
+            'avg_duration': text_sessions.exclude(is_active=True).aggregate(
+                avg=Avg('duration_seconds')
+            )['avg'] or 0,
+            'avg_messages': text_sessions.aggregate(
+                avg=Avg('message_count')
+            )['avg'] or 0,
+            'active_now': text_sessions.filter(is_active=True).count()
+        }
+        
+        voice_mode_stats = {
+            'total_sessions': voice_count,
+            'avg_duration': voice_sessions.exclude(is_active=True).aggregate(
+                avg=Avg('duration_seconds')
+            )['avg'] or 0,
+            'avg_messages': voice_sessions.aggregate(
+                avg=Avg('message_count')
+            )['avg'] or 0,
+            'active_now': voice_sessions.filter(is_active=True).count()
+        }
+        
+        # Time-based stats
+        today_sessions = all_sessions.filter(started_at__gte=today_start).count()
+        this_week_sessions = all_sessions.filter(started_at__gte=week_start).count()
+        this_month_sessions = all_sessions.filter(started_at__gte=month_start).count()
+        
+        stats_data = {
+            'total_sessions': total_sessions,
+            'active_sessions': active_sessions,
+            'text_chat_sessions': text_count,
+            'voice_chat_sessions': voice_count,
+            'text_chat_percentage': round(text_percentage, 2),
+            'voice_chat_percentage': round(voice_percentage, 2),
+            'average_session_duration': round(avg_duration, 2),
+            'total_messages': total_messages,
+            'unique_users': unique_users,
+            'active_users_now': active_users_now,
+            'text_mode_stats': text_mode_stats,
+            'voice_mode_stats': voice_mode_stats,
+            'today_sessions': today_sessions,
+            'this_week_sessions': this_week_sessions,
+            'this_month_sessions': this_month_sessions,
+        }
+        
+        serializer = ChatModeStatsSerializer(stats_data)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'])
+    def user_stats(self, request):
+        """Get per-user chat mode usage statistics"""
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        
+        # Get all users with chat sessions
+        users_with_sessions = ChatModeUsage.objects.values('user').distinct()
+        
+        user_stats_list = []
+        
+        for user_data in users_with_sessions:
+            user = User.objects.get(id=user_data['user'])
+            sessions = ChatModeUsage.objects.filter(user=user)
+            
+            text_count = sessions.filter(mode='text').count()
+            voice_count = sessions.filter(mode='voice').count()
+            
+            # Determine preferred mode
+            if text_count > voice_count:
+                preferred_mode = 'text'
+            elif voice_count > text_count:
+                preferred_mode = 'voice'
+            else:
+                preferred_mode = 'equal'
+            
+            # Total duration
+            total_duration = sessions.exclude(is_active=True).aggregate(
+                total=Sum('duration_seconds')
+            )['total'] or 0
+            
+            # Total messages
+            total_messages = sessions.aggregate(
+                total=Sum('message_count')
+            )['total'] or 0
+            
+            # Last session
+            last_session = sessions.order_by('-started_at').first()
+            
+            # Currently active
+            is_currently_active = sessions.filter(is_active=True).exists()
+            
+            user_stats_list.append({
+                'user_id': user.id,
+                'user_email': user.email,
+                'username': user.username,
+                'display_name': user.display_name or user.username,
+                'total_sessions': sessions.count(),
+                'text_chat_count': text_count,
+                'voice_chat_count': voice_count,
+                'preferred_mode': preferred_mode,
+                'total_duration_seconds': total_duration,
+                'total_messages': total_messages,
+                'last_session_at': last_session.started_at if last_session else None,
+                'is_currently_active': is_currently_active
+            })
+        
+        # Sort by total sessions descending
+        user_stats_list.sort(key=lambda x: x['total_sessions'], reverse=True)
+        
+        serializer = ChatModeUserStatsSerializer(user_stats_list, many=True)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'])
+    def active_sessions(self, request):
+        """Get currently active chat sessions with user details"""
+        active_sessions = ChatModeUsage.objects.filter(
+            is_active=True
+        ).select_related('user').order_by('-started_at')
+        
+        serializer = ChatModeUsageSerializer(active_sessions, many=True)
+        return Response(serializer.data)

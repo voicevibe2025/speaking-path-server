@@ -8,7 +8,8 @@ from .models import (
     SessionAnalytics,
     LearningProgress,
     ErrorPattern,
-    SkillAssessment
+    SkillAssessment,
+    ChatModeUsage
 )
 
 User = get_user_model()
@@ -358,3 +359,81 @@ class AnalyticsDashboardSerializer(serializers.Serializer):
                 })
 
         return insights
+
+
+class ChatModeUsageSerializer(serializers.ModelSerializer):
+    """Serializer for ChatModeUsage model"""
+    user_email = serializers.EmailField(source='user.email', read_only=True)
+    user_id = serializers.IntegerField(source='user.id', read_only=True)
+    username = serializers.CharField(source='user.username', read_only=True)
+    display_name = serializers.CharField(source='user.display_name', read_only=True)
+    current_duration = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = ChatModeUsage
+        fields = [
+            'usage_id', 'user', 'user_id', 'user_email', 'username', 'display_name',
+            'mode', 'session_id', 'started_at', 'ended_at', 'duration_seconds',
+            'current_duration', 'message_count', 'is_active', 'device_info',
+            'app_version', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['usage_id', 'session_id', 'created_at', 'updated_at']
+    
+    def get_current_duration(self, obj):
+        """Get current duration in seconds"""
+        return int(obj.calculate_duration())
+
+
+class ChatModeUsageCreateSerializer(serializers.ModelSerializer):
+    """Serializer for creating ChatModeUsage sessions"""
+    
+    class Meta:
+        model = ChatModeUsage
+        fields = ['mode', 'device_info', 'app_version']
+    
+    def validate_mode(self, value):
+        """Validate mode is either 'text' or 'voice'"""
+        if value not in ['text', 'voice']:
+            raise serializers.ValidationError(
+                "Mode must be either 'text' or 'voice'"
+            )
+        return value
+
+
+class ChatModeStatsSerializer(serializers.Serializer):
+    """Serializer for chat mode usage statistics"""
+    total_sessions = serializers.IntegerField()
+    active_sessions = serializers.IntegerField()
+    text_chat_sessions = serializers.IntegerField()
+    voice_chat_sessions = serializers.IntegerField()
+    text_chat_percentage = serializers.FloatField()
+    voice_chat_percentage = serializers.FloatField()
+    average_session_duration = serializers.FloatField()
+    total_messages = serializers.IntegerField()
+    unique_users = serializers.IntegerField()
+    active_users_now = serializers.IntegerField()
+    
+    # Per-mode breakdown
+    text_mode_stats = serializers.DictField(child=serializers.FloatField())
+    voice_mode_stats = serializers.DictField(child=serializers.FloatField())
+    
+    # Time-based stats
+    today_sessions = serializers.IntegerField()
+    this_week_sessions = serializers.IntegerField()
+    this_month_sessions = serializers.IntegerField()
+
+
+class ChatModeUserStatsSerializer(serializers.Serializer):
+    """Serializer for individual user chat mode statistics"""
+    user_id = serializers.IntegerField()
+    user_email = serializers.EmailField()
+    username = serializers.CharField()
+    display_name = serializers.CharField()
+    total_sessions = serializers.IntegerField()
+    text_chat_count = serializers.IntegerField()
+    voice_chat_count = serializers.IntegerField()
+    preferred_mode = serializers.CharField()
+    total_duration_seconds = serializers.IntegerField()
+    total_messages = serializers.IntegerField()
+    last_session_at = serializers.DateTimeField()
+    is_currently_active = serializers.BooleanField()
