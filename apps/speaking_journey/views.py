@@ -1233,7 +1233,7 @@ def _sample_vocabulary_questions(topic: Topic, n: int) -> list[dict]:
 
 
 def _generate_grammar_questions(topic: Topic, n: int) -> list[dict]:
-    """Generate n challenging grammar fill-in-the-blank questions using Gemini AI.
+    """Generate n B1-B2 level grammar fill-in-the-blank questions using Gemini AI.
     
     Questions are based on the topic context but do NOT use actual conversation examples.
     Each question has a sentence with a blank (____) and 4 options, one correct.
@@ -1258,17 +1258,34 @@ def _generate_grammar_questions(topic: Topic, n: int) -> list[dict]:
     conversation_examples = [turn.get('text', '') for turn in (topic.conversation_example or []) if isinstance(turn, dict)]
     conversation_text = ' '.join(conversation_examples[:3]) if conversation_examples else ''
     
-    prompt = f"""You are an expert English grammar tutor creating challenging multiple-choice fill-in-the-blank questions.
+    prompt = f"""You are an expert English grammar tutor creating B1-B2 intermediate level multiple-choice fill-in-the-blank questions.
 
 Topic: {topic_title}
 Description: {topic_desc}
 
-Generate {n} grammar questions related to this topic context. Each question should:
-1. Test a specific grammar point (verb tenses, prepositions, articles, conditionals, modals, etc.)
-2. Be challenging and slightly tricky to make users think carefully
+Generate {n} DIVERSE grammar questions suitable for B1-B2 (CEFR intermediate) level learners related to this topic context. 
+
+IMPORTANT: VARY the grammar topics across all questions. Include a MIX of these different grammar areas:
+- Verb tenses (present simple, past simple, present perfect, future)
+- Subject-verb agreement
+- Articles (a, an, the)
+- Prepositions (time and place)
+- Comparatives and superlatives
+- Modal verbs (can, should, must, might, would)
+- Question forms
+- Gerunds vs infinitives
+- Pronouns (subject, object, possessive)
+- Conjunctions (and, but, because, although)
+- Quantifiers (some, any, much, many, few)
+- Adverbs of frequency
+
+Each question should:
+1. Test a DIFFERENT grammar point from the others - ensure variety!
+2. Be clear and straightforward - focus on practical, everyday grammar usage
 3. NOT use any sentences from the actual conversation examples
-4. Have exactly 4 options: one correct answer and 3 plausible distractors
-5. Use realistic, natural English sentences
+4. Have exactly 4 options: one correct answer and 3 plausible but clearly wrong distractors
+5. Use simple, natural English sentences from everyday situations
+6. Avoid advanced or tricky grammar constructions (no subjunctive, complex conditionals, or rare tenses)
 
 IMPORTANT: Do NOT copy or closely paraphrase these conversation examples:
 {conversation_text}
@@ -1276,13 +1293,18 @@ IMPORTANT: Do NOT copy or closely paraphrase these conversation examples:
 Format your response as valid JSON array ONLY (no markdown, no code blocks):
 [
   {{
-    "sentence": "I ____ to Paris three times last year.",
-    "options": ["go", "went", "have gone", "had gone"],
-    "answer": "went"
+    "sentence": "She ____ taller than her brother.",
+    "options": ["is", "are", "be", "am"],
+    "answer": "is"
+  }},
+  {{
+    "sentence": "I enjoy ____ books in my free time.",
+    "options": ["reading", "to read", "read", "reads"],
+    "answer": "reading"
   }}
 ]
 
-Generate {n} questions now:"""
+Generate {n} VARIED questions now:"""
     
     candidates = [
         'gemini-2.5-flash',
@@ -1373,34 +1395,81 @@ Generate {n} questions now:"""
 
 
 def _fallback_grammar_questions(topic: Topic, n: int) -> list[dict]:
-    """Generate simple fallback grammar questions when Gemini is unavailable."""
+    """Generate diverse fallback grammar questions when Gemini is unavailable."""
     import random
     
     templates = [
+        # Past simple
         {
             'sentence': 'I ____ to the market yesterday.',
             'options': ['go', 'went', 'have gone', 'will go'],
             'answer': 'went'
         },
+        # Present perfect
         {
             'sentence': 'She ____ English for three years.',
             'options': ['studies', 'studied', 'has studied', 'will study'],
             'answer': 'has studied'
         },
+        # Comparatives
         {
-            'sentence': 'They ____ arrive by 6 PM tomorrow.',
-            'options': ['will', 'would', 'can', 'must'],
-            'answer': 'will'
+            'sentence': 'This book is ____ than that one.',
+            'options': ['more interesting', 'most interesting', 'interesting', 'interest'],
+            'answer': 'more interesting'
         },
+        # Articles
         {
-            'sentence': 'If I ____ more time, I would travel more.',
-            'options': ['have', 'had', 'will have', 'would have'],
-            'answer': 'had'
+            'sentence': 'She is ____ excellent teacher.',
+            'options': ['an', 'a', 'the', '---'],
+            'answer': 'an'
         },
+        # Gerunds
         {
-            'sentence': 'He ____ been waiting for an hour.',
-            'options': ['have', 'has', 'had', 'is'],
-            'answer': 'has'
+            'sentence': 'I enjoy ____ music in my free time.',
+            'options': ['listening to', 'listen to', 'to listen', 'listened to'],
+            'answer': 'listening to'
+        },
+        # Prepositions of time
+        {
+            'sentence': 'The meeting is ____ Monday morning.',
+            'options': ['on', 'in', 'at', 'for'],
+            'answer': 'on'
+        },
+        # Subject-verb agreement
+        {
+            'sentence': 'Everyone ____ to arrive on time.',
+            'options': ['needs', 'need', 'needing', 'to need'],
+            'answer': 'needs'
+        },
+        # Quantifiers
+        {
+            'sentence': 'There are ____ people at the party.',
+            'options': ['many', 'much', 'a lot', 'few of'],
+            'answer': 'many'
+        },
+        # Adverbs of frequency
+        {
+            'sentence': 'She ____ goes to the gym on weekends.',
+            'options': ['usually', 'usual', 'use to', 'used'],
+            'answer': 'usually'
+        },
+        # Conjunctions
+        {
+            'sentence': 'I wanted to go out, ____ it was raining.',
+            'options': ['but', 'and', 'because', 'so'],
+            'answer': 'but'
+        },
+        # Question forms
+        {
+            'sentence': '____ does the train leave?',
+            'options': ['What time', 'What', 'Which time', 'How time'],
+            'answer': 'What time'
+        },
+        # Pronouns
+        {
+            'sentence': 'This is ____ favorite restaurant.',
+            'options': ['my', 'me', 'mine', 'I'],
+            'answer': 'my'
         },
     ]
     
@@ -2922,7 +2991,7 @@ class SubmitFluencyRecordingView(APIView):
         pause_indicators = transcription.count('...') + transcription.count('um') + transcription.count('uh')
         stutter_indicators = len([w for w in transcription.split() if '-' in w or w.count(w[0] if w else '') > 2])
         
-        prompt_text = f"""You are an encouraging English fluency coach AI. Analyze this speaking performance and provide a supportive score (0-100). Be generous and focus on what the user did well.
+        prompt_text = f"""You are an encouraging English fluency coach AI. Analyze this speaking performance and provide a supportive score (0-100). Be very generous and focus on what the user did well.
 
 FLUENCY PROMPT: "{prompt}"
 
@@ -2936,12 +3005,12 @@ PERFORMANCE METRICS:
 - Potential Stutters: {stutter_indicators}
 - Timing Score: {timing_score}/25 (based on how close to {target_duration}s target)
 
-EVALUATION CRITERIA (be lenient and encouraging):
-1. RELEVANCE (0-35 points): Award points generously if the response relates to the prompt in any way. Even partial relevance deserves 25+ points.
-2. FLUENCY (0-40 points): Focus on effort and attempt. Natural attempts at speaking deserve 30+ points. Only severe issues should score below 25.
-3. TIMING (0-25 points): Optimal duration close to {target_duration} seconds. Any reasonable attempt (10+ seconds) deserves at least 15 points.
+EVALUATION CRITERIA (be very lenient and encouraging):
+1. RELEVANCE (0-35 points): Award points generously if the response relates to the prompt in ANY way. Even vague relevance deserves 28+ points. Any attempt to address the topic should get 30+ points.
+2. FLUENCY (0-40 points): Focus on effort and courage to speak. Any natural speaking attempt deserves 32+ points. Reward attempts at complete sentences. Only unintelligible speech should score below 28.
+3. TIMING (0-25 points): Be flexible with duration. Any attempt of 8+ seconds deserves at least 18 points. Reward longer attempts generously.
 
-IMPORTANT: Your goal is to encourage learners. Most genuine attempts should score 75-85. Only obviously poor attempts should score below 70.
+IMPORTANT: Your goal is to motivate learners and build confidence. Most genuine attempts should score 78-88. Even basic attempts should reach 70-75 easily. Reserve scores below 65 only for extremely poor quality or off-topic responses.
 
 Provide your response in this JSON format:
 {{
@@ -2953,7 +3022,7 @@ Provide your response in this JSON format:
   "suggestions": ["<gentle suggestion 1>", "<gentle suggestion 2>", "<gentle suggestion 3>"]
 }}
 
-Be encouraging and supportive to help build the user's confidence!"""
+Be very encouraging and supportive to help build the user's confidence!"""
 
         try:
             logger.info(f"🤖 GEMINI EVALUATION: Starting evaluation for {word_count} words, {recording_duration:.1f}s duration")
@@ -3027,14 +3096,14 @@ Be encouraging and supportive to help build the user's confidence!"""
             result = json.loads(response_text)
             raw_score = int(result.get('total_score', 75))
             
-            # Apply a gentle boost to make scoring more achievable (10-15% boost)
+            # Apply a gentle boost to make scoring more achievable (18% boost)
             # This helps users feel more encouraged and motivated
-            boost_percentage = 0.12  # 12% boost
+            boost_percentage = 0.18  # 18% boost (increased from 12%)
             boosted_score = min(100, int(raw_score * (1 + boost_percentage)))
             
-            # Ensure minimum score of 65 for genuine attempts (word_count > 5)
-            if word_count > 5 and boosted_score < 65:
-                boosted_score = 65
+            # Ensure minimum score of 70 for genuine attempts (word_count > 5)
+            if word_count > 5 and boosted_score < 70:
+                boosted_score = 70
             
             logger.info(f"✅ GEMINI SUCCESS: Raw score {raw_score} -> Boosted score {boosted_score}, Relevance: {result.get('relevance_score')}, Fluency: {result.get('fluency_score')}, Timing: {result.get('timing_score')}")
             
@@ -3046,13 +3115,13 @@ Be encouraging and supportive to help build the user's confidence!"""
             
         except Exception as e:
             logger.warning(f"🚨 GEMINI FALLBACK: Evaluation failed: {e}")
-            # Fallback scoring - more generous to encourage users
-            base_score = 70  # Increased from 60
+            # Fallback scoring - very generous to encourage users
+            base_score = 72  # Increased from 70
             if word_count > 5:  # Basic relevance check
-                base_score += 15
+                base_score += 18  # Increased from 15
             if word_count > 20:  # Extra bonus for longer responses
-                base_score += 5
-            base_score += min(timing_score, 15)  # Add timing bonus
+                base_score += 8  # Increased from 5
+            base_score += min(timing_score, 18)  # Add timing bonus (increased cap)
             fallback_score = min(base_score, 100)
             logger.info(f"⚠️ FALLBACK SCORE: {fallback_score} (base={base_score}, words={word_count}, timing={timing_score})")
             
@@ -3063,26 +3132,28 @@ Be encouraging and supportive to help build the user's confidence!"""
             )
     
     def _calculate_timing_score(self, actual_duration, target_duration):
-        """Calculate timing score based on how close to target duration."""
+        """Calculate timing score based on how close to target duration. More forgiving version."""
         if actual_duration <= 0:
             return 0
         
         # Perfect score at exactly target duration
-        # Decrease score as we get further from target
+        # More forgiving score as we get further from target
         difference = abs(actual_duration - target_duration)
         
         if difference == 0:
             return 25
         elif difference <= 5:
-            return 22
+            return 24  # Very close (was 22)
         elif difference <= 10:
-            return 18
+            return 22  # Close enough (was 18)
         elif difference <= 15:
-            return 12
+            return 19  # Acceptable (was 12)
         elif difference <= 20:
-            return 8
+            return 16  # Still reasonable (was 8)
+        elif difference <= 30:
+            return 12  # Give credit for effort (new tier)
         else:
-            return 5  # Minimum score for very long/short recordings
+            return 8  # Minimum score increased (was 5)
 
 
 class SubmitFluencyPromptView(APIView):
