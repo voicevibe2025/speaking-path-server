@@ -95,16 +95,33 @@ class EvaluateExampleView(APIView):
     
     def _evaluate_with_gemini(self, word: str, definition: str, example_sentence: str) -> dict:
         """Use Gemini to evaluate if the example sentence is acceptable."""
-        try:
-            # Configure Gemini
-            api_key = os.getenv('GEMINI_API_KEY')
-            if not api_key:
-                raise ValueError("GEMINI_API_KEY not configured")
-            
-            genai.configure(api_key=api_key)
-            model = genai.GenerativeModel('gemini-2.0-flash-exp')
-            
-            prompt = f"""You are an English language tutor evaluating a student's example sentence.
+        # Get API key from multiple sources (same pattern as GrammarPractice)
+        from django.conf import settings
+        api_key = (
+            getattr(settings, 'GEMINI_API_KEY', '') or 
+            os.environ.get('GEMINI_API_KEY', '') or 
+            os.environ.get('GOOGLE_API_KEY', '')
+        )
+        
+        if not api_key:
+            logger.error("GEMINI_API_KEY not configured")
+            return {
+                'is_acceptable': False,
+                'feedback': 'Unable to evaluate. Please contact support (API key missing).'
+            }
+        
+        # Try multiple Gemini models with fallback (same pattern as GrammarPractice)
+        genai.configure(api_key=api_key)
+        
+        candidates = [
+            getattr(settings, 'GEMINI_TEXT_MODEL', None) or os.environ.get('GEMINI_MODEL') or 'gemini-2.5-flash',
+            'gemini-2.5-pro',
+            'gemini-1.5-flash',
+            'gemini-1.5-pro',
+            'gemini-pro',
+        ]
+        
+        prompt = f"""You are an English language tutor evaluating a student's example sentence.
 
 Word: {word}
 Definition: {definition}
@@ -125,30 +142,43 @@ Respond in JSON format:
 
 Be encouraging and supportive. Focus on whether they understand the word, not perfect grammar.
 """
-            
-            response = model.generate_content(prompt)
-            text = response.text.strip()
-            
-            # Parse JSON from response
-            if text.startswith('```json'):
-                text = text.split('```json')[1].split('```')[0].strip()
-            elif text.startswith('```'):
-                text = text.split('```')[1].split('```')[0].strip()
-            
-            import json
-            result = json.loads(text)
-            
-            return {
-                'is_acceptable': result.get('is_acceptable', False),
-                'feedback': result.get('feedback', 'Unable to evaluate. Please try again.')
-            }
-            
-        except Exception as e:
-            logger.error(f"Gemini evaluation error: {type(e).__name__}: {e}", exc_info=True)
-            return {
-                'is_acceptable': False,
-                'feedback': f'Unable to evaluate your sentence. Error: {type(e).__name__}. Please try again or contact support.'
-            }
+        
+        # Try each model candidate
+        import json
+        for model_name in candidates:
+            try:
+                model = genai.GenerativeModel(model_name)
+                response = model.generate_content(prompt)
+                text = getattr(response, 'text', None)
+                
+                if not text:
+                    continue
+                
+                text = text.strip()
+                
+                # Parse JSON from response
+                if text.startswith('```json'):
+                    text = text.split('```json')[1].split('```')[0].strip()
+                elif text.startswith('```'):
+                    text = text.split('```')[1].split('```')[0].strip()
+                
+                result = json.loads(text)
+                
+                return {
+                    'is_acceptable': result.get('is_acceptable', False),
+                    'feedback': result.get('feedback', 'Unable to evaluate. Please try again.')
+                }
+                
+            except Exception as e:
+                logger.warning(f"Gemini evaluation via {model_name} failed: {e}")
+                continue
+        
+        # All models failed
+        logger.error("All Gemini models failed for WordUp evaluation")
+        return {
+            'is_acceptable': False,
+            'feedback': 'Unable to evaluate your sentence. Please try again later.'
+        }
     
     def post(self, request):
         serializer = EvaluateExampleRequest(data=request.data)
