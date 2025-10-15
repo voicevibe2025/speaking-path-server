@@ -43,6 +43,41 @@ class Command(BaseCommand):
                 'part_of_speech': 'adjective',
                 'example_sentence': 'The elephant was enormous compared to the dog.'
             },
+            {
+                'word': 'frequent',
+                'definition': 'Happening often or at short intervals',
+                'difficulty': 'beginner',
+                'part_of_speech': 'adjective',
+                'example_sentence': 'He is a frequent visitor to the library.'
+            },
+            {
+                'word': 'gentle',
+                'definition': 'Having a mild, kind, or tender temperament or character',
+                'difficulty': 'beginner',
+                'part_of_speech': 'adjective',
+                'example_sentence': 'The dog was very gentle with the children.'
+            },
+            {
+                'word': 'happy',
+                'definition': 'Feeling or showing pleasure or contentment',
+                'difficulty': 'beginner',
+                'part_of_speech': 'adjective',
+                'example_sentence': 'She was happy to see her friends again.'
+            },
+            {
+                'word': 'imagine',
+                'definition': 'To form a mental image or concept of',
+                'difficulty': 'beginner',
+                'part_of_speech': 'verb',
+                'example_sentence': 'Can you imagine a world without music?'
+            },
+            {
+                'word': 'journey',
+                'definition': 'An act of traveling from one place to another',
+                'difficulty': 'beginner',
+                'part_of_speech': 'noun',
+                'example_sentence': 'The journey to the mountains was long but beautiful.'
+            },
             # Intermediate words
             {
                 'word': 'ambiguous',
@@ -79,6 +114,41 @@ class Command(BaseCommand):
                 'part_of_speech': 'adjective',
                 'example_sentence': 'The speaker gave an eloquent presentation that moved the audience.'
             },
+            {
+                'word': 'facilitate',
+                'definition': 'To make an action or process easy or easier',
+                'difficulty': 'intermediate',
+                'part_of_speech': 'verb',
+                'example_sentence': 'The new software will facilitate data analysis.'
+            },
+            {
+                'word': 'harmonious',
+                'definition': 'Forming a pleasing or consistent whole',
+                'difficulty': 'intermediate',
+                'part_of_speech': 'adjective',
+                'example_sentence': 'They lived in a harmonious relationship with their neighbors.'
+            },
+            {
+                'word': 'illustrate',
+                'definition': 'To explain or make clear by using examples, charts, or pictures',
+                'difficulty': 'intermediate',
+                'part_of_speech': 'verb',
+                'example_sentence': 'The teacher used diagrams to illustrate the concept.'
+            },
+            {
+                'word': 'meticulous',
+                'definition': 'Showing great attention to detail; very careful and precise',
+                'difficulty': 'intermediate',
+                'part_of_speech': 'adjective',
+                'example_sentence': 'He was meticulous in his preparation for the presentation.'
+            },
+            {
+                'word': 'navigate',
+                'definition': 'To plan and direct the route or course of a ship, aircraft, or other form of transport, especially by using instruments or maps',
+                'difficulty': 'intermediate',
+                'part_of_speech': 'verb',
+                'example_sentence': 'It was difficult to navigate through the dense fog.'
+            },
             # Advanced words
             {
                 'word': 'aberration',
@@ -114,6 +184,41 @@ class Command(BaseCommand):
                 'difficulty': 'advanced',
                 'part_of_speech': 'adjective',
                 'example_sentence': 'She is the quintessential professional, always punctual and prepared.'
+            },
+            {
+                'word': 'cacophony',
+                'definition': 'A harsh, discordant mixture of sounds',
+                'difficulty': 'advanced',
+                'part_of_speech': 'noun',
+                'example_sentence': 'A cacophony of car horns filled the street during rush hour.'
+            },
+            {
+                'word': 'deleterious',
+                'definition': 'Causing harm or damage',
+                'difficulty': 'advanced',
+                'part_of_speech': 'adjective',
+                'example_sentence': 'Smoking has many deleterious effects on health.'
+            },
+            {
+                'word': 'esoteric',
+                'definition': 'Intended for or likely to be understood by only a small number of people with a specialized knowledge or interest',
+                'difficulty': 'advanced',
+                'part_of_speech': 'adjective',
+                'example_sentence': 'The book was full of esoteric references that only a few scholars could understand.'
+            },
+            {
+                'word': 'paradigm',
+                'definition': 'A typical example or pattern of something; a model',
+                'difficulty': 'advanced',
+                'part_of_speech': 'noun',
+                'example_sentence': 'The new discovery shifted the scientific paradigm.'
+            },
+            {
+                'word': 'serendipity',
+                'definition': 'The occurrence and development of events by chance in a happy or beneficial way',
+                'difficulty': 'advanced',
+                'part_of_speech': 'noun',
+                'example_sentence': 'Meeting her was pure serendipity; it changed my life for the better.'
             },
         ]
 

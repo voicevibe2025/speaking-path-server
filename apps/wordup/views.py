@@ -144,10 +144,10 @@ Be encouraging and supportive. Focus on whether they understand the word, not pe
             }
             
         except Exception as e:
-            logger.error(f"Gemini evaluation error: {e}")
+            logger.error(f"Gemini evaluation error: {type(e).__name__}: {e}", exc_info=True)
             return {
                 'is_acceptable': False,
-                'feedback': 'Unable to evaluate your sentence. Please try again.'
+                'feedback': f'Unable to evaluate your sentence. Error: {type(e).__name__}. Please try again or contact support.'
             }
     
     def post(self, request):
