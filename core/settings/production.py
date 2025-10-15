@@ -29,9 +29,15 @@ CSRF_TRUSTED_ORIGINS = env.list(
     ],
 )
 
-# Static files (served by WhiteNoise)
-# Temporarily using simpler storage to fix admin 500 error
-STATICFILES_STORAGE = "whitenoise.storage.CompressedStaticFilesStorage"
+# Static files (served by WhiteNoise) - Django 4.2+ format
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage",
+    },
+}
 
 # --- Database ---
 # Prefer a single DATABASE_URL if provided (Railway Postgres) and require SSL
@@ -115,8 +121,9 @@ SUPABASE_CONFIGURED = bool(
 )
 
 if USE_S3_MEDIA:
-    # django-storages S3 backend
-    DEFAULT_FILE_STORAGE = "storages.backends.s3boto3.S3Boto3Storage"
+    # django-storages S3 backend - Update STORAGES dict instead of DEFAULT_FILE_STORAGE
+    STORAGES["default"]["BACKEND"] = "storages.backends.s3boto3.S3Boto3Storage"
+    
     AWS_STORAGE_BUCKET_NAME = env("AWS_STORAGE_BUCKET_NAME")
     AWS_ACCESS_KEY_ID = env("AWS_ACCESS_KEY_ID")
     AWS_SECRET_ACCESS_KEY = env("AWS_SECRET_ACCESS_KEY")
