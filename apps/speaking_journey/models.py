@@ -79,13 +79,15 @@ class TopicProgress(models.Model):
 
     @property
     def all_modes_completed(self):
-        """Return True only if core practice modes are completed.
-        Listening and Grammar are optional bonus practices that don't block unlocking.
+        """Return True only if all 4 required practice modes are completed.
+        Listening is an optional bonus practice that doesn't block unlocking.
+        Required practices: Pronunciation, Fluency, Vocabulary, Grammar.
         """
         return (
             self.pronunciation_completed and
             self.fluency_completed and
-            self.vocabulary_completed
+            self.vocabulary_completed and
+            self.grammar_completed
         )
 
     def __str__(self):

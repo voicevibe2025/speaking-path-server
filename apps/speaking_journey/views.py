@@ -251,14 +251,7 @@ def _meets_completion_criteria(topic_progress):
     Check if a topic meets the completion criteria:
     - All 4 main practices (pronunciation, fluency, vocabulary, grammar) must be completed
     - For EACH practice, user must reach at least 75% of that practice's maximum score for the topic
-    
-    GRANDFATHER CLAUSE: If a topic is already marked as completed, honor that status
-    to preserve existing student progress when new requirements are added.
     """
-    # Grandfather clause: honor existing completions (preserve student progress)
-    if getattr(topic_progress, 'completed', False):
-        return True
-    
     # Check if all 4 main practices are completed (robust: accept phrase progress as pronunciation completion)
     try:
         topic = getattr(topic_progress, 'topic', None)
@@ -974,7 +967,7 @@ class CompleteListeningPracticeView(APIView):
         tp.listening_completed = True
         
         # Listening is an optional bonus practice that doesn't block topic unlocking
-        # Mark topic completed if core modes (pronunciation, fluency, vocabulary) are done
+        # Mark topic completed if all 4 required modes (pronunciation, fluency, vocabulary, grammar) are done
         if not tp.completed and tp.all_modes_completed:
             tp.completed = True
             tp.completed_at = timezone.now()
@@ -1202,8 +1195,8 @@ class CompleteGrammarPracticeView(APIView):
         tp.grammar_total_score = int(session.total_score or 0)
         tp.grammar_completed = True
         
-        # Grammar is an optional bonus practice that doesn't block topic unlocking
-        # Mark topic completed if core modes (pronunciation, fluency, vocabulary) are done
+        # Grammar is a required practice for topic completion and unlocking
+        # Mark topic completed if all 4 required modes (pronunciation, fluency, vocabulary, grammar) are done
         was_completed = bool(tp.completed)
         if not tp.completed and tp.all_modes_completed:
             tp.completed = True
@@ -2393,7 +2386,7 @@ class SubmitPhraseRecordingView(APIView):
         next_phrase_index = phrase_progress.current_phrase_index
 
         # If all phrases completed, mark pronunciation as completed
-        # (Listening and Grammar are optional bonus practices that users can do separately)
+        # (Listening is an optional bonus practice that users can do separately)
         if phrase_progress.is_all_phrases_completed:
             topic_progress.pronunciation_completed = True
 
@@ -2858,22 +2851,22 @@ class CompleteTopicView(APIView):
         topic = get_object_or_404(Topic, id=topic_id, is_active=True)
         progress, created = TopicProgress.objects.get_or_create(user=request.user, topic=topic)
         was_completed = bool(progress.completed)
-        # Mark all modes completed when manually completing a topic (keeps behavior consistent during testing)
-        progress.pronunciation_completed = True
-        progress.fluency_completed = True
-        progress.vocabulary_completed = True
-        # Listening and Grammar are optional, but set them for testing purposes
-        progress.listening_completed = True
-        progress.grammar_completed = True
-        message = 'Topic marked as completed (including optional practices)'
+
+        # Only allow marking topic as completed if the 4-practice criteria are met.
+        if not _meets_completion_criteria(progress):
+            resp = {
+                'success': False,
+                'message': 'Cannot complete topic: requirements not met (Pronunciation, Fluency, Vocabulary, Grammar each >= 75)',
+                'completedTopicId': str(topic.id),
+                'unlockedTopicId': None,
+            }
+            serializer = CompleteTopicResponseSerializer(resp)
+            return Response(serializer.data, status=status.HTTP_400_BAD_REQUEST)
+
         if not progress.completed:
             progress.completed = True
             progress.completed_at = timezone.now()
-        else:
-            message = 'Topic already completed'
-        progress.save()
-        # Note: Coach cache refresh removed to avoid timeout on slow Gemini calls.
-        # Coach analysis has its own endpoint (CoachAnalysisView) with proper caching.
+            progress.save(update_fields=['completed', 'completed_at'])
 
         # Determine next topic to unlock
         next_topic = (
@@ -2883,7 +2876,7 @@ class CompleteTopicView(APIView):
         )
         resp = {
             'success': True,
-            'message': message,
+            'message': 'Topic marked as completed',
             'completedTopicId': str(topic.id),
             'unlockedTopicId': str(next_topic.id) if next_topic else None,
         }
@@ -3865,7 +3858,7 @@ class SeedPerfectScoresView(APIView):
         tp.pronunciation_completed = True
         tp.fluency_completed = True
         tp.vocabulary_completed = True
-        # Listening and Grammar are optional bonus practices
+        # Listening is an optional bonus practice. Grammar is required.
         tp.listening_completed = True
         tp.grammar_completed = True
         
