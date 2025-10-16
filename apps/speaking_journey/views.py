@@ -4720,7 +4720,7 @@ def _heuristic_coach(user) -> dict:
     
     out = {
         'currentVersion': 1,
-        'generatedAt': timezone.now(),
+        'generatedAt': timezone.now().isoformat(),
         'skills': skills,
         'strengths': strengths,
         'weaknesses': weaknesses,
@@ -4847,7 +4847,8 @@ def _call_gemini_coach(user) -> dict:
             # Validate with serializer shape
             ser = CoachAnalysisSerializer(data=data)
             if ser.is_valid():
-                return ser.validated_data
+                # Return serialized representation to ensure datetimes are strings
+                return ser.data
         except Exception as e:
             logger.warning('Gemini coach via %s failed: %s', name, e)
             continue
