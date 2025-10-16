@@ -4256,15 +4256,32 @@ class LingoLeagueView(APIView):
 # AI Coach - LLM-based Adaptive Learning System
 # Uses Gemini to simulate GRU-like temporal modeling for personalized recommendations
 # ---------------------------
-_COACH_CACHE: dict[str, dict] = {}
 
-def _refresh_coach_cache_for_user(user, ttl_minutes: int = 15) -> dict:
-    """Recompute coach analysis for user and store in in-process cache with a short TTL."""
-    data = _call_gemini_coach(user)
-    key = str(user.id)
-    expires_at = timezone.now() + timedelta(minutes=ttl_minutes)
-    _COACH_CACHE[key] = {'data': data, 'expires_at': expires_at}
-    return data
+def _get_cached_analysis(user):
+    """Retrieve cached analysis from database if exists and not expired."""
+    from .models import CoachAnalysisCache
+    try:
+        cache = CoachAnalysisCache.objects.get(user=user)
+        logger.info(f"Coach cache found for user {user.id}: AI={cache.is_ai_generated}, stale={cache.is_stale}")
+        return cache
+    except CoachAnalysisCache.DoesNotExist:
+        logger.info(f"No coach cache found for user {user.id}")
+        return None
+
+def _save_cached_analysis(user, data: dict, is_ai: bool = False, ttl_hours: int = 12):
+    """Save analysis to database cache with expiration."""
+    from .models import CoachAnalysisCache
+    expires_at = timezone.now() + timedelta(hours=ttl_hours)
+    cache, created = CoachAnalysisCache.objects.update_or_create(
+        user=user,
+        defaults={
+            'analysis_data': data,
+            'expires_at': expires_at,
+            'is_ai_generated': is_ai,
+        }
+    )
+    logger.info(f"Coach cache {'created' if created else 'updated'} for user {user.id}: AI={is_ai}, expires={expires_at}")
+    return cache
 
 
 def _build_coach_features(user) -> dict:
@@ -4334,6 +4351,7 @@ def _build_coach_features(user) -> dict:
                 grammar = int(tp.grammar_total_score or 0)
                 logger.info(f"Topic {tp.topic.title}: pron={pron}, flu={flu}, vocab={vocab}, listen={listen}, grammar={grammar}")
                 features['perTopic'].append({
+                    'topicId': tp.topic.id,
                     'title': tp.topic.title,
                     'pron': pron,
                     'flu': flu,
@@ -4633,8 +4651,7 @@ def _heuristic_coach(user) -> dict:
         'grammar': 'Complete Grammar Exercise',
     }.get(weakest, 'Master Current Topic')
     
-    # Choose current/first unlocked topic for deeplink context (best-effort)
-    topic = Topic.objects.filter(is_active=True).order_by('sequence').first()
+    # Choose the most relevant topic based on user's weakest skill performance
     mode_map = {
         'pronunciation': 'master',
         'fluency': 'conversation',
@@ -4642,7 +4659,64 @@ def _heuristic_coach(user) -> dict:
         'listening': 'listening',
         'grammar': 'grammar',
     }
-    deeplink = f"app://voicevibe/speaking/topic/{topic.id if topic else 'current'}/" + mode_map.get(weakest, 'master')
+    
+    # Find the topic where user is weakest in their identified weak skill
+    target_topic = None
+    if not is_new_user and feats.get('perTopic'):
+        # Map weakest skill to the corresponding field in perTopic
+        skill_field_map = {
+            'pronunciation': 'pron',
+            'fluency': 'flu',
+            'vocabulary': 'vocab',
+            'listening': 'listen',
+            'grammar': 'grammar',
+        }
+        field_key = skill_field_map.get(weakest, 'pron')
+        
+        # Find topic with lowest score in the weak skill (excluding completed topics)
+        per_topic_list = feats['perTopic']
+        incomplete_topics = [t for t in per_topic_list if not t.get('completed', False)]
+        
+        if incomplete_topics:
+            # Sort by the weak skill score (ascending) to find the weakest
+            sorted_topics = sorted(incomplete_topics, key=lambda t: t.get(field_key, 0))
+            weakest_topic_data = sorted_topics[0]
+            # Find the actual Topic object by ID (more reliable than title)
+            try:
+                topic_id = weakest_topic_data.get('topicId')
+                if topic_id:
+                    target_topic = Topic.objects.filter(
+                        id=topic_id,
+                        is_active=True
+                    ).first()
+                # Fallback to title if topicId not available
+                if not target_topic:
+                    target_topic = Topic.objects.filter(
+                        title=weakest_topic_data['title'],
+                        is_active=True
+                    ).first()
+            except Exception:
+                pass
+    
+    # Fallback: use first unlocked topic or first active topic
+    if not target_topic:
+        # Try to get user's first unlocked but incomplete topic
+        try:
+            user_progress = TopicProgress.objects.select_related('topic').filter(
+                user=user,
+                topic__is_active=True,
+                completed=False
+            ).order_by('topic__sequence').first()
+            if user_progress:
+                target_topic = user_progress.topic
+        except Exception:
+            pass
+    
+    # Final fallback: first active topic
+    if not target_topic:
+        target_topic = Topic.objects.filter(is_active=True).order_by('sequence').first()
+    
+    deeplink = f"app://voicevibe/speaking/topic/{target_topic.id if target_topic else 'current'}/" + mode_map.get(weakest, 'master')
     
     out = {
         'currentVersion': 1,
@@ -4669,6 +4743,7 @@ def _heuristic_coach(user) -> dict:
         'schedule': [],
         'coachMessage': coach_msg,
         'cacheForHours': 12,
+        '_is_ai_generated': False,  # Mark as heuristic, not AI
     }
     return out
 
@@ -4735,9 +4810,14 @@ def _call_gemini_coach(user) -> dict:
         "  cacheForHours: int\n"
         "}\n\n"
         "Deeplink format: app://voicevibe/speaking/topic/<topicId>/(master|conversation|vocab|listening|grammar)\n"
-        "If no specific topic, use 'current' as topicId.\n\n"
+        "IMPORTANT: Analyze perTopic data to identify which specific topic the user needs to practice.\n"
+        "- For nextBestActions, use the topicId from perTopic where the user has the lowest score in their weakest skill\n"
+        "- Prioritize incomplete topics (completed: false) over completed ones\n"
+        "- If all topics are completed or no data exists, use 'current' as topicId\n"
+        "- Example: If user is weak in pronunciation and 'Daily Activities' has lowest pron score, use that topic's ID\n\n"
         f"USER FEATURES:\n{json.dumps(feats, ensure_ascii=False, indent=2)}\n\n"
         "Return ONLY valid JSON matching the schema above. Ensure all 5 skills are analyzed.\n"
+        "CRITICAL: In nextBestActions, specify the actual topic ID where user needs most improvement, not just 'current'.\n"
     )
     candidates = [
         getattr(settings, 'GEMINI_TEXT_MODEL', None) or os.environ.get('GEMINI_MODEL') or 'gemini-2.5-pro',
@@ -4775,60 +4855,77 @@ def _call_gemini_coach(user) -> dict:
 
 
 class CoachAnalysisView(APIView):
-    """AI Coach analysis endpoint with 12-hour cache and graceful degradation."""
+    """AI Coach analysis endpoint with persistent 12-hour cache."""
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
         user = request.user
-        key = str(user.id)
-        now = timezone.now()
-        cached = _COACH_CACHE.get(key)
+        logger.info(f"CoachAnalysisView GET called for user {user.id}")
         
-        # Always serve cached data if it exists (even if expired) to prevent timeout
-        if cached and cached.get('data'):
+        # Try to get cached analysis from database
+        cache = _get_cached_analysis(user)
+        
+        if cache:
+            # Serve cached data (even if stale) to prevent timeout
             try:
-                ser = CoachAnalysisSerializer(cached['data'])
-                is_stale = cached.get('expires_at') and cached['expires_at'] <= now
+                ser = CoachAnalysisSerializer(cache.analysis_data)
                 response_data = ser.data.copy() if hasattr(ser.data, 'copy') else dict(ser.data)
-                if is_stale:
-                    response_data['_cache_stale'] = True  # Optional metadata for client
+                # Add metadata for client
+                response_data['_cache_stale'] = cache.is_stale
+                response_data['_is_ai_generated'] = cache.is_ai_generated
+                response_data['_generated_at'] = cache.generated_at.isoformat()
+                logger.info(f"Returning cached analysis for user {user.id}: stale={cache.is_stale}, AI={cache.is_ai_generated}")
                 return Response(response_data, status=status.HTTP_200_OK)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"Failed to serialize cached analysis for user {user.id}: {e}")
         
-        # Cache miss (first-time user or server restart): return heuristic response immediately
+        # Cache miss: return heuristic response immediately and save to DB
         # NEVER call Gemini synchronously from GET endpoint to avoid timeout
-        # Use POST /coach/analysis/refresh for AI-powered analysis
+        logger.info(f"Cache miss for user {user.id}, generating heuristic analysis")
         data = _heuristic_coach(user)
-        # 12-hour TTL (720 minutes) aligns with 6am/6pm refresh windows
-        ttl_hours = 12
-        _COACH_CACHE[key] = {
-            'data': data,
-            'expires_at': now + timedelta(hours=ttl_hours)
-        }
+        _save_cached_analysis(user, data, is_ai=False, ttl_hours=12)
+        
         ser = CoachAnalysisSerializer(data)
-        return Response(ser.data, status=status.HTTP_200_OK)
+        response_data = ser.data.copy() if hasattr(ser.data, 'copy') else dict(ser.data)
+        response_data['_cache_stale'] = False
+        response_data['_is_ai_generated'] = False
+        return Response(response_data, status=status.HTTP_200_OK)
 
 
 class CoachAnalysisRefreshView(APIView):
     """Manual refresh endpoint for AI Coach analysis.
     
-    This endpoint performs a synchronous Gemini call and may take 10-30 seconds.
+    This endpoint performs a synchronous Gemini call and may take 10-45 seconds.
     Only call this when the user explicitly requests a refresh.
-    For scheduled refreshes, implement a Celery task or cron job.
     """
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
         user = request.user
-        key = str(user.id)
-        data = _call_gemini_coach(user)
-        now = timezone.now()
-        # 12-hour cache TTL
-        ttl_hours = 12
-        _COACH_CACHE[key] = {
-            'data': data,
-            'expires_at': now + timedelta(hours=ttl_hours)
-        }
-        ser = CoachAnalysisSerializer(data)
-        return Response(ser.data, status=status.HTTP_200_OK)
+        logger.info(f"CoachAnalysisRefreshView POST called for user {user.id} - starting Gemini analysis")
+        
+        try:
+            # Call Gemini AI (may take 10-45 seconds)
+            data = _call_gemini_coach(user)
+            
+            # Check if it's actually AI-generated or fell back to heuristic
+            is_ai = data.get('_is_ai_generated', True)  # Assume AI unless explicitly marked
+            
+            # Save to database cache
+            _save_cached_analysis(user, data, is_ai=is_ai, ttl_hours=12)
+            
+            logger.info(f"Coach analysis refresh completed for user {user.id}: AI={is_ai}")
+            
+            ser = CoachAnalysisSerializer(data)
+            response_data = ser.data.copy() if hasattr(ser.data, 'copy') else dict(ser.data)
+            response_data['_cache_stale'] = False
+            response_data['_is_ai_generated'] = is_ai
+            return Response(response_data, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"Coach analysis refresh failed for user {user.id}: {e}", exc_info=True)
+            # Return error response
+            return Response(
+                {'error': 'Failed to generate AI analysis. Please try again later.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
