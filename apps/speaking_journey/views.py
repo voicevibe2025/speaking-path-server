@@ -4284,6 +4284,24 @@ def _save_cached_analysis(user, data: dict, is_ai: bool = False, ttl_hours: int 
     return cache
 
 
+def _json_safe(obj):
+    """Recursively convert objects to JSON-serializable types (UUID -> str, datetime -> ISO, Decimal -> float)."""
+    import uuid as _uuid
+    from datetime import datetime, date
+    from decimal import Decimal
+    if isinstance(obj, (datetime, date)):
+        return obj.isoformat()
+    if isinstance(obj, _uuid.UUID):
+        return str(obj)
+    if isinstance(obj, Decimal):
+        return float(obj)
+    if isinstance(obj, dict):
+        return {k: _json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple, set)):
+        return [_json_safe(v) for v in obj]
+    return obj
+
+
 def _build_coach_features(user) -> dict:
     """Aggregate temporal features for the LLM-based Adaptive Coach.
     
@@ -4351,7 +4369,7 @@ def _build_coach_features(user) -> dict:
                 grammar = int(tp.grammar_total_score or 0)
                 logger.info(f"Topic {tp.topic.title}: pron={pron}, flu={flu}, vocab={vocab}, listen={listen}, grammar={grammar}")
                 features['perTopic'].append({
-                    'topicId': tp.topic.id,
+                    'topicId': str(tp.topic.id),
                     'title': tp.topic.title,
                     'pron': pron,
                     'flu': flu,
@@ -4815,7 +4833,7 @@ def _call_gemini_coach(user) -> dict:
         "- Prioritize incomplete topics (completed: false) over completed ones\n"
         "- If all topics are completed or no data exists, use 'current' as topicId\n"
         "- Example: If user is weak in pronunciation and 'Daily Activities' has lowest pron score, use that topic's ID\n\n"
-        f"USER FEATURES:\n{json.dumps(feats, ensure_ascii=False, indent=2)}\n\n"
+        f"USER FEATURES:\n{json.dumps(_json_safe(feats), ensure_ascii=False, indent=2)}\n\n"
         "Return ONLY valid JSON matching the schema above. Ensure all 5 skills are analyzed.\n"
         "CRITICAL: In nextBestActions, specify the actual topic ID where user needs most improvement, not just 'current'.\n"
     )
