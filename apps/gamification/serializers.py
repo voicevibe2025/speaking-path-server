@@ -14,7 +14,8 @@ from .models import (
     DailyQuest,
     UserQuest,
     RewardShop,
-    UserReward
+    UserReward,
+    AchievementEvent,
 )
 
 User = get_user_model()
@@ -311,6 +312,19 @@ class UserRewardSerializer(serializers.ModelSerializer):
             'acquisition_type', 'is_active', 'equipped_at'
         ]
         read_only_fields = ['user', 'acquired_at']
+
+
+class AchievementEventSerializer(serializers.ModelSerializer):
+    """
+    Serializer for persistent achievement events
+    """
+    class Meta:
+        model = AchievementEvent
+        fields = [
+            'id', 'event_type', 'title', 'description', 'timestamp',
+            'xp_earned', 'meta'
+        ]
+        read_only_fields = fields
 
 
 class PurchaseRewardSerializer(serializers.Serializer):

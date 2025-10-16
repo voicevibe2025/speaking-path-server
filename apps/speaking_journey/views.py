@@ -41,7 +41,7 @@ from .models import (
     VocabularyPracticeSession, ListeningPracticeSession, GrammarPracticeSession,
     UserConversationRecording, UserProfile
 )
-from apps.gamification.models import UserLevel, PointsTransaction
+from apps.gamification.models import UserLevel, PointsTransaction, AchievementEvent
 from .serializers import (
     SpeakingTopicsResponseSerializer,
     SpeakingTopicDtoSerializer,
@@ -91,6 +91,7 @@ def _award_xp(user, amount: int, source: str, context: Optional[dict] = None) ->
         if amt <= 0:
             return 0
         profile, _ = UserLevel.objects.get_or_create(user=user)
+        old_level = int(getattr(profile, 'current_level', 1) or 1)
         profile.experience_points = int(profile.experience_points or 0) + amt
         profile.total_points_earned = int(profile.total_points_earned or 0) + amt
         # Level-up loop
@@ -102,6 +103,23 @@ def _award_xp(user, amount: int, source: str, context: Optional[dict] = None) ->
             else:
                 break
         profile.save()
+        # Log LEVEL_UP events if level increased
+        try:
+            new_level = int(getattr(profile, 'current_level', 1) or 1)
+            if new_level > old_level:
+                try:
+                    AchievementEvent.objects.create(
+                        user=user,
+                        event_type='LEVEL_UP',
+                        title=f"Reached level {new_level}",
+                        description=f"You reached level {new_level}",
+                        xp_earned=amt,
+                        meta={'oldLevel': old_level, 'newLevel': new_level, 'source': str(source or 'unknown'), 'context': context or {}}
+                    )
+                except Exception:
+                    pass
+        except Exception:
+            pass
         try:
             PointsTransaction.objects.create(
                 user=user,
@@ -961,6 +979,21 @@ class CompleteListeningPracticeView(APIView):
             tp.completed = True
             tp.completed_at = timezone.now()
         tp.save()
+        # Log TOPIC_COMPLETED once when it flips
+        try:
+            if not was_completed and tp.completed:
+                try:
+                    AchievementEvent.objects.create(
+                        user=request.user,
+                        event_type='TOPIC_COMPLETED',
+                        title=f"Completed '{getattr(topic, 'title', '')}'",
+                        description=f"You completed the topic '{getattr(topic, 'title', '')}'",
+                        meta={'topicId': str(topic.id), 'practice': 'listening'}
+                    )
+                except Exception:
+                    pass
+        except Exception:
+            pass
         # Note: Coach cache refresh removed to avoid timeout on slow Gemini calls.
         # Coach analysis has its own endpoint (CoachAnalysisView) with proper caching.
 
@@ -1176,6 +1209,21 @@ class CompleteGrammarPracticeView(APIView):
             tp.completed = True
             tp.completed_at = timezone.now()
         tp.save()
+        # Log TOPIC_COMPLETED once when it flips
+        try:
+            if not was_completed and tp.completed:
+                try:
+                    AchievementEvent.objects.create(
+                        user=request.user,
+                        event_type='TOPIC_COMPLETED',
+                        title=f"Completed '{getattr(topic, 'title', '')}'",
+                        description=f"You completed the topic '{getattr(topic, 'title', '')}'",
+                        meta={'topicId': str(topic.id), 'practice': 'grammar'}
+                    )
+                except Exception:
+                    pass
+        except Exception:
+            pass
         
         # Award +20 XP for completion
         xp_awarded += _award_xp(
@@ -2350,11 +2398,27 @@ class SubmitPhraseRecordingView(APIView):
             topic_progress.pronunciation_completed = True
 
         # If now all modes are completed, mark topic completed and award mastery later
+        was_completed = bool(topic_progress.completed)
         if not topic_progress.completed and topic_progress.all_modes_completed:
             topic_progress.completed = True
             topic_progress.completed_at = timezone.now()
         topic_progress.save()
         topic_completed = topic_progress.completed
+        # Log TOPIC_COMPLETED once when it flips
+        try:
+            if not was_completed and topic_progress.completed:
+                try:
+                    AchievementEvent.objects.create(
+                        user=request.user,
+                        event_type='TOPIC_COMPLETED',
+                        title=f"Completed '{getattr(topic, 'title', '')}'",
+                        description=f"You completed the topic '{getattr(topic, 'title', '')}'",
+                        meta={'topicId': str(topic.id), 'practice': 'pronunciation'}
+                    )
+                except Exception:
+                    pass
+        except Exception:
+            pass
         if topic_completed and phrase_progress.is_all_phrases_completed:
             # Award topic mastery bonus once (+50)
             xp_awarded += _award_topic_mastery_once(request.user, topic)
@@ -3232,10 +3296,26 @@ class SubmitFluencyPromptView(APIView):
         tp.fluency_total_score = int(score)
         tp.fluency_completed = True  # Single prompt is always completed once score is set
         # If all modes completed, mark topic completed
+        was_completed = bool(tp.completed)
         if tp.all_modes_completed and not tp.completed:
             tp.completed = True
             tp.completed_at = timezone.now()
         tp.save()
+        # Log TOPIC_COMPLETED once when it flips
+        try:
+            if not was_completed and tp.completed:
+                try:
+                    AchievementEvent.objects.create(
+                        user=request.user,
+                        event_type='TOPIC_COMPLETED',
+                        title=f"Completed '{getattr(topic, 'title', '')}'",
+                        description=f"You completed the topic '{getattr(topic, 'title', '')}'",
+                        meta={'topicId': str(topic.id), 'practice': 'fluency'}
+                    )
+                except Exception:
+                    pass
+        except Exception:
+            pass
         # Note: Coach cache refresh removed to avoid timeout on slow Gemini calls.
         # Coach analysis has its own endpoint (CoachAnalysisView) with proper caching.
 
@@ -3795,11 +3875,27 @@ class SeedPerfectScoresView(APIView):
             tp.fluency_prompt_scores = [100] * len(fprompts)
             
         # Mark topic as completed if all modes are now completed
+        was_completed = bool(tp.completed)
         if tp.all_modes_completed and not tp.completed:
             tp.completed = True
             tp.completed_at = timezone.now()
             
         tp.save()
+        # Log TOPIC_COMPLETED once when it flips
+        try:
+            if not was_completed and tp.completed:
+                try:
+                    AchievementEvent.objects.create(
+                        user=request.user,
+                        event_type='TOPIC_COMPLETED',
+                        title=f"Completed '{getattr(topic, 'title', '')}'",
+                        description=f"You completed the topic '{getattr(topic, 'title', '')}'",
+                        meta={'topicId': str(topic.id), 'practice': 'conversation'}
+                    )
+                except Exception:
+                    pass
+        except Exception:
+            pass
         
         # Ensure phrase progress shows all completed
         try:
@@ -3928,10 +4024,26 @@ class RecomputeTopicAggregatesView(APIView):
             pass
 
         # Mark topic completed if all modes completed
+        was_completed = bool(tp.completed)
         if not tp.completed and tp.all_modes_completed:
             tp.completed = True
             tp.completed_at = timezone.now()
         tp.save()
+        # Log TOPIC_COMPLETED once when it flips
+        try:
+            if not was_completed and tp.completed:
+                try:
+                    AchievementEvent.objects.create(
+                        user=request.user,
+                        event_type='TOPIC_COMPLETED',
+                        title=f"Completed '{getattr(topic, 'title', '')}'",
+                        description=f"You completed the topic '{getattr(topic, 'title', '')}'",
+                        meta={'topicId': str(topic.id), 'practice': 'unknown'}
+                    )
+                except Exception:
+                    pass
+        except Exception:
+            pass
 
         data = {
             'success': True,

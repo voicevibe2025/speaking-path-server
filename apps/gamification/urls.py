@@ -11,7 +11,8 @@ from .views import (
     LeaderboardViewSet,
     DailyQuestViewSet,
     RewardShopViewSet,
-    UserRewardViewSet
+    UserRewardViewSet,
+    AchievementEventViewSet,
 )
 
 app_name = 'gamification'
@@ -28,6 +29,7 @@ router.register(r'leaderboards', LeaderboardViewSet, basename='leaderboard')
 router.register(r'daily-quests', DailyQuestViewSet, basename='dailyquest')
 router.register(r'reward-shop', RewardShopViewSet, basename='rewardshop')
 router.register(r'user-rewards', UserRewardViewSet, basename='userreward')
+router.register(r'achievement-events', AchievementEventViewSet, basename='achievementevent')
 
 # URL patterns
 urlpatterns = [

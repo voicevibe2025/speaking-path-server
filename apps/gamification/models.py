@@ -449,3 +449,31 @@ class UserReward(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.reward.name}"
+
+
+class AchievementEvent(models.Model):
+    EVENT_TYPES = (
+        ('LEVEL_UP', 'LEVEL_UP'),
+        ('TOPIC_COMPLETED', 'TOPIC_COMPLETED'),
+        ('PROFICIENCY_TIER', 'PROFICIENCY_TIER'),
+        ('BADGE_EARNED', 'BADGE_EARNED'),
+    )
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='achievement_events')
+    event_type = models.CharField(max_length=30, choices=EVENT_TYPES)
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+    timestamp = models.DateTimeField(default=timezone.now, db_index=True)
+    xp_earned = models.IntegerField(null=True, blank=True)
+    meta = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'achievement_events'
+        ordering = ['-timestamp', '-id']
+        indexes = [
+            models.Index(fields=['user', 'timestamp']),
+        ]
+
+    def __str__(self):
+        return f"{self.user_id} {self.event_type} @ {self.timestamp}"

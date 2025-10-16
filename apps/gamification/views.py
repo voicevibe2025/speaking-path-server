@@ -25,7 +25,8 @@ from .models import (
     DailyQuest,
     UserQuest,
     RewardShop,
-    UserReward
+    UserReward,
+    AchievementEvent,
 )
 from .serializers import (
     UserLevelSerializer,
@@ -40,6 +41,7 @@ from .serializers import (
     RewardShopSerializer,
     UserRewardSerializer,
     PurchaseRewardSerializer,
+    AchievementEventSerializer,
     JoinChallengeSerializer,
     UpdateStreakSerializer
 )
@@ -113,6 +115,19 @@ class UserLevelViewSet(viewsets.ModelViewSet):
             
             # Check if leveled up
             leveled_up = profile.current_level > old_level
+            if leveled_up:
+                # Persist a LEVEL_UP achievement event
+                try:
+                    AchievementEvent.objects.create(
+                        user=request.user,
+                        event_type='LEVEL_UP',
+                        title=f"Reached level {profile.current_level}",
+                        description=f"You reached level {profile.current_level}",
+                        xp_earned=int(points) if points else None,
+                        meta={'oldLevel': int(old_level or 0), 'newLevel': int(profile.current_level or 0), 'source': str(source or 'add_experience')}
+                    )
+                except Exception:
+                    pass
             # Log transaction (only for positive points)
             try:
                 if points and int(points) != 0:
@@ -425,7 +440,7 @@ class LeaderboardViewSet(viewsets.ReadOnlyModelViewSet):
             filter_label='WEEKLY_XP'
         )
         return Response(data)
-    
+
     @action(detail=False, methods=['get'])
     def daily(self, request):
         """Get daily leaderboard"""
@@ -449,7 +464,7 @@ class LeaderboardViewSet(viewsets.ReadOnlyModelViewSet):
             filter_label='DAILY_XP'
         )
         return Response(data)
-    
+
     @action(detail=False, methods=['get'])
     def monthly(self, request):
         """Get monthly leaderboard"""
@@ -559,6 +574,210 @@ class LeaderboardViewSet(viewsets.ReadOnlyModelViewSet):
             current_user_entry_override=current_user_entry,
         )
         return Response(data)
+
+
+    def _update_leaderboard(self, leaderboard):
+        """Update leaderboard entries"""
+        # Clear existing entries
+        leaderboard.entries.all().delete()
+
+        # Determine time window
+        start = leaderboard.period_start or timezone.now().replace(year=1970, month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+        end = timezone.now()
+
+        # Aggregate positive earnings within the window
+        from django.db.models import Sum
+        tx_qs = PointsTransaction.objects.filter(created_at__gte=start, created_at__lt=end, amount__gt=0)
+        sums = (
+            tx_qs.values('user_id')
+            .annotate(total=Sum('amount'))
+            .order_by('-total')[:100]
+        )
+
+        # Fallback: if no transactions in window, show top all-time totals
+        if not sums:
+            top_users = UserLevel.objects.all().order_by('-total_points_earned')[:100]
+            for rank, user_level in enumerate(top_users, 1):
+                LeaderboardEntry.objects.create(
+                    leaderboard=leaderboard,
+                    user=user_level.user,
+                    rank=rank,
+                    score=user_level.total_points_earned,
+                    wayang_character=user_level.wayang_character
+                )
+        else:
+            # Create entries based on windowed sums
+            user_ids = [row['user_id'] for row in sums]
+            levels = {ul.user_id: ul for ul in UserLevel.objects.filter(user_id__in=user_ids)}
+            for rank, row in enumerate(sums, 1):
+                ul = levels.get(row['user_id'])
+                wayang = getattr(ul, 'wayang_character', None) if ul else None
+                LeaderboardEntry.objects.create(
+                    leaderboard=leaderboard,
+                    user_id=row['user_id'],
+                    rank=rank,
+                    score=row['total'] or 0,
+                    wayang_character=wayang
+                )
+
+        now = timezone.now()
+        leaderboard.last_updated = now
+        leaderboard.period_end = now
+        leaderboard.save()
+
+    def _get_user_avatar_url(self, user, request):
+        """Resolve a user's avatar URL.
+        Priority:
+        1) Uploaded image from UserProfile.avatar (build absolute URI)
+        2) Legacy UserProfile.avatar_url
+        Returns None if not available.
+        """
+        # Respect privacy: if target user hides avatar, do not expose to other viewers
+        try:
+            if not (request and getattr(request, 'user', None) and request.user.is_authenticated and request.user == user):
+                privacy = PrivacySettings.objects.filter(user=user).first()
+                if privacy and privacy.hide_avatar:
+                    return None
+        except Exception:
+            pass
+        try:
+            profile = getattr(user, 'profile', None)
+            if not profile:
+                return None
+
+            avatar_field = getattr(profile, 'avatar', None)
+            if avatar_field:
+                # Uploaded image
+                url = getattr(avatar_field, 'url', None)
+                if url:
+                    try:
+                        return request.build_absolute_uri(url) if request is not None else url
+                    except Exception:
+                        return url
+
+            legacy = getattr(profile, 'avatar_url', '') or ''
+            return legacy or None
+        except Exception:
+            return None
+
+    def _build_leaderboard_response(self, leaderboard, request, type_label: str, filter_label: str, entries_qs_override=None, last_updated_override=None, prebuilt_entries=None, current_user_entry_override=None):
+        """Construct Android-friendly LeaderboardData payload.
+        Matches app's domain model fields and naming.
+        """
+        if prebuilt_entries is not None:
+            entries = prebuilt_entries
+            current_user_entry = current_user_entry_override
+            # Enrich avatar URLs for prebuilt entries when missing
+            try:
+                user_ids = []
+                for it in entries:
+                    if not it.get('avatarUrl'):
+                        uid = it.get('userId')
+                        try:
+                            user_ids.append(int(uid))
+                        except Exception:
+                            continue
+                if user_ids:
+                    User = get_user_model()
+                    users = User.objects.filter(id__in=set(user_ids)).select_related('profile')
+                    users_by_id = {u.id: u for u in users}
+                    for it in entries:
+                        if not it.get('avatarUrl'):
+                            uid = it.get('userId')
+                            try:
+                                user_obj = users_by_id.get(int(uid))
+                            except Exception:
+                                user_obj = None
+                            if user_obj:
+                                it['avatarUrl'] = self._get_user_avatar_url(user_obj, request)
+            except Exception:
+                pass
+        else:
+            entries_qs = entries_qs_override or leaderboard.entries.select_related('user', 'user__profile', 'primary_badge').order_by('rank')
+
+            entries = []
+            current_user_entry = None
+
+            for e in entries_qs:
+                # Derive user fields
+                user = e.user
+                try:
+                    level = user.level_profile.current_level
+                    streak = user.level_profile.streak_days
+                except Exception:
+                    level = 0
+                    streak = 0
+
+                display_name = getattr(user, 'get_full_name', None)
+                if callable(display_name):
+                    name_val = (user.get_full_name() or '').strip()
+                    if not name_val:
+                        name_val = user.username
+                else:
+                    name_val = user.username
+
+                badge_obj = None
+                if e.primary_badge:
+                    badge_color = getattr(e.primary_badge, 'pattern_color', None) or '#000000'
+                    badge_obj = {
+                        'id': str(getattr(e.primary_badge, 'badge_id', e.primary_badge.id)),
+                        'name': e.primary_badge.name,
+                        'icon': e.primary_badge.icon,
+                        'color': badge_color,
+                    }
+
+                avatar_url = self._get_user_avatar_url(user, request)
+                entry_data = {
+                    'rank': e.rank,
+                    'userId': str(user.id),
+                    'username': user.username,
+                    'displayName': name_val,
+                    'avatarUrl': avatar_url,
+                    'score': e.score,
+                    'level': level,
+                    'streakDays': streak,
+                    'country': None,
+                    'countryCode': None,
+                    'isCurrentUser': user.id == getattr(request.user, 'id', None),
+                    'change': 'NONE',
+                    'achievements': 0,
+                    'weeklyXp': e.score if type_label == 'WEEKLY' else 0,
+                    'monthlyXp': e.score if type_label == 'MONTHLY' else 0,
+                    'badge': badge_obj,
+                }
+
+                if entry_data['isCurrentUser']:
+                    current_user_entry = entry_data
+
+                entries.append(entry_data)
+
+        data = {
+            'type': type_label,
+            'filter': filter_label,
+            'entries': entries,
+            'currentUserEntry': current_user_entry,
+            'lastUpdated': last_updated_override or (leaderboard.last_updated if leaderboard else timezone.now()),
+            'totalParticipants': len(entries),
+        }
+        return data
+
+
+class AchievementEventViewSet(viewsets.ReadOnlyModelViewSet):
+    """Read-only endpoints for persistent achievement events of current user."""
+    serializer_class = AchievementEventSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return AchievementEvent.objects.filter(user=self.request.user).order_by('-timestamp', '-id')
+
+    def list(self, request, *args, **kwargs):
+        try:
+            limit = int(request.query_params.get('limit') or 50)
+        except Exception:
+            limit = 50
+        qs = self.get_queryset()[: max(1, min(200, limit))]
+        ser = self.get_serializer(qs, many=True)
+        return Response(ser.data)
     
     def _update_leaderboard(self, leaderboard):
         """Update leaderboard entries"""
