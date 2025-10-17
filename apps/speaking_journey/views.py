@@ -5141,6 +5141,20 @@ class CoachAnalysisRefreshView(APIView):
     def post(self, request):
         user = request.user
         logger.info(f"CoachAnalysisRefreshView POST called for user {user.id} - starting Gemini analysis")
+        cache = _get_cached_analysis(user)
+        if cache and not cache.is_stale:
+            try:
+                ser = CoachAnalysisSerializer(cache.analysis_data)
+                response_data = ser.data.copy() if hasattr(ser.data, 'copy') else dict(ser.data)
+                response_data['_cache_stale'] = False
+                response_data['_is_ai_generated'] = cache.is_ai_generated
+                response_data['_generated_at'] = cache.generated_at.isoformat()
+                response_data['_next_refresh_at'] = cache.expires_at.isoformat()
+                response_data['_skipped_refresh'] = True
+                logger.info(f"Coach analysis refresh skipped for user {user.id}: cache valid until {cache.expires_at}")
+                return Response(response_data, status=status.HTTP_200_OK)
+            except Exception as e:
+                logger.error(f"Failed to serialize cached analysis during refresh for user {user.id}: {e}")
         
         try:
             # Call Gemini AI (may take 10-45 seconds)
