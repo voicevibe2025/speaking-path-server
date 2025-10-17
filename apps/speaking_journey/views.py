@@ -139,20 +139,99 @@ def _award_topic_mastery_once(user, topic) -> int:
     Uses PointsTransaction to ensure idempotency.
     """
     try:
-        # If a previous transaction exists for this topic mastery, skip
-        exists = PointsTransaction.objects.filter(
+        # Check if we've already awarded mastery XP for this topic
+        source_key = f"topic_mastery_{topic.id}"
+        already_exists = PointsTransaction.objects.filter(
             user=user,
-            source='topic_mastery',
-            context__topicId=str(topic.id)
+            source=source_key
         ).exists()
-        if exists:
-            return 0
+        if not already_exists:
+            PointsTransaction.objects.create(user=user, amount=50, source=source_key, context={'topic_id': str(topic.id)})
+            return 50
     except Exception:
-        # If filter on context fails, fall back to best-effort (may double-award in rare cases)
         pass
-    return _award_xp(user, 50, 'topic_mastery', {'topicId': str(topic.id)})
+    return 0
 
-# Simple in-process cache for word clues to speed up repeat sessions
+
+def _get_proficiency_tier(topics_completed: int) -> str:
+    """
+    Map number of completed topics to a proficiency tier name.
+    
+    Tiers (matching UserProfileSerializer.get_current_proficiency):
+    0–10   -> Chaucerite
+    11–20  -> Shakespire
+    21–30  -> Miltonarch
+    31–40  -> Austennova
+    41–50  -> Dickenlord
+    51–60  -> Joycemancer
+    61+    -> The Bard Eternal
+    """
+    if topics_completed <= 10:
+        return "Chaucerite"
+    elif topics_completed <= 20:
+        return "Shakespire"
+    elif topics_completed <= 30:
+        return "Miltonarch"
+    elif topics_completed <= 40:
+        return "Austennova"
+    elif topics_completed <= 50:
+        return "Dickenlord"
+    elif topics_completed <= 60:
+        return "Joycemancer"
+    else:
+        return "The Bard Eternal"
+
+
+def _check_and_create_proficiency_event(user):
+    """
+    Check if user's proficiency tier has changed based on completed topics count.
+    If tier changed, create a PROFICIENCY_TIER achievement event.
+    
+    This should be called whenever a topic is marked as completed.
+    """
+    try:
+        # Count completed topics
+        topics_completed = TopicProgress.objects.filter(user=user, completed=True).count()
+        current_tier = _get_proficiency_tier(topics_completed)
+        
+        # Get the most recent proficiency tier event (if any)
+        last_event = AchievementEvent.objects.filter(
+            user=user,
+            event_type='PROFICIENCY_TIER'
+        ).order_by('-timestamp').first()
+        
+        # Extract previous tier from the last event title
+        previous_tier = None
+        if last_event:
+            # Title format: "Received Shakespire badge for completing 11 topics"
+            import re
+            match = re.search(r'Received (\w+(?:\s+\w+)*?) badge', last_event.title)
+            if match:
+                previous_tier = match.group(1).strip()
+        
+        # If tier changed (or first time), create event
+        if current_tier != previous_tier:
+            # Create descriptive title
+            title = f"Received {current_tier} badge for completing {topics_completed} topics"
+            
+            # Create event
+            AchievementEvent.objects.create(
+                user=user,
+                event_type='PROFICIENCY_TIER',
+                title=title,
+                description=f"You've reached the {current_tier} proficiency tier by completing {topics_completed} topics!",
+                meta={
+                    'tier': current_tier,
+                    'topics_completed': topics_completed,
+                    'previous_tier': previous_tier or 'None'
+                }
+            )
+            logger.info(f"Created PROFICIENCY_TIER event for user {user.id}: {current_tier} ({topics_completed} topics)")
+    except Exception as e:
+        logger.error(f"Failed to create proficiency event for user {user.id}: {e}")
+        pass
+
+
 DEF_STYLE_VERSION = "fun_v1"
 _DEF_CACHE: dict[str, str] = {}
 
@@ -972,6 +1051,11 @@ class CompleteListeningPracticeView(APIView):
             tp.completed = True
             tp.completed_at = timezone.now()
         tp.save()
+        
+        # Check for proficiency tier change when topic is completed
+        if not was_completed and tp.completed:
+            _check_and_create_proficiency_event(request.user)
+        
         # Log TOPIC_COMPLETED once when it flips
         try:
             if not was_completed and tp.completed:
@@ -1202,6 +1286,11 @@ class CompleteGrammarPracticeView(APIView):
             tp.completed = True
             tp.completed_at = timezone.now()
         tp.save()
+        
+        # Check for proficiency tier change when topic is completed
+        if not was_completed and tp.completed:
+            _check_and_create_proficiency_event(request.user)
+        
         # Log TOPIC_COMPLETED once when it flips
         try:
             if not was_completed and tp.completed:
@@ -2396,6 +2485,11 @@ class SubmitPhraseRecordingView(APIView):
             topic_progress.completed = True
             topic_progress.completed_at = timezone.now()
         topic_progress.save()
+        
+        # Check for proficiency tier change when topic is completed
+        if not was_completed and topic_progress.completed:
+            _check_and_create_proficiency_event(request.user)
+        
         topic_completed = topic_progress.completed
         # Log TOPIC_COMPLETED once when it flips
         try:
@@ -2867,6 +2961,9 @@ class CompleteTopicView(APIView):
             progress.completed = True
             progress.completed_at = timezone.now()
             progress.save(update_fields=['completed', 'completed_at'])
+            
+            # Check for proficiency tier change when topic is manually completed
+            _check_and_create_proficiency_event(request.user)
 
         # Determine next topic to unlock
         next_topic = (
@@ -3294,6 +3391,11 @@ class SubmitFluencyPromptView(APIView):
             tp.completed = True
             tp.completed_at = timezone.now()
         tp.save()
+        
+        # Check for proficiency tier change when topic is completed
+        if not was_completed and tp.completed:
+            _check_and_create_proficiency_event(request.user)
+        
         # Log TOPIC_COMPLETED once when it flips
         try:
             if not was_completed and tp.completed:
@@ -3717,6 +3819,11 @@ class CompleteVocabularyPracticeView(APIView):
             tp.completed = True
             tp.completed_at = timezone.now()
         tp.save()
+        
+        # Check for proficiency tier change when topic is completed
+        if not was_completed and tp.completed:
+            _check_and_create_proficiency_event(request.user)
+        
         # Note: Coach cache refresh removed to avoid timeout on slow Gemini calls.
         # Coach analysis has its own endpoint (CoachAnalysisView) with proper caching.
 
@@ -3874,6 +3981,10 @@ class SeedPerfectScoresView(APIView):
             tp.completed_at = timezone.now()
             
         tp.save()
+        
+        # Check for proficiency tier change when topic is completed
+        if not was_completed and tp.completed:
+            _check_and_create_proficiency_event(request.user)
         # Log TOPIC_COMPLETED once when it flips
         try:
             if not was_completed and tp.completed:
@@ -4022,6 +4133,9 @@ class RecomputeTopicAggregatesView(APIView):
             tp.completed = True
             tp.completed_at = timezone.now()
         tp.save()
+        # Check for proficiency tier change when topic is completed
+        if not was_completed and tp.completed:
+            _check_and_create_proficiency_event(request.user)
         # Log TOPIC_COMPLETED once when it flips
         try:
             if not was_completed and tp.completed:

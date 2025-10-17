@@ -25,7 +25,7 @@ TOPICS = [
             "greeting", "acquaintance", "colleague", "classmate", "stranger", "farewell",
             "address", "title", "name", "country", "city", "pleasure"
         ],
-        "fluency_practice_prompt": "Introduce yourself to a new classmate. Include your name, where you're from, what you do, and one hobby."
+        "fluency_practice_prompt": "Introduce yourself. Include your name, where you're from, where you live, what you do, and one hobby."
     },
     {
         "title": "Daily Activities",
@@ -59,7 +59,7 @@ TOPICS = [
             "hobby", "leisure", "exercise", "sleep", "morning", "afternoon", "evening",
             "night", "weekday", "weekend", "errand", "task", "habit", "schedule"
         ],
-        "fluency_practice_prompt": "Describe your weekday routine from morning to evening. Mention times and how you commute."
+        "fluency_practice_prompt": "Describe your daily routine. Include your wake-up time, morning activities, work or school, and evening activities."
     },
     {
         "title": "Time and Dates",
@@ -90,7 +90,7 @@ TOPICS = [
             "holiday", "birthday", "anniversary", "event", "appointment", "schedule",
             "duration", "period"
         ],
-        "fluency_practice_prompt": "Describe your weekly schedule. Mention classes or work, and important times."
+        "fluency_practice_prompt": "Describe some important dates in your life, like birthdays, holidays, or anniversaries. Explain why those dates are special to you."
     },
     {
         "title": "Hobbies and Interests",
@@ -151,7 +151,7 @@ TOPICS = [
             "cheap", "affordable", "return", "exchange", "refund", "clothing",
             "accessories", "electronics", "groceries"
         ],
-        "fluency_practice_prompt": "Role-play buying clothes. Ask about price, size, and payment options."
+        "fluency_practice_prompt": "Do you prefer shopping online or in stores? Explain why and mention price differences if any."
 
     },
     {
@@ -184,7 +184,7 @@ TOPICS = [
             "busy signal", "message", "take a message", "call back", "contact",
             "reach", "speak to", "on the line", "hold on", "connection", "signal"
         ],
-        "fluency_practice_prompt": "Role-play making a phone call to a friend to make plans for the weekend."
+        "fluency_practice_prompt": "How often do you make or receive phone calls? Do you prefer calling or texting? Why?"
     },
     {
         "title": "Ordering Food",
@@ -212,7 +212,7 @@ TOPICS = [
             "tip", "reservation", "table", "takeout", "delivery", "cuisine", "dish",
             "ingredient"
         ],
-        "fluency_practice_prompt": "Role-play ordering dinner at a restaurant. Ask for a recommendation and mention any dietary preferences."
+        "fluency_practice_prompt": "When you eat out, do you prefer fast food, street food, or fancy restaurants? Why?"
     },
     {
         "title": "Calling for Help",
@@ -239,7 +239,7 @@ TOPICS = [
             "stolen", "danger", "safety", "urgent", "assistance", "report",
             "witness", "victim", "rescue"
         ],
-        "fluency_practice_prompt": "Explain what you would do if you got lost in a foreign city."
+        "fluency_practice_prompt": "Think about a time when you needed help but it was hard to ask. Why was it difficult?"
     },
     {
         "title": "Weather Report",
@@ -299,7 +299,7 @@ TOPICS = [
             "landmark", "intersection", "crosswalk", "pedestrian", "destination",
             "route", "map", "GPS", "sign", "avenue", "street", "road", "highway"
         ],
-        "fluency_practice_prompt": "Give clear directions from a train station to your favorite café."
+        "fluency_practice_prompt": "Describe the directions from your home to your school or college."
     },
     {
         "title": "At the Post Office",
@@ -327,7 +327,7 @@ TOPICS = [
             "express mail", "registered mail", "international", "domestic",
             "customs", "form", "sender", "recipient"
         ],
-        "fluency_practice_prompt": "Explain the process of mailing a package at the post office."
+        "fluency_practice_prompt": "Talk about the last time you sent a letter or a package. Who was it for, and what did you send?"
     },
     {
         "title": "Running Errands",
@@ -385,7 +385,7 @@ TOPICS = [
             "study group", "campus", "dorm", "professor", "instructor", "deadline",
             "grade", "feedback"
         ],
-        "fluency_practice_prompt": "Role-play a conversation with a classmate after a difficult lecture."
+        "fluency_practice_prompt": "What do you usually do after class? Do you stay and talk with friends or go straight home?"
     },
     {
         "title": "Transportation",
@@ -443,7 +443,7 @@ TOPICS = [
             "thirties", "infant", "toddler", "child", "teenager", "adult", "senior",
             "generation", "birthdate", "milestone", "youth", "elderly"
         ],
-        "fluency_practice_prompt": "Talk about the different stages of life (e.g., childhood, adolescence, adulthood)."
+        "fluency_practice_prompt": "Imagine you could go back to any age in your life. Which age would you choose, and why?"
     },
     {
         "title": "At the Movies",
@@ -529,7 +529,7 @@ TOPICS = [
             "arena", "court", "field", "pitch", "goal", "point", "championship",
             "tournament", "medal", "trophy"
         ],
-        "fluency_practice_prompt": "Discuss the benefits of playing sports for physical and mental health."
+        "fluency_practice_prompt": "What’s your favorite sport? How often do you play or watch it?"
     },
     {
         "title": "At the Theater",
@@ -556,7 +556,7 @@ TOPICS = [
             "curtain", "audience", "ticket", "box office", "usher", "program", "act",
             "scene", "dialogue", "applause", "actor", "actress", "intermission"
         ],
-        "fluency_practice_prompt": "Describe a memorable theater performance you have seen."
+        "fluency_practice_prompt": "Talk about the last time you went to a theater or cinema. What did you watch, and did you enjoy it?"
     },
     {
         "title": "Taking a Vacation",
@@ -616,7 +616,7 @@ TOPICS = [
             "bedding", "grooming", "veterinarian", "vet", "leash", "collar",
             "adoption", "rescue", "shelter", "pet owner"
         ],
-        "fluency_practice_prompt": "Describe your pet or a pet you would like to have."
+        "fluency_practice_prompt": "Are pets popular in your country? What kinds of animals do people usually keep at home?"
     },
     {
         "title": "Giving Your Opinion",
@@ -645,7 +645,7 @@ TOPICS = [
             "conviction", "support", "oppose", "propose", "evaluate", "analyze",
             "critique", "feedback"
         ],
-        "fluency_practice_prompt": "Express your opinion on a current event or a popular topic."
+        "fluency_practice_prompt": "Do you agree or disagree with this statement: ‘Money can buy happiness’? Explain your opinion."
     },
     {
         "title": "Weddings",
@@ -674,7 +674,7 @@ TOPICS = [
             "fiancée", "vows", "ring", "bouquet", "anniversary", "celebration",
             "guest", "invitation", "toast"
         ],
-        "fluency_practice_prompt": "Talk about your ideal wedding. What would it be like?"
+        "fluency_practice_prompt": "Describe a wedding tradition in your culture. What makes it special or unique?"
     },
     {
         "title": "Giving Advice",
@@ -703,6 +703,6 @@ TOPICS = [
             "suggestion", "dilemma", "support", "encourage", "warn", "caution",
             "insight", "perspective"
         ],
-        "fluency_practice_prompt": "Give advice to someone who wants to learn a new language."
+        "fluency_practice_prompt": "What advice would you give to someone who wants to improve their English or study better?"
     }
 ]

@@ -113,6 +113,69 @@ class Command(BaseCommand):
                 'part_of_speech': 'adjective',
                 'example_sentence': 'The library was a quiet place to study.'
             },
+            {
+                'word': 'read',
+                'definition': 'To look at and comprehend the meaning of written or printed matter.',
+                'difficulty': 'beginner',
+                'part_of_speech': 'verb',
+                'example_sentence': 'I like to read a book before I go to sleep.'
+            },
+            {
+                'word': 'sing',
+                'definition': 'To make musical sounds with the voice.',
+                'difficulty': 'beginner',
+                'part_of_speech': 'verb',
+                'example_sentence': 'She loves to sing in the shower.'
+            },
+            {
+                'word': 'talk',
+                'definition': 'To speak in order to give information or express ideas or feelings.',
+                'difficulty': 'beginner',
+                'part_of_speech': 'verb',
+                'example_sentence': 'We need to talk about our plans for the weekend.'
+            },
+            {
+                'word': 'use',
+                'definition': 'To take, hold, or deploy as a means of accomplishing a purpose.',
+                'difficulty': 'beginner',
+                'part_of_speech': 'verb',
+                'example_sentence': 'Can I use your pen for a moment?'
+            },
+            {
+                'word': 'walk',
+                'definition': 'To move at a regular pace by lifting and setting down each foot in turn, never having both feet off the ground at once.',
+                'difficulty': 'beginner',
+                'part_of_speech': 'verb',
+                'example_sentence': 'I walk to work every day.'
+            },
+            {
+                'word': 'work',
+                'definition': 'Activity involving mental or physical effort done in order to achieve a purpose or result.',
+                'difficulty': 'beginner',
+                'part_of_speech': 'noun',
+                'example_sentence': 'He has a lot of work to do.'
+            },
+            {
+                'word': 'write',
+                'definition': 'To mark on a surface, typically paper, with a pen, pencil, or similar implement.',
+                'difficulty': 'beginner',
+                'part_of_speech': 'verb',
+                'example_sentence': 'She is learning to write her name.'
+            },
+            {
+                'word': 'young',
+                'definition': 'Having lived or existed for only a short time.',
+                'difficulty': 'beginner',
+                'part_of_speech': 'adjective',
+                'example_sentence': 'The young cat was very playful.'
+            },
+            {
+                'word': 'zone',
+                'definition': 'An area or stretch of land having a particular characteristic, purpose, or use, or subject to particular restrictions.',
+                'difficulty': 'beginner',
+                'part_of_speech': 'noun',
+                'example_sentence': 'This is a pedestrian-only zone.'
+            },
             # Intermediate words
             {
                 'word': 'ambiguous',
@@ -219,6 +282,69 @@ class Command(BaseCommand):
                 'part_of_speech': 'adjective',
                 'example_sentence': 'He was skeptical about the claims made in the advertisement.'
             },
+            {
+                'word': 'tenacious',
+                'definition': 'Tending to keep a firm hold of something; clinging or adhering closely.',
+                'difficulty': 'intermediate',
+                'part_of_speech': 'adjective',
+                'example_sentence': 'She was tenacious in her pursuit of her goals.'
+            },
+            {
+                'word': 'ubiquitous',
+                'definition': 'Present, appearing, or found everywhere.',
+                'difficulty': 'intermediate',
+                'part_of_speech': 'adjective',
+                'example_sentence': 'Mobile phones are now ubiquitous around the world.'
+            },
+            {
+                'word': 'validate',
+                'definition': 'To check or prove the validity or accuracy of something.',
+                'difficulty': 'intermediate',
+                'part_of_speech': 'verb',
+                'example_sentence': 'You need to validate your email address to complete the registration.'
+            },
+            {
+                'word': 'whimsical',
+                'definition': 'Playfully quaint or fanciful, especially in an appealing and amusing way.',
+                'difficulty': 'intermediate',
+                'part_of_speech': 'adjective',
+                'example_sentence': 'The whimsical decorations made the room feel magical.'
+            },
+            {
+                'word': 'yearn',
+                'definition': 'To have an intense feeling of longing for something, typically something that one has lost or been separated from.',
+                'difficulty': 'intermediate',
+                'part_of_speech': 'verb',
+                'example_sentence': 'She yearned for the simple days of her childhood.'
+            },
+            {
+                'word': 'zealous',
+                'definition': 'Having or showing zeal.',
+                'difficulty': 'intermediate',
+                'part_of_speech': 'adjective',
+                'example_sentence': 'He was a zealous supporter of the new policy.'
+            },
+            {
+                'word': 'acquiesce',
+                'definition': 'To accept something reluctantly but without protest.',
+                'difficulty': 'intermediate',
+                'part_of_speech': 'verb',
+                'example_sentence': 'She acquiesced to their demands.'
+            },
+            {
+                'word': 'belligerent',
+                'definition': 'Hostile and aggressive.',
+                'difficulty': 'intermediate',
+                'part_of_speech': 'adjective',
+                'example_sentence': 'The belligerent man was shouting at the waiter.'
+            },
+            {
+                'word': 'capitulate',
+                'definition': 'To cease to resist an opponent or an unwelcome demand; surrender.',
+                'difficulty': 'intermediate',
+                'part_of_speech': 'verb',
+                'example_sentence': 'The army was forced to capitulate.'
+            },
             # Advanced words
             {
                 'word': 'aberration',
@@ -324,6 +450,69 @@ class Command(BaseCommand):
                 'difficulty': 'advanced',
                 'part_of_speech': 'noun',
                 'example_sentence': 'The Roman Empire reached its zenith in the 2nd century AD.'
+            },
+            {
+                'word': 'alacrity',
+                'definition': 'Bris_of_speecha and cheerful readiness.',
+                'difficulty': 'advanced',
+                'part_of_speech': 'noun',
+                'example_sentence': 'She accepted the invitation with alacrity.'
+            },
+            {
+                'word': 'bombastic',
+                'definition': 'High-sounding but with little meaning; inflated.',
+                'difficulty': 'advanced',
+                'part_of_speech': 'adjective',
+                'example_sentence': 'The politician\'s bombastic speech was full of empty promises.'
+            },
+            {
+                'word': 'cognizant',
+                'definition': 'Having knowledge or being aware of.',
+                'difficulty': 'advanced',
+                'part_of_speech': 'adjective',
+                'example_sentence': 'He was cognizant of the risks involved.'
+            },
+            {
+                'word': 'diatribe',
+                'definition': 'A forceful and bitter verbal attack against someone or something.',
+                'difficulty': 'advanced',
+                'part_of_speech': 'noun',
+                'example_sentence': 'The senator launched into a diatribe against the new tax bill.'
+            },
+            {
+                'word': 'ebullient',
+                'definition': 'Cheerful and full of energy.',
+                'difficulty': 'advanced',
+                'part_of_speech': 'adjective',
+                'example_sentence': 'She was in an ebullient mood after her victory.'
+            },
+            {
+                'word': 'fastidious',
+                'definition': 'Very attentive to and concerned about accuracy and detail.',
+                'difficulty': 'advanced',
+                'part_of_speech': 'adjective',
+                'example_sentence': 'He was a fastidious dresser, always impeccably turned out.'
+            },
+            {
+                'word': 'garrulous',
+                'definition': 'Excessively talkative, especially on trivial matters.',
+                'difficulty': 'advanced',
+                'part_of_speech': 'adjective',
+                'example_sentence': 'The garrulous old man bored everyone with his stories.'
+            },
+            {
+                'word': 'hapless',
+                'definition': 'Unfortunate.',
+                'difficulty': 'advanced',
+                'part_of_speech': 'adjective',
+                'example_sentence': 'The hapless victims of the earthquake were left homeless.'
+            },
+            {
+                'word': 'iconoclast',
+                'definition': 'A person who attacks cherished beliefs or institutions.',
+                'difficulty': 'advanced',
+                'part_of_speech': 'noun',
+                'example_sentence': 'The artist was an iconoclast who challenged traditional notions of beauty.'
             },
         ]
 
