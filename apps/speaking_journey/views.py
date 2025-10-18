@@ -5112,6 +5112,7 @@ class CoachAnalysisView(APIView):
                 response_data['_cache_stale'] = cache.is_stale
                 response_data['_is_ai_generated'] = cache.is_ai_generated
                 response_data['_generated_at'] = cache.generated_at.isoformat()
+                response_data['_next_refresh_at'] = cache.expires_at.isoformat()
                 logger.info(f"Returning cached analysis for user {user.id}: stale={cache.is_stale}, AI={cache.is_ai_generated}")
                 return Response(response_data, status=status.HTTP_200_OK)
             except Exception as e:
@@ -5123,10 +5124,15 @@ class CoachAnalysisView(APIView):
         data = _heuristic_coach(user)
         _save_cached_analysis(user, data, is_ai=False, ttl_hours=12)
         
+        # Get the cache entry to retrieve expires_at timestamp
+        cache = _get_cached_analysis(user)
+        
         ser = CoachAnalysisSerializer(data)
         response_data = ser.data.copy() if hasattr(ser.data, 'copy') else dict(ser.data)
         response_data['_cache_stale'] = False
         response_data['_is_ai_generated'] = False
+        if cache:
+            response_data['_next_refresh_at'] = cache.expires_at.isoformat()
         return Response(response_data, status=status.HTTP_200_OK)
 
 
@@ -5166,12 +5172,17 @@ class CoachAnalysisRefreshView(APIView):
             # Save to database cache
             _save_cached_analysis(user, data, is_ai=is_ai, ttl_hours=12)
             
+            # Get the cache entry to retrieve expires_at timestamp
+            cache = _get_cached_analysis(user)
+            
             logger.info(f"Coach analysis refresh completed for user {user.id}: AI={is_ai}")
             
             ser = CoachAnalysisSerializer(data)
             response_data = ser.data.copy() if hasattr(ser.data, 'copy') else dict(ser.data)
             response_data['_cache_stale'] = False
             response_data['_is_ai_generated'] = is_ai
+            if cache:
+                response_data['_next_refresh_at'] = cache.expires_at.isoformat()
             return Response(response_data, status=status.HTTP_200_OK)
             
         except Exception as e:
