@@ -331,6 +331,97 @@ class WordProgressStatsView(APIView):
         })
 
 
+class EvaluatePronunciationView(APIView):
+    """
+    POST /api/v1/wordup/evaluate-pronunciation/
+    Evaluates user's pronunciation of a word.
+    Returns transcription and feedback.
+    """
+    permission_classes = [IsAuthenticated]
+    
+    async def _transcribe_audio(self, audio_base64: str) -> str:
+        """Transcribe audio using Whisper."""
+        try:
+            audio_bytes = base64.b64decode(audio_base64)
+            whisper_service = WhisperService()
+            
+            result = await whisper_service.transcribe_audio(audio_bytes)
+            
+            return result.get('text', '').strip()
+        except Exception as e:
+            logger.error(f"Audio transcription error: {e}")
+            raise
+    
+    def post(self, request):
+        from .serializers import EvaluatePronunciationRequest, EvaluatePronunciationResponse
+        
+        serializer = EvaluatePronunciationRequest(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        data = serializer.validated_data
+        word_id = data['word_id']
+        audio_base64 = data['audio_base64']
+        
+        # Get the word
+        try:
+            word = Word.objects.get(id=word_id)
+        except Word.DoesNotExist:
+            return Response(
+                {"error": "Word not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Transcribe audio
+        try:
+            import asyncio
+            transcribed_text = asyncio.run(self._transcribe_audio(audio_base64))
+        except Exception as e:
+            return Response(
+                {"error": f"Failed to transcribe audio: {str(e)}"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if not transcribed_text:
+            return Response(
+                {"error": "No speech detected in audio"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Compare transcribed text with target word (case-insensitive)
+        transcribed_lower = transcribed_text.lower().strip()
+        target_lower = word.word.lower().strip()
+        
+        # Check if the word is present in the transcription
+        is_correct = target_lower in transcribed_lower or transcribed_lower in target_lower
+        
+        # Calculate simple confidence based on similarity
+        if is_correct:
+            if transcribed_lower == target_lower:
+                confidence = 1.0
+                feedback = f"Perfect! You pronounced '{word.word}' correctly!"
+            else:
+                confidence = 0.8
+                feedback = f"Good! I heard '{transcribed_text}' which includes '{word.word}'."
+        else:
+            confidence = 0.0
+            # Provide helpful feedback
+            if len(transcribed_text) > 0:
+                feedback = f"I heard '{transcribed_text}', but we're looking for '{word.word}'. Try again!"
+            else:
+                feedback = f"I couldn't hear you clearly. Please say '{word.word}' and try again."
+        
+        response_serializer = EvaluatePronunciationResponse(data={
+            'is_correct': is_correct,
+            'transcribed_text': transcribed_text,
+            'feedback': feedback,
+            'confidence': confidence,
+        })
+        response_serializer.is_valid(raise_exception=True)
+        
+        return Response(response_serializer.data)
+
+
 class WordTTSView(APIView):
     """
     GET /api/v1/wordup/tts/?text=word

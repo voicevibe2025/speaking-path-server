@@ -14,6 +14,7 @@ class WordSerializer(serializers.ModelSerializer):
             'difficulty',
             'example_sentence',
             'part_of_speech',
+            'ipa_pronunciation',
         ]
 
 
@@ -57,3 +58,17 @@ class MasterWordRequest(serializers.Serializer):
     """Request serializer for mastering a word."""
     word_id = serializers.IntegerField()
     example_sentence = serializers.CharField(max_length=500)
+
+
+class EvaluatePronunciationRequest(serializers.Serializer):
+    """Request serializer for evaluating pronunciation."""
+    word_id = serializers.IntegerField()
+    audio_base64 = serializers.CharField(required=True)
+
+
+class EvaluatePronunciationResponse(serializers.Serializer):
+    """Response serializer for pronunciation evaluation."""
+    is_correct = serializers.BooleanField()
+    transcribed_text = serializers.CharField()
+    feedback = serializers.CharField()
+    confidence = serializers.FloatField()

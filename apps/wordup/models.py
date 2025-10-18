@@ -19,6 +19,7 @@ class Word(models.Model):
     difficulty = models.CharField(max_length=20, choices=DIFFICULTY_CHOICES, default='beginner')
     example_sentence = models.TextField(blank=True, help_text="Optional example sentence")
     part_of_speech = models.CharField(max_length=50, blank=True)
+    ipa_pronunciation = models.CharField(max_length=200, blank=True, help_text="IPA phonetic transcription")
     created_at = models.DateTimeField(auto_now_add=True)
     
     class Meta:
