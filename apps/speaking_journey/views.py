@@ -4471,6 +4471,124 @@ class LingoLeagueView(APIView):
         }
         return Response(data, status=status.HTTP_200_OK)
 
+
+class TopicLeaderboardView(APIView):
+    """Per-topic leaderboard based on combined mastery across required practices
+    (Pronunciation, Fluency, Vocabulary, Grammar). Returns Android-friendly
+    LeaderboardData-like payload to match the mobile domain model.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def _resolve_avatar_url(self, user, request):
+        try:
+            profile = getattr(user, 'profile', None)
+            if not profile:
+                return None
+            avatar_field = getattr(profile, 'avatar', None)
+            if avatar_field and hasattr(avatar_field, 'url'):
+                try:
+                    return request.build_absolute_uri(avatar_field.url) if request else avatar_field.url
+                except Exception:
+                    return getattr(avatar_field, 'url', None)
+            legacy = getattr(profile, 'avatar_url', '') or ''
+            return legacy or None
+        except Exception:
+            return None
+
+    def get(self, request, topic_id):
+        try:
+            limit = int(request.query_params.get('limit') or 50)
+        except Exception:
+            limit = 50
+        limit = max(1, min(limit, 200))
+
+        topic = get_object_or_404(Topic, id=topic_id, is_active=True)
+
+        tps = TopicProgress.objects.filter(topic=topic).select_related('user', 'user__profile', 'user__level_profile')
+
+        entries_raw = []
+        for tp in tps:
+            user = getattr(tp, 'user', None)
+            if not user:
+                continue
+            try:
+                pron = int(getattr(tp, 'pronunciation_total_score', 0) or 0)
+                flu = int(getattr(tp, 'fluency_total_score', 0) or 0)
+                vocab = int(getattr(tp, 'vocabulary_total_score', 0) or 0)
+                grammar = int(getattr(tp, 'grammar_total_score', 0) or 0)
+                pron = min(max(pron, 0), 100)
+                flu = min(max(flu, 0), 100)
+                vocab = min(max(vocab, 0), 100)
+                grammar = min(max(grammar, 0), 100)
+                total_max = 400
+                total_score = pron + flu + vocab + grammar
+                combined_percent = int(round((total_score / max(1, total_max)) * 100.0))
+            except Exception:
+                combined_percent = 0
+
+            if combined_percent <= 0:
+                continue
+
+            # Display name prefers full name if available
+            try:
+                display_name = (user.get_full_name() or '').strip() or user.username
+            except Exception:
+                display_name = getattr(user, 'username', str(getattr(user, 'id', '')))
+
+            # Level and streak
+            try:
+                level_profile = getattr(user, 'level_profile', None)
+                level_val = int(getattr(level_profile, 'current_level', 0) or 0)
+                streak_val = int(getattr(level_profile, 'streak_days', 0) or 0)
+            except Exception:
+                level_val = 0
+                streak_val = 0
+
+            entries_raw.append(
+                (
+                    combined_percent,
+                    {
+                        'rank': 0,  # temporary
+                        'userId': str(user.id),
+                        'username': getattr(user, 'username', str(user.id)),
+                        'displayName': display_name,
+                        'avatarUrl': self._resolve_avatar_url(user, request),
+                        'score': combined_percent,
+                        'level': level_val,
+                        'streakDays': streak_val,
+                        'country': None,
+                        'countryCode': None,
+                        'isCurrentUser': user.id == getattr(request.user, 'id', None),
+                        'change': 'NONE',
+                        'achievements': 0,
+                        'weeklyXp': 0,
+                        'monthlyXp': 0,
+                        'badge': None,
+                    }
+                )
+            )
+
+        # Sort and rank
+        entries_raw.sort(key=lambda x: x[0], reverse=True)
+        entries = []
+        current_user_entry = None
+        for idx, (_, entry) in enumerate(entries_raw[:limit], 1):
+            entry['rank'] = idx
+            if entry.get('isCurrentUser'):
+                current_user_entry = entry
+            entries.append(entry)
+
+        data = {
+            'type': 'ALL_TIME',
+            'filter': 'OVERALL_XP',
+            'entries': entries,
+            'currentUserEntry': current_user_entry,
+            'lastUpdated': timezone.now(),
+            'totalParticipants': len(entries_raw),
+        }
+        return Response(data, status=status.HTTP_200_OK)
+
+
 # ---------------------------
 # AI Coach - LLM-based Adaptive Learning System
 # Uses Gemini to simulate GRU-like temporal modeling for personalized recommendations
