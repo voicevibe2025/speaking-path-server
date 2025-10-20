@@ -7,13 +7,11 @@ import io
 import wave
 import uuid
 import logging
-
-logger = logging.getLogger(__name__)
-import logging
 import hashlib
 import subprocess
 import json
 import math
+import threading
 from datetime import timedelta
 from difflib import SequenceMatcher
 # Defer openai-whisper import to runtime to avoid import-time overhead and potential coverage/numba issues
@@ -24,6 +22,10 @@ try:
 except Exception:
     FasterWhisperModel = None
 import google.generativeai as genai
+try:
+    from google.generativeai.types import GenerationConfig as _GenConfig
+except Exception:
+    _GenConfig = None
 from django.conf import settings
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
@@ -35,6 +37,7 @@ from django.shortcuts import get_object_or_404
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from django.db.models import Avg, Count, Sum
+from django.core.cache import cache
 import requests
 from .models import (
     Topic, PhraseProgress, UserPhraseRecording, TopicProgress,
@@ -4621,6 +4624,59 @@ def _save_cached_analysis(user, data: dict, is_ai: bool = False, ttl_hours: int 
     return cache
 
 
+# Lightweight background enqueue (deduped via Django cache)
+_BG_REFRESH_KEY = "coach_refresh:{user_id}"
+
+def _is_refresh_in_progress(user_id) -> bool:
+    try:
+        return bool(cache.get(_BG_REFRESH_KEY.format(user_id=user_id)))
+    except Exception:
+        return False
+
+def _enqueue_coach_refresh(user_id: int) -> bool:
+    """Start a background thread to refresh coach analysis if not already running.
+    Returns True if a refresh was enqueued, False if one is already in progress or enqueue failed.
+    """
+    key = _BG_REFRESH_KEY.format(user_id=user_id)
+    try:
+        # cache.add is atomic: only first caller within TTL succeeds
+        if not cache.add(key, True, timeout=300):
+            logger.info(f"Coach background refresh already in progress for user {user_id}")
+            return False
+    except Exception:
+        # If cache backend is unavailable, still proceed without dedupe
+        logger.warning("Cache add failed for coach refresh key; proceeding without dedupe")
+
+    def _worker():
+        try:
+            UserModel = get_user_model()
+            user = UserModel.objects.get(id=user_id)
+            logger.info(f"Starting background Gemini coach refresh for user {user_id}")
+            data = _call_gemini_coach(user)
+            is_ai = data.get('_is_ai_generated', True)
+            _save_cached_analysis(user, data, is_ai=is_ai, ttl_hours=12)
+            logger.info(f"Background Gemini coach refresh completed for user {user_id}; AI={is_ai}")
+        except Exception as e:
+            logger.error(f"Background coach refresh failed for user {user_id}: {e}", exc_info=True)
+        finally:
+            try:
+                cache.delete(key)
+            except Exception:
+                pass
+
+    try:
+        t = threading.Thread(target=_worker, name=f"coach_refresh_{user_id}", daemon=True)
+        t.start()
+        return True
+    except Exception as e:
+        logger.error(f"Failed to start background thread for coach refresh: {e}")
+        try:
+            cache.delete(key)
+        except Exception:
+            pass
+        return False
+
+
 def _json_safe(obj):
     """Recursively convert objects to JSON-serializable types (UUID -> str, datetime -> ISO, Decimal -> float)."""
     import uuid as _uuid
@@ -5175,19 +5231,29 @@ def _call_gemini_coach(user) -> dict:
         "CRITICAL: In nextBestActions, specify the actual topic ID where user needs most improvement, not just 'current'.\n"
     )
     candidates = [
-        getattr(settings, 'GEMINI_TEXT_MODEL', None) or os.environ.get('GEMINI_MODEL') or 'gemini-2.5-pro',
-        'gemini-2.5-flash',
-        'gemini-1.5-pro',
+        getattr(settings, 'GEMINI_TEXT_MODEL', None) or os.environ.get('GEMINI_MODEL') or 'gemini-2.5-flash',
+        'gemini-2.5-pro',
         'gemini-1.5-flash',
+        'gemini-1.5-pro',
     ]
     try:
         genai.configure(api_key=api_key)
     except Exception:
         return _heuristic_coach(user)
+    gen_config = None
+    try:
+        if _GenConfig:
+            max_tokens = int(os.environ.get('COACH_MAX_OUTPUT_TOKENS', '1024'))
+            gen_config = _GenConfig(max_output_tokens=max_tokens, temperature=0.3, top_p=0.9)
+    except Exception:
+        gen_config = None
     for name in candidates:
         try:
             model = genai.GenerativeModel(name)
-            resp = model.generate_content(prompt)
+            if gen_config is not None:
+                resp = model.generate_content(prompt, generation_config=gen_config)
+            else:
+                resp = model.generate_content(prompt)
             raw = (getattr(resp, 'text', None) or '').strip()
             if not raw:
                 continue
@@ -5231,6 +5297,7 @@ class CoachAnalysisView(APIView):
                 response_data['_is_ai_generated'] = cache.is_ai_generated
                 response_data['_generated_at'] = cache.generated_at.isoformat()
                 response_data['_next_refresh_at'] = cache.expires_at.isoformat()
+                response_data['_in_progress'] = _is_refresh_in_progress(user.id)
                 logger.info(f"Returning cached analysis for user {user.id}: stale={cache.is_stale}, AI={cache.is_ai_generated}")
                 return Response(response_data, status=status.HTTP_200_OK)
             except Exception as e:
@@ -5251,6 +5318,7 @@ class CoachAnalysisView(APIView):
         response_data['_is_ai_generated'] = False
         if cache:
             response_data['_next_refresh_at'] = cache.expires_at.isoformat()
+        response_data['_in_progress'] = _is_refresh_in_progress(user.id)
         return Response(response_data, status=status.HTTP_200_OK)
 
 
@@ -5265,48 +5333,44 @@ class CoachAnalysisRefreshView(APIView):
     def post(self, request):
         user = request.user
         logger.info(f"CoachAnalysisRefreshView POST called for user {user.id} - starting Gemini analysis")
-        cache = _get_cached_analysis(user)
-        if cache and not cache.is_stale:
+        cache_entry = _get_cached_analysis(user)
+        if cache_entry and not cache_entry.is_stale:
             try:
-                ser = CoachAnalysisSerializer(cache.analysis_data)
+                ser = CoachAnalysisSerializer(cache_entry.analysis_data)
                 response_data = ser.data.copy() if hasattr(ser.data, 'copy') else dict(ser.data)
                 response_data['_cache_stale'] = False
-                response_data['_is_ai_generated'] = cache.is_ai_generated
-                response_data['_generated_at'] = cache.generated_at.isoformat()
-                response_data['_next_refresh_at'] = cache.expires_at.isoformat()
+                response_data['_is_ai_generated'] = cache_entry.is_ai_generated
+                response_data['_generated_at'] = cache_entry.generated_at.isoformat()
+                response_data['_next_refresh_at'] = cache_entry.expires_at.isoformat()
                 response_data['_skipped_refresh'] = True
-                logger.info(f"Coach analysis refresh skipped for user {user.id}: cache valid until {cache.expires_at}")
+                response_data['_in_progress'] = _is_refresh_in_progress(user.id)
+                logger.info(f"Coach analysis refresh skipped for user {user.id}: cache valid until {cache_entry.expires_at}")
                 return Response(response_data, status=status.HTTP_200_OK)
             except Exception as e:
                 logger.error(f"Failed to serialize cached analysis during refresh for user {user.id}: {e}")
-        
+        enqueued = _enqueue_coach_refresh(user.id)
         try:
-            # Call Gemini AI (may take 10-45 seconds)
-            data = _call_gemini_coach(user)
-            
-            # Check if it's actually AI-generated or fell back to heuristic
-            is_ai = data.get('_is_ai_generated', True)  # Assume AI unless explicitly marked
-            
-            # Save to database cache
-            _save_cached_analysis(user, data, is_ai=is_ai, ttl_hours=12)
-            
-            # Get the cache entry to retrieve expires_at timestamp
-            cache = _get_cached_analysis(user)
-            
-            logger.info(f"Coach analysis refresh completed for user {user.id}: AI={is_ai}")
-            
-            ser = CoachAnalysisSerializer(data)
-            response_data = ser.data.copy() if hasattr(ser.data, 'copy') else dict(ser.data)
-            response_data['_cache_stale'] = False
-            response_data['_is_ai_generated'] = is_ai
-            if cache:
-                response_data['_next_refresh_at'] = cache.expires_at.isoformat()
+            if cache_entry:
+                ser = CoachAnalysisSerializer(cache_entry.analysis_data)
+                response_data = ser.data.copy() if hasattr(ser.data, 'copy') else dict(ser.data)
+                response_data['_cache_stale'] = cache_entry.is_stale
+                response_data['_is_ai_generated'] = cache_entry.is_ai_generated
+                response_data['_generated_at'] = cache_entry.generated_at.isoformat()
+                response_data['_next_refresh_at'] = cache_entry.expires_at.isoformat()
+            else:
+                baseline = _heuristic_coach(user)
+                _save_cached_analysis(user, baseline, is_ai=False, ttl_hours=12)
+                ser = CoachAnalysisSerializer(baseline)
+                response_data = ser.data.copy() if hasattr(ser.data, 'copy') else dict(ser.data)
+                response_data['_cache_stale'] = False
+                response_data['_is_ai_generated'] = False
+                ce2 = _get_cached_analysis(user)
+                if ce2:
+                    response_data['_next_refresh_at'] = ce2.expires_at.isoformat()
+            response_data['_refresh_enqueued'] = bool(enqueued)
+            response_data['_in_progress'] = _is_refresh_in_progress(user.id)
+            logger.info(f"Coach analysis background refresh {'enqueued' if enqueued else 'already in progress'} for user {user.id}")
             return Response(response_data, status=status.HTTP_200_OK)
-            
         except Exception as e:
-            logger.error(f"Coach analysis refresh failed for user {user.id}: {e}", exc_info=True)
-            # Return error response
-            return Response(
-                {'error': 'Failed to generate AI analysis. Please try again later.'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+            logger.error(f"Coach analysis non-blocking refresh response failed for user {user.id}: {e}", exc_info=True)
+            return Response({'error': 'Refresh request accepted but response formatting failed.'}, status=status.HTTP_202_ACCEPTED)
