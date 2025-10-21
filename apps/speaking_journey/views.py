@@ -330,56 +330,22 @@ def _unlock_all_for_user(user) -> bool:
 
 def _meets_completion_criteria(topic_progress):
     """
-    Check if a topic meets the completion criteria:
-    - All 4 main practices (pronunciation, fluency, vocabulary, grammar) must be completed
-    - For EACH practice, user must reach at least 75% of that practice's maximum score for the topic
+    Hybrid pass rule for topic completion/unlock:
+    - Require evidence of attempt for all 4 skills (pronunciation, fluency, vocabulary, grammar) by default
+    - Pass if: average of the four scores >= PASS_AVG and no skill < FLOOR
+
+    Thresholds are configurable via settings/env:
+      TOPIC_PASS_AVG_PERCENT (default 75)
+      TOPIC_PASS_FLOOR_PERCENT (default 60)
+      TOPIC_PASS_REQUIRE_ATTEMPT_EACH (default true)
     """
-    # Check if all 4 main practices are completed (robust: accept phrase progress as pronunciation completion)
+    # Load user/topic context
     try:
         topic = getattr(topic_progress, 'topic', None)
         user = getattr(topic_progress, 'user', None)
     except Exception:
         topic = None
         user = None
-    pron_complete_effective = bool(getattr(topic_progress, 'pronunciation_completed', False))
-    if not pron_complete_effective and topic and user:
-        try:
-            pp = PhraseProgress.objects.filter(user=user, topic=topic).first()
-            if pp and getattr(pp, 'is_all_phrases_completed', False):
-                pron_complete_effective = True
-        except Exception:
-            pass
-    # Fluency completion: compute from prompt scores only (ignore flags)
-    fluency_complete_effective = False
-    try:
-        if topic:
-            fprompt = getattr(topic, 'fluency_practice_prompt', '') or ''
-            scores = list(getattr(topic_progress, 'fluency_prompt_scores', []) or [])
-            if fprompt and len(scores) >= 1:
-                # For single prompt, just check if first score exists and is >= 75
-                if len(scores) > 0 and isinstance(scores[0], int) and scores[0] >= 75:
-                    fluency_complete_effective = True
-    except Exception:
-        pass
-
-    # Vocabulary completion: require at least one completed session (ignore flags)
-    vocabulary_complete_effective = False
-    try:
-        if topic and user:
-            vocabulary_complete_effective = VocabularyPracticeSession.objects.filter(user=user, topic=topic, completed=True).exists()
-    except Exception:
-        pass
-
-    # Grammar completion: require at least one completed session (ignore flags)
-    grammar_complete_effective = False
-    try:
-        if topic and user:
-            grammar_complete_effective = GrammarPracticeSession.objects.filter(user=user, topic=topic, completed=True).exists()
-    except Exception:
-        pass
-
-    if not (pron_complete_effective and fluency_complete_effective and vocabulary_complete_effective and grammar_complete_effective):
-        return False
 
     topic = getattr(topic_progress, 'topic', None)
     if not topic:
@@ -428,19 +394,57 @@ def _meets_completion_criteria(topic_progress):
     if grammar_max > 0:
         grammar_total = min(grammar_total, grammar_max)
 
-    # Require each practice to reach >= 75% of its max
-    def meets(score, mx):
-        if mx <= 0:
-            return False
-        threshold = 0.75 * mx
-        return float(score) >= threshold
+    # Attempts required flag
+    require_attempts = str(getattr(settings, 'TOPIC_PASS_REQUIRE_ATTEMPT_EACH', os.environ.get('TOPIC_PASS_REQUIRE_ATTEMPT_EACH', '1'))).strip().lower() in {'1', 'true', 'yes', 'on'}
 
-    return all([
-        meets(pron_total, pron_max),
-        meets(flu_total, flu_max),
-        meets(vocab_total, vocab_max),
-        meets(grammar_total, grammar_max),
+    # Has-evidence checks (attempts)
+    has_pron = pron_total > 0
+    # Fluency evidence: at least one stored prompt score
+    has_flu = False
+    try:
+        scores = list(getattr(topic_progress, 'fluency_prompt_scores', []) or [])
+        has_flu = len(scores) > 0
+    except Exception:
+        has_flu = flu_total > 0
+    # Vocabulary/Grammar evidence: score persisted or a completed session exists
+    has_vocab = vocab_total > 0
+    has_gram = grammar_total > 0
+    if topic and user:
+        if not has_vocab:
+            try:
+                has_vocab = VocabularyPracticeSession.objects.filter(user=user, topic=topic, completed=True).exists()
+            except Exception:
+                pass
+        if not has_gram:
+            try:
+                has_gram = GrammarPracticeSession.objects.filter(user=user, topic=topic, completed=True).exists()
+            except Exception:
+                pass
+
+    if require_attempts and not (has_pron and has_flu and has_vocab and has_gram):
+        return False
+
+    # Thresholds
+    try:
+        pass_avg = float(getattr(settings, 'TOPIC_PASS_AVG_PERCENT', os.environ.get('TOPIC_PASS_AVG_PERCENT', 75)))
+    except Exception:
+        pass_avg = 75.0
+    try:
+        floor_pct = float(getattr(settings, 'TOPIC_PASS_FLOOR_PERCENT', os.environ.get('TOPIC_PASS_FLOOR_PERCENT', 60)))
+    except Exception:
+        floor_pct = 60.0
+
+    # Hybrid rule
+    total_max = float(pron_max + flu_max + vocab_max + grammar_max)
+    total_score = float(pron_total + flu_total + vocab_total + grammar_total)
+    combined_percent = (total_score / total_max) * 100.0 if total_max > 0 else 0.0
+    floor_ok = all([
+        pron_total >= floor_pct,
+        flu_total >= floor_pct,
+        vocab_total >= floor_pct,
+        grammar_total >= floor_pct,
     ])
+    return bool(combined_percent >= pass_avg and floor_ok)
 
 
 def _normalize_text(text):
@@ -2220,25 +2224,39 @@ class SpeakingTopicsView(APIView):
             eff_flu = min(fluency_total_score, flu_max) if flu_max > 0 else 0
             eff_vocab = min(vocabulary_score, vocab_max) if vocab_max > 0 else 0
             eff_grammar = min(grammar_score, grammar_max) if grammar_max > 0 else 0
-
-            # Per-practice 75% thresholds
-            def met(score, mx):
-                if mx <= 0:
-                    return False
-                return float(score) >= 0.75 * mx
-
-            pron_met = met(eff_pron, pron_max)
-            flu_met = met(eff_flu, flu_max)
-            vocab_met = met(eff_vocab, vocab_max)
-            grammar_met = met(eff_grammar, grammar_max)
+            
+            # Pass rule thresholds (configurable via env/settings)
+            try:
+                pass_avg = float(getattr(settings, 'TOPIC_PASS_AVG_PERCENT', os.environ.get('TOPIC_PASS_AVG_PERCENT', 75)))
+            except Exception:
+                pass_avg = 75.0
+            try:
+                floor_pct = float(getattr(settings, 'TOPIC_PASS_FLOOR_PERCENT', os.environ.get('TOPIC_PASS_FLOOR_PERCENT', 60)))
+            except Exception:
+                floor_pct = 60.0
 
             # Combined progress (now includes grammar as 4th required practice)
             total_max = int(pron_max + flu_max + vocab_max + grammar_max)
             total_score = int(eff_pron + eff_flu + eff_vocab + eff_grammar)
             combined_percent = round((total_score / total_max) * 100.0, 1) if total_max > 0 else 0.0
-            combined_threshold_score = int(math.ceil(0.75 * total_max)) if total_max > 0 else 0
 
-            meets_requirement = bool(pron_met and flu_met and vocab_met and grammar_met)
+            # Hybrid pass: average >= pass_avg AND no skill below floor
+            floor_ok = all([
+                eff_pron >= floor_pct,
+                eff_flu >= floor_pct,
+                eff_vocab >= floor_pct,
+                eff_grammar >= floor_pct,
+            ])
+            meets_requirement = bool(combined_percent >= pass_avg and floor_ok)
+
+            combined_threshold_score = int(math.ceil((pass_avg / 100.0) * total_max)) if total_max > 0 else 0
+
+            # 'Met' flags reflect floor threshold
+            pron_met = eff_pron >= floor_pct
+            flu_met = eff_flu >= floor_pct
+            vocab_met = eff_vocab >= floor_pct
+            grammar_met = eff_grammar >= floor_pct
+
             practice_scores_data = {
                 'pronunciation': pronunciation_score,
                 'fluency': fluency_total_score,
@@ -2265,7 +2283,7 @@ class SpeakingTopicsView(APIView):
                 'totalMaxScore': total_max,
                 'combinedThresholdScore': combined_threshold_score,
                 'combinedPercent': combined_percent,
-                'thresholdPercent': 75,
+                'thresholdPercent': int(pass_avg),
             }
 
             payload.append({
