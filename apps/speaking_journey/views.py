@@ -42,7 +42,7 @@ import requests
 from .models import (
     Topic, PhraseProgress, UserPhraseRecording, TopicProgress,
     VocabularyPracticeSession, ListeningPracticeSession, GrammarPracticeSession,
-    UserConversationRecording, UserProfile
+    UserConversationRecording, UserProfile, EnglishLevel
 )
 from apps.gamification.models import UserLevel, PointsTransaction, AchievementEvent
 from .serializers import (
@@ -291,6 +291,42 @@ def _compute_unlocks(user):
                 unlocked_sequences.add(topics[idx + 1].sequence)
         elif t.sequence in unlocked_sequences:
             # Keep already unlocked topics unlocked
+            pass
+
+    if _unlock_all_for_user(user):
+        unlocked_sequences = set(t.sequence for t in topics)
+
+    return topics, completed_sequences, unlocked_sequences
+
+
+def _compute_unlocks_scoped(user, topics: list[Topic]):
+    """
+    Compute unlocked/completed sets within a provided ordered topics list.
+    Mirrors _compute_unlocks but does not query all topics.
+    """
+    topics = list(topics or [])
+
+    # Map existing TopicProgress by sequence
+    topic_progress = {
+        tp.topic.sequence: tp
+        for tp in TopicProgress.objects.filter(user=user, topic__in=topics)
+        .select_related('topic')
+    }
+
+    completed_sequences = set()
+    unlocked_sequences = set()
+
+    if topics:
+        unlocked_sequences.add(topics[0].sequence)  # First topic in scope always unlocked
+
+    for idx, t in enumerate(topics):
+        tp = topic_progress.get(t.sequence)
+        if tp and _meets_completion_criteria(tp):
+            completed_sequences.add(t.sequence)
+            unlocked_sequences.add(t.sequence)
+            if idx + 1 < len(topics):
+                unlocked_sequences.add(topics[idx + 1].sequence)
+        elif t.sequence in unlocked_sequences:
             pass
 
     if _unlock_all_for_user(user):
@@ -2118,16 +2154,28 @@ class SpeakingTopicsView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        topics, completed_sequences, unlocked_sequences = _compute_unlocks(request.user)
+        # Optional English Level filtering. Applied only when the request explicitly provides englishLevel.
+        # Legacy clients (no query) will see all topics.
+        raw_level = (request.query_params.get('englishLevel') or request.query_params.get('english_level') or '').strip().upper()
+        effective_level = raw_level if raw_level in {c for c, _ in EnglishLevel.choices} else None
+
+        # Get or create user profile (for welcome personalization and to persist settings elsewhere)
+        profile, _ = UserProfile.objects.get_or_create(
+            user=request.user,
+            defaults={'first_visit': True}
+        )
+
+        if effective_level:
+            scoped_qs = Topic.objects.filter(is_active=True, difficulty=effective_level).order_by('sequence')
+            topics_list = list(scoped_qs)
+            topics, completed_sequences, unlocked_sequences = _compute_unlocks_scoped(request.user, topics_list)
+        else:
+            topics, completed_sequences, unlocked_sequences = _compute_unlocks(request.user)
         # Test flag: unlock all topics for designated test accounts
         if _unlock_all_for_user(request.user):
             unlocked_sequences = {t.sequence for t in topics}
 
-        # Get or create user profile for welcome screen personalization
-        profile, created = UserProfile.objects.get_or_create(
-            user=request.user,
-            defaults={'first_visit': True}
-        )
+        # Profile already fetched/created above
 
         # Fetch all phrase progress for this user
         phrase_progress_dict = {}
@@ -2294,6 +2342,7 @@ class SpeakingTopicsView(APIView):
                 'vocabulary': t.vocabulary or [],
                 'conversation': t.conversation_example or [],
                 'fluencyPracticePrompts': [t.fluency_practice_prompt] if t.fluency_practice_prompt else [],
+                'difficulty': getattr(t, 'difficulty', None) or None,
                 'fluencyProgress': {
                     'promptsCount': 1 if fprompt else 0,
                     'promptScores': [int(prompt_score)] if prompt_score is not None else [],
@@ -2314,6 +2363,7 @@ class SpeakingTopicsView(APIView):
             'firstVisit': profile.first_visit,
             'lastVisitedTopicId': str(profile.last_visited_topic.id) if profile.last_visited_topic else None,
             'lastVisitedTopicTitle': profile.last_visited_topic.title if profile.last_visited_topic else "",
+            'englishLevel': profile.english_level if getattr(profile, 'english_level', None) else None,
         }
 
         # Mark as not first visit after this request
@@ -2329,18 +2379,25 @@ class SpeakingTopicsView(APIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     def post(self, request):
-        """Update last visited topic for welcome screen personalization"""
         topic_id = request.data.get('lastVisitedTopicId')
-        if not topic_id:
-            return Response({'detail': 'Missing lastVisitedTopicId'}, status=status.HTTP_400_BAD_REQUEST)
+        raw_level = (request.data.get('englishLevel') or request.data.get('english_level') or '').strip().upper()
 
-        topic = get_object_or_404(Topic, id=topic_id, is_active=True)
-        profile, created = UserProfile.objects.get_or_create(
+        if not topic_id and not raw_level:
+            return Response({'detail': 'Missing lastVisitedTopicId or englishLevel'}, status=status.HTTP_400_BAD_REQUEST)
+
+        profile, _ = UserProfile.objects.get_or_create(
             user=request.user,
             defaults={'first_visit': False}
         )
-        profile.last_visited_topic = topic
-        profile.save(update_fields=['last_visited_topic'])
+
+        if topic_id:
+            topic = get_object_or_404(Topic, id=topic_id, is_active=True)
+            profile.last_visited_topic = topic
+
+        if raw_level in {c for c, _ in EnglishLevel.choices}:
+            profile.english_level = raw_level
+
+        profile.save()
 
         return Response({'success': True}, status=status.HTTP_200_OK)
 

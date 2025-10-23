@@ -50,6 +50,8 @@ class SpeakingTopicDtoSerializer(serializers.Serializer):
     fluencyProgress = serializers.DictField(child=serializers.JSONField(), required=False)
     phraseProgress = PhraseProgressSerializer(required=False)
     practiceScores = PracticeScoresSerializer(required=False)
+    # Optional: content difficulty (English Level) for new clients
+    difficulty = serializers.CharField(required=False)
     # Conversation practice progress (bonus mode)
     conversationScore = serializers.IntegerField(required=False)
     conversationCompleted = serializers.BooleanField(required=False)
@@ -61,6 +63,8 @@ class UserProfileSerializer(serializers.Serializer):
     firstVisit = serializers.BooleanField()
     lastVisitedTopicId = serializers.CharField(allow_null=True, required=False)
     lastVisitedTopicTitle = serializers.CharField(allow_blank=True, required=False)
+    # Optional: stored English Level preference for topic filtering
+    englishLevel = serializers.CharField(allow_null=True, required=False)
 
 
 class SpeakingTopicsResponseSerializer(serializers.Serializer):

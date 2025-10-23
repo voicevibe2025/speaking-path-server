@@ -112,6 +112,9 @@ class UserProfileSerializer(serializers.ModelSerializer):
     groupName = serializers.CharField(source='user.group.name', read_only=True, allow_null=True)
     groupDisplayName = serializers.CharField(source='user.group.display_name', read_only=True, allow_null=True)
     hasGroup = serializers.SerializerMethodField()
+    
+    # English Level from Speaking Journey
+    englishLevel = serializers.SerializerMethodField()
 
     def get_total_practice_hours(self, obj):
         """
@@ -412,6 +415,17 @@ class UserProfileSerializer(serializers.ModelSerializer):
             return obj.user.group is not None
         except Exception:
             return False
+    
+    def get_englishLevel(self, obj):
+        """Get english_level from Speaking Journey UserProfile"""
+        try:
+            from apps.speaking_journey.models import UserProfile as SJUserProfile
+            sj_profile = SJUserProfile.objects.filter(user=obj.user).first()
+            if sj_profile and sj_profile.english_level:
+                return sj_profile.english_level
+            return None
+        except Exception:
+            return None
 
     def get_monthly_days_active(self, obj):
         """Get the number of days the user was active in the current month"""
@@ -832,7 +846,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'last_practice_date',
             'created_at', 'updated_at', 'recent_achievements',
             'practice_count', 'words_learned',
-            'groupId', 'groupName', 'groupDisplayName', 'hasGroup'
+            'groupId', 'groupName', 'groupDisplayName', 'hasGroup',
+            'englishLevel'
         ]
         read_only_fields = ['id', 'user', 'total_practice_time', 'created_at', 'updated_at']
 

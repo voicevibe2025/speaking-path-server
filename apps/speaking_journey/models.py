@@ -6,6 +6,12 @@ import uuid
 User = get_user_model()
 
 
+class EnglishLevel(models.TextChoices):
+    BEGINNER = 'BEGINNER', _('Beginner')
+    INTERMEDIATE = 'INTERMEDIATE', _('Intermediate')
+    ADVANCED = 'ADVANCED', _('Advanced')
+
+
 class Topic(models.Model):
     """
     Speaking Journey Topic with ordered sequence and material lines
@@ -21,6 +27,13 @@ class Topic(models.Model):
     fluency_practice_prompt = models.JSONField(default=list, blank=True)
     sequence = models.PositiveIntegerField(unique=True)
     is_active = models.BooleanField(default=True)
+    # Difficulty for content gating (English Level). Default all existing topics to INTERMEDIATE.
+    difficulty = models.CharField(
+        max_length=12,
+        choices=EnglishLevel.choices,
+        default=EnglishLevel.INTERMEDIATE,
+        db_index=True,
+    )
 
     class Meta:
         db_table = 'speaking_journey_topics'
@@ -267,6 +280,14 @@ class UserProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='speaking_journey_profile')
     last_visited_topic = models.ForeignKey(Topic, on_delete=models.SET_NULL, null=True, blank=True)
     first_visit = models.BooleanField(default=True)
+    # User-chosen English Level for topic filtering; null means not set (show all topics for legacy clients)
+    english_level = models.CharField(
+        max_length=12,
+        choices=EnglishLevel.choices,
+        null=True,
+        blank=True,
+        default=None,
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
