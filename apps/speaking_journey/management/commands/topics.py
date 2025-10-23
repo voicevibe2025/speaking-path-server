@@ -704,5 +704,1092 @@ TOPICS = [
             "insight", "perspective"
         ],
         "fluency_practice_prompt": "What advice would you give to someone who wants to improve their English or study better?"
-    }
+    },
+    {
+        "title": "At the Airport",
+        "description": "Learn useful phrases for checking in, going through security, boarding a flight, and asking for assistance at the airport. This topic helps you communicate clearly when traveling by air.",
+        "material": [
+            "Where is the check-in counter?",
+            "Can I see your passport, please?",
+            "Do you have any luggage to check in?",
+            "Your flight is delayed by 30 minutes.",
+            "Please proceed to gate 12.",
+            "Enjoy your flight!"
+        ],
+        "conversation": [
+            {"speaker": "A", "text": "Excuse me, where is the check-in counter for Garuda Airlines?"},
+            {"speaker": "B", "text": "It’s over there, next to the coffee shop."},
+            {"speaker": "A", "text": "Thank you. Hi, I’d like to check in for my flight to Bali."},
+            {"speaker": "C", "text": "Of course. May I see your passport and ticket, please?"},
+            {"speaker": "A", "text": "Sure, here they are."},
+            {"speaker": "C", "text": "Do you have any bags to check in today?"},
+            {"speaker": "A", "text": "Yes, just this suitcase."},
+            {"speaker": "C", "text": "Alright. Your flight is on time. Please go to gate 12. Boarding starts at 10:30."},
+            {"speaker": "A", "text": "Perfect, thank you very much."},
+            {"speaker": "C", "text": "You’re welcome. Have a nice flight!"}
+        ],
+        "vocabulary": [
+            "check-in", "boarding pass", "gate", "departure", "arrival", "passport", "ticket",
+            "security check", "customs", "baggage", "carry-on", "suitcase", "flight attendant",
+            "delayed", "departure hall", "terminal", "announcement", "boarding", "gate number", "on time"
+        ],
+        "fluency_practice_prompt": "Talk about your experience at the airport. Describe what time you arrived, how you checked in, what happened at the security check, and how you felt while waiting for your flight. Mention the destination, boarding gate, and your excitement about the trip."
+    },
+    {
+        "title": "Job Interviews",
+        "description": "Learn useful phrases and expressions for job interviews, including how to talk about your experience, skills, strengths, and career goals. This topic helps you prepare to make a great first impression.",
+        "material": [
+            "Tell me about yourself.",
+            "Why do you want to work here?",
+            "What are your strengths?",
+            "What are your weaknesses?",
+            "Can you describe your previous experience?",
+            "Do you have any questions for us?"
+        ],
+        "conversation": [
+            {"speaker": "Interviewer", "text": "Good morning! Please have a seat."},
+            {"speaker": "Candidate", "text": "Good morning. Thank you."},
+            {"speaker": "Interviewer", "text": "So, could you tell me a little about yourself?"},
+            {"speaker": "Candidate", "text": "Sure. My name is Daniel, and I recently graduated with a degree in Business Administration. I’ve done an internship in customer service and really enjoy working with people."},
+            {"speaker": "Interviewer", "text": "That’s great. Why do you want to work with our company?"},
+            {"speaker": "Candidate", "text": "I’ve read about your company’s strong focus on customer satisfaction. I believe my communication skills and passion for helping others fit well with your values."},
+            {"speaker": "Interviewer", "text": "Good answer. What would you say are your strengths?"},
+            {"speaker": "Candidate", "text": "I’m a good listener, organized, and I always try to finish my work on time."},
+            {"speaker": "Interviewer", "text": "And what about your weaknesses?"},
+            {"speaker": "Candidate", "text": "I sometimes take on too many tasks at once, but I’m learning to manage my time better."},
+            {"speaker": "Interviewer", "text": "That’s understandable. Do you have any questions for us?"},
+            {"speaker": "Candidate", "text": "Yes, could you tell me more about the training process for new employees?"},
+            {"speaker": "Interviewer", "text": "Of course. We provide a two-week training program to help you learn our systems and company culture."},
+            {"speaker": "Candidate", "text": "That sounds great. Thank you very much."},
+            {"speaker": "Interviewer", "text": "You’re welcome. We’ll contact you soon about the next step."}
+        ],
+        "vocabulary": [
+            "interview", "candidate", "employer", "position", "qualifications", "experience",
+            "skills", "strengths", "weaknesses", "career", "apply", "resume", "cover letter",
+            "training", "opportunity", "full-time", "part-time", "promotion", "salary", "teamwork"
+        ],
+        "fluency_practice_prompt": "Imagine you are in a job interview. Introduce yourself, explain your background and strengths, and talk about why you want to work for the company. Mention what kind of job you are looking for and what you can contribute to the team."
+    },
+    {
+        "title": "At the Bank",
+        "description": "Learn useful phrases for common banking situations such as opening an account, depositing money, withdrawing cash, and asking for information about bank services.",
+        "material": [
+            "I'd like to open a bank account.",
+            "Can I withdraw some money, please?",
+            "I’d like to deposit this cash.",
+            "What is the interest rate for savings accounts?",
+            "Could you help me fill out this form?",
+            "I lost my debit card. What should I do?"
+        ],
+        "conversation": [
+            {"speaker": "Customer", "text": "Good morning. I’d like to open a new savings account."},
+            {"speaker": "Bank Teller", "text": "Good morning. Sure, may I see your ID card, please?"},
+            {"speaker": "Customer", "text": "Of course. Here it is."},
+            {"speaker": "Bank Teller", "text": "Thank you. Would you like to open an individual or joint account?"},
+            {"speaker": "Customer", "text": "Just an individual account, please."},
+            {"speaker": "Bank Teller", "text": "Alright. Please fill out this form and sign at the bottom."},
+            {"speaker": "Customer", "text": "Okay, done. Can I also deposit some cash today?"},
+            {"speaker": "Bank Teller", "text": "Yes, of course. How much would you like to deposit?"},
+            {"speaker": "Customer", "text": "One million rupiahs, please."},
+            {"speaker": "Bank Teller", "text": "All done. Here’s your deposit slip and your new account booklet."},
+            {"speaker": "Customer", "text": "Great, thank you very much."},
+            {"speaker": "Bank Teller", "text": "You’re welcome. Have a nice day!"}
+        ],
+        "vocabulary": [
+            "account", "deposit", "withdraw", "interest rate", "ATM", "teller", "transaction",
+            "balance", "credit card", "debit card", "cash", "form", "signature", "receipt",
+            "loan", "transfer", "check", "currency", "bankbook", "branch"
+        ],
+        "fluency_practice_prompt": "Talk about your experience at the bank. Explain why you went there, what kind of account or service you needed, and what happened during your visit. Mention how the bank staff helped you and what you plan to do next."
+    },
+    {
+        "title": "At the Hotel",
+        "description": "Learn common phrases for checking in, asking about room facilities, making requests, and solving small problems during your stay at a hotel.",
+        "material": [
+            "I'd like to check in, please.",
+            "Do you have a reservation?",
+            "Could I see your ID, please?",
+            "What time is breakfast served?",
+            "Can I have an extra towel, please?",
+            "I'd like to check out."
+        ],
+        "conversation": [
+            {"speaker": "Receptionist", "text": "Good evening. Welcome to Dharmawangsa Jakarta Hotel. How may I help you?"},
+            {"speaker": "Guest", "text": "Good evening. I’d like to check in, please. I have a reservation under the name Nadia Agustina."},
+            {"speaker": "Receptionist", "text": "Certainly, May I see your ID, please?"},
+            {"speaker": "Guest", "text": "Sure, here it is."},
+            {"speaker": "Receptionist", "text": "Thank you. You’ve booked a double room for two nights, correct?"},
+            {"speaker": "Guest", "text": "Yes, that’s right."},
+            {"speaker": "Receptionist", "text": "Great. Your room number is 308. Breakfast is served from 6:30 to 10 a.m. The elevator is to your left."},
+            {"speaker": "Guest", "text": "Perfect, thank you. Oh, could I have an extra towel, please?"},
+            {"speaker": "Receptionist", "text": "Of course. I’ll have one sent up right away."},
+            {"speaker": "Guest", "text": "Thank you so much."},
+            {"speaker": "Receptionist", "text": "You’re welcome. Enjoy your stay, Ms. Agustina."}
+        ],
+        "vocabulary": [
+            "check-in", "check-out", "reservation", "guest", "receptionist", "lobby",
+            "room service", "key card", "double room", "single room", "suite", "breakfast",
+            "elevator", "towel", "booking", "reception desk", "front desk", "bellboy",
+            "housekeeping", "luggage"
+        ],
+        "fluency_practice_prompt": "Imagine you’ve just arrived at a hotel. Describe how you check in, what kind of room you booked, and what you ask the receptionist. Mention the facilities you need and how you feel about your stay."
+    },
+    {
+        "title": "At the Library",
+        "description": "Learn useful phrases for borrowing books, asking for information, and using library services. This topic helps you communicate politely and confidently in an academic environment.",
+        "material": [
+            "Excuse me, where can I find books about history?",
+            "I'd like to borrow this book, please.",
+            "How long can I keep the book?",
+            "You can borrow it for two weeks.",
+            "Can I renew this book online?",
+            "I’ve returned the book yesterday."
+        ],
+        "conversation": [
+            {"speaker": "Student", "text": "Excuse me, where can I find books about psychology?"},
+            {"speaker": "Librarian", "text": "They’re on the second floor, in section B, next to the computer area."},
+            {"speaker": "Student", "text": "Thank you. I’d also like to borrow this book today."},
+            {"speaker": "Librarian", "text": "Sure. May I see your library card, please?"},
+            {"speaker": "Student", "text": "Sure, here it is. This is my library card."},
+            {"speaker": "Librarian", "text": "Thank you. You can borrow the book for two weeks. The due date is November 7th."},
+            {"speaker": "Student", "text": "Got it. Can I renew the book online if I need more time?"},
+            {"speaker": "Librarian", "text": "Yes, you can renew it once through our website before the due date."},
+            {"speaker": "Student", "text": "That’s convenient. Thank you for your help."},
+            {"speaker": "Librarian", "text": "You’re welcome. Enjoy your reading!"}
+        ],
+        "vocabulary": [
+            "library", "librarian", "library card", "borrow", "return", "renew", "due date",
+            "book", "section", "shelf", "catalog", "fine", "reference", "periodical",
+            "library rules", "membership", "computer area", "study room", "library hours", "reading corner"
+        ],
+        "fluency_practice_prompt": "Talk about your visit to a library. Describe what kind of books you were looking for, how you borrowed them, and whether you asked the librarian for help. Mention how long you can keep the books and what you like about the library."
+    },
+    {
+        "title": "At the Hospital",
+        "description": "Learn how to describe symptoms, talk to doctors and nurses, and ask for medical help. This topic helps you communicate clearly and calmly in health-related situations.",
+        "material": [
+            "I’m not feeling well.",
+            "I have a fever and a sore throat.",
+            "How long have you had these symptoms?",
+            "You need to get some rest and drink more water.",
+            "I’ll prescribe you some medicine.",
+            "Please come back if it gets worse."
+        ],
+        "conversation": [
+            {"speaker": "Patient", "text": "Good morning, doctor. I’m not feeling well today."},
+            {"speaker": "Doctor", "text": "Good morning. What seems to be the problem?"},
+            {"speaker": "Patient", "text": "I’ve had a fever and sore throat since yesterday, and I feel really tired."},
+            {"speaker": "Doctor", "text": "I see. Do you have a cough or any other symptoms?"},
+            {"speaker": "Patient", "text": "Yes, I have a mild cough, but no headache."},
+            {"speaker": "Doctor", "text": "Alright. Let me check your temperature. Please open your mouth."},
+            {"speaker": "Patient", "text": "Sure. Here you go."},
+            {"speaker": "Doctor", "text": "Your temperature is a bit high. It looks like you have a throat infection."},
+            {"speaker": "Patient", "text": "Oh, I see. What should I do, doctor?"},
+            {"speaker": "Doctor", "text": "I’ll prescribe you some antibiotics and fever medicine. Get plenty of rest and drink lots of water."},
+            {"speaker": "Patient", "text": "Okay, thank you. How long should I take the medicine?"},
+            {"speaker": "Doctor", "text": "Take it for five days, three times a day after meals. Come back if your condition doesn’t improve."},
+            {"speaker": "Patient", "text": "Got it. Thank you very much, doctor."},
+            {"speaker": "Doctor", "text": "You’re welcome. Take care and get well soon."}
+        ],
+        "vocabulary": [
+            "doctor", "patient", "nurse", "medicine", "prescription", "pharmacy", "symptom",
+            "fever", "cough", "sore throat", "headache", "temperature", "infection",
+            "check-up", "treatment", "clinic", "appointment", "rest", "recovery", "get well"
+        ],
+        "fluency_practice_prompt": "Talk about a time when you were sick or visited a hospital. Describe your symptoms, what the doctor said, and what medicine you had to take. Explain how you felt and what you did to recover."
+    },
+        {
+        "title": "Cooking at Home",
+        "description": "Plan and talk about cooking meals at home, from choosing recipes to preparing ingredients and sharing food with family or friends.",
+        "material": [
+            "Let's cook dinner together tonight.",
+            "Do we have all the ingredients?",
+            "I need to chop the vegetables.",
+            "Simmer the soup for ten minutes.",
+            "Can you set the table while I finish cooking?",
+            "This recipe says to preheat the oven to 180 degrees.",
+            "Taste the sauce and see if it needs more salt.",
+            "Dinner is ready! Let's eat."
+        ],
+        "conversation": [
+            {"speaker": "A", "text": "Hey Dina, do you feel like cooking at home tonight?"},
+            {"speaker": "B", "text": "Sure, let's make ayam penyet. Do we have enough chicken?"},
+            {"speaker": "A", "text": "Yes, it's in the fridge. We just need fresh chilies and tomatoes."},
+            {"speaker": "B", "text": "Great, I'll run to the minimart downstairs and grab them."},
+            {"speaker": "A", "text": "Thanks! I'll start marinating the chicken and boiling the rice."},
+            {"speaker": "B", "text": "Should I fry the sambal when I get back?"},
+            {"speaker": "A", "text": "Yes please, and don't forget to slice the cucumbers for the side."},
+            {"speaker": "B", "text": "Got it. Dinner should be ready by seven."},
+            {"speaker": "A", "text": "Perfect. I'll set the table while everything cooks."}
+        ],
+        "vocabulary": [
+            "recipe", "ingredient", "kitchen", "pan", "pot", "spatula", "stove",
+            "oven", "fry", "boil", "steam", "grill", "bake", "chop", "slice",
+            "stir", "marinate", "season", "simmer", "taste", "serve", "portion",
+            "leftovers", "meal prep", "utensils"
+        ],
+        "fluency_practice_prompt": "Describe how you prepare a favorite meal at home. Mention the ingredients, cooking steps, and who you share it with."
+    },
+
+    {
+        "title": "Getting a Haircut",
+        "description": "Practice talking about what kind of haircut you want. Learn how to communicate with your hairstylist or barber.",
+        "material": [
+            "I'd like a trim, please.",
+            "Could you take about an inch off?",
+            "I want to keep the length.",
+            "Just a little off the top.",
+            "How short do you want the back?",
+            "I'd like to try a new style.",
+            "Should I wash your hair first?",
+            "Do you want any product in your hair?",
+            "Here's a picture of what I want.",
+            "Could you add some layers?"
+        ],
+        "conversation": [
+            {
+                "speaker": "A",
+                "text": "Hi, I'd like to get a haircut, please."
+            },
+            {
+                "speaker": "B",
+                "text": "Of course. Do you have an appointment?"
+            },
+            {
+                "speaker": "A",
+                "text": "No, I don't. Is there a long wait?"
+            },
+            {
+                "speaker": "B",
+                "text": "You're in luck, I can take you right now. Have a seat. What are we doing today?"
+            },
+            {
+                "speaker": "A",
+                "text": "I'd just like a simple trim. Please take about two inches off the length."
+            },
+            {
+                "speaker": "B",
+                "text": "Okay, two inches. And do you want any layers or changes to the style?"
+            },
+            {
+                "speaker": "A",
+                "text": "No, just a straight cut is fine. I want to keep it simple."
+            },
+            {
+                "speaker": "B",
+                "text": "Sounds good. I'll wash your hair first, then we can start."
+            },
+            {
+                "speaker": "A",
+                "text": "Great, thank you."
+            },
+            {
+                "speaker": "B",
+                "text": "Alright, how does that length look?"
+            },
+            {
+                "speaker": "A",
+                "text": "It looks perfect. Thank you so much."
+            },
+            {
+                "speaker": "B",
+                "text": "You're welcome. Would you like me to blow-dry it for you?"
+            },
+            {
+                "speaker": "A",
+                "text": "Yes, please. That would be great."
+            }
+        ],
+        "vocabulary": [
+            "haircut",
+            "trim",
+            "hairstylist",
+            "barber",
+            "salon",
+            "appointment",
+            "take off",
+            "length",
+            "layers",
+            "style",
+            "shampoo",
+            "blow-dry",
+            "hair product",
+            "scissors",
+            "clippers",
+            "bangs",
+            "fringe",
+            "sideburns",
+            "straight cut",
+            "an inch"
+        ],
+        "fluency_practice_prompt": "Describe the last haircut you got or the kind of haircut you would like to get next."
+    },
+    {
+        "title": "Describing Your Family",
+        "description": "Practice talking about the people in your family. Learn how to describe their relationships, jobs, and personalities.",
+        "material": [
+            "I come from a big family.",
+            "There are four people in my family.",
+            "I have one older brother and one younger sister.",
+            "My mother is a teacher.",
+            "My father works in an office.",
+            "My parents live in a small town.",
+            "I'm an only child.",
+            "My brother is very funny.",
+            "We are very close.",
+            "My grandparents visit us often."
+        ],
+        "conversation": [
+            {
+                "speaker": "A",
+                "text": "So, tell me about your family."
+            },
+            {
+                "speaker": "B",
+                "text": "Sure. I have a relatively small family. It's just my parents, my older brother, and me."
+            },
+            {
+                "speaker": "A",
+                "text": "Nice. What does your older brother do?"
+            },
+            {
+                "speaker": "B",
+                "text": "He's a university student. He's studying computer science. What about you, do you have any siblings?"
+            },
+            {
+                "speaker": "A",
+                "text": "Yes, I have one younger sister. She's still in high school."
+            },
+            {
+                "speaker": "B",
+                "text": "That's cool. Are you two close?"
+            },
+            {
+                "speaker": "A",
+                "text": "Yes, we get along very well. What are your parents like?"
+            },
+            {
+                "speaker": "B",
+                "text": "My mom is very outgoing and talkative, but my dad is a bit more quiet and reserved."
+            },
+            {
+                "speaker": "A",
+                "text": "They sound like a nice balance. My parents are both pretty energetic."
+            },
+            {
+                "speaker": "B",
+                "text": "That must make for a lively house!"
+            }
+        ],
+        "vocabulary": [
+            "parents",
+            "mother",
+            "father",
+            "siblings",
+            "brother",
+            "sister",
+            "older",
+            "younger",
+            "only child",
+            "get along well",
+            "close family",
+            "outgoing",
+            "quiet",
+            "reserved",
+            "energetic",
+            "university student",
+            "high school",
+            "aunt",
+            "uncle",
+            "cousin",
+            "grandparents"
+        ],
+        "fluency_practice_prompt": "Describe the members of your immediate family, including their personalities and what they do."
+    },
+    {
+        "title": "Renting an Apartment",
+        "description": "This topic helps you practice talking about finding and renting a place to live. You will learn useful phrases for asking about apartments and viewing them.",
+        "material": [
+            "I'm looking for a one-bedroom apartment.",
+            "How much is the rent per month?",
+            "Are utilities included in the rent?",
+            "Is there a security deposit?",
+            "When is the apartment available?",
+            "Can I schedule a time to see it?",
+            "Is it close to public transportation?",
+            "Are pets allowed?",
+            "I would like to sign the lease.",
+            "What is the minimum lease term?"
+        ],
+        "conversation": [
+            {
+                "speaker": "A",
+                "text": "Hello, I'm calling about the apartment I saw online. Is it still available?"
+            },
+            {
+                "speaker": "B",
+                "text": "Yes, the two-bedroom on Park Street is still available."
+            },
+            {
+                "speaker": "A",
+                "text": "Great. Could you tell me how much the monthly rent is?"
+            },
+            {
+                "speaker": "B",
+                "text": "The rent is $1,500 per month."
+            },
+            {
+                "speaker": "A",
+                "text": "I see. And are utilities like electricity and water included?"
+            },
+            {
+                "speaker": "B",
+                "text": "Water is included, but you have to pay for electricity and internet separately."
+            },
+            {
+                "speaker": "A",
+                "text": "Okay. Is there a security deposit required?"
+            },
+            {
+                "speaker": "B",
+                "text": "Yes, the security deposit is one month's rent."
+            },
+            {
+                "speaker": "A",
+                "text": "That sounds reasonable. I would like to come and see the apartment."
+            },
+            {
+                "speaker": "B",
+                "text": "Of course. When would be a good time for you?"
+            },
+            {
+                "speaker": "A",
+                "text": "How about this Saturday afternoon?"
+            },
+            {
+                "speaker": "B",
+                "text": "Saturday at 2 PM works. Does that work for you?"
+            },
+            {
+                "speaker": "A",
+                "text": "Yes, that's perfect. Thank you!"
+            }
+        ],
+        "vocabulary": [
+            "rent",
+            "apartment",
+            "landlord",
+            "tenant",
+            "lease",
+            "security deposit",
+            "utilities",
+            "available",
+            "included",
+            "per month",
+            "sign a lease",
+            "one-bedroom",
+            "two-bedroom",
+            "for rent",
+            "public transportation",
+            "pets allowed",
+            "schedule a viewing",
+            "move in",
+            "furnished",
+            "unfurnished",
+            "application"
+        ],
+        "fluency_practice_prompt": "Describe the perfect apartment you would like to rent, including its location, size, and price."
+    },
+    {
+        "title": "Returning a Purchase",
+        "description": "Learn how to talk to a store clerk when you want to return an item you bought. Practice explaining the reason for the return and asking for a refund or exchange.",
+        "material": [
+            "I'd like to return this shirt.",
+            "Do you have the receipt?",
+            "It's the wrong size.",
+            "It doesn't work properly.",
+            "Can I get a refund?",
+            "I would like to exchange it for another one.",
+            "Here's my receipt.",
+            "What's the problem with it?",
+            "It was a gift, so I don't have a receipt.",
+            "We can offer you store credit."
+        ],
+        "conversation": [
+            {
+                "speaker": "A",
+                "text": "Hello, I'd like to return this sweater."
+            },
+            {
+                "speaker": "B",
+                "text": "Certainly. Do you have your receipt with you?"
+            },
+            {
+                "speaker": "A",
+                "text": "Yes, here it is."
+            },
+            {
+                "speaker": "B",
+                "text": "Thank you. May I ask what the reason for the return is?"
+            },
+            {
+                "speaker": "A",
+                "text": "It's the wrong size. It's a bit too small for me."
+            },
+            {
+                "speaker": "B",
+                "text": "I see. Would you like to exchange it for a larger size? We have it in a large."
+            },
+            {
+                "speaker": "A",
+                "text": "Oh, that's great. Yes, I'd like to exchange it, please."
+            },
+            {
+                "speaker": "B",
+                "text": "No problem at all. I'll just get that for you."
+            },
+            {
+                "speaker": "A",
+                "text": "Thank you so much."
+            },
+            {
+                "speaker": "B",
+                "text": "Here you are. Is there anything else I can help you with today?"
+            },
+            {
+                "speaker": "A",
+                "text": "No, that's everything. Thanks for your help."
+            },
+            {
+                "speaker": "B",
+                "text": "You're very welcome. Have a good day!"
+            }
+        ],
+        "vocabulary": [
+            "return",
+            "purchase",
+            "receipt",
+            "refund",
+            "exchange",
+            "wrong size",
+            "too small",
+            "store credit",
+            "item",
+            "customer",
+            "clerk",
+            "doesn't fit",
+            "broken",
+            "damaged",
+            "out of stock",
+            "payment method",
+            "process a refund",
+            "certainly",
+            "different size",
+            "larger size",
+            "policy"
+        ],
+        "fluency_practice_prompt": "Describe a time you had to return something to a store, explaining what the item was, why you returned it, and what happened."
+    },
+    {
+        "title": "Joining a Gym",
+        "description": "Learn useful phrases for asking about gym memberships, facilities, and how to sign up.",
+        "material": [
+            "I'd like to sign up for a membership.",
+            "What are your membership options?",
+            "Do you offer a free trial class?",
+            "Can I get a tour of the gym?",
+            "What are the opening hours?",
+            "Are fitness classes included?",
+            "Is there a joining fee?",
+            "Do you have personal trainers?",
+            "Where are the locker rooms?",
+            "How does this machine work?"
+        ],
+        "conversation": [
+            {
+                "speaker": "A",
+                "text": "Hi, I'm interested in joining this gym."
+            },
+            {
+                "speaker": "B",
+                "text": "Welcome! I can certainly help you with that. What kind of membership are you looking for?"
+            },
+            {
+                "speaker": "A",
+                "text": "I'm not sure yet. What are my options?"
+            },
+            {
+                "speaker": "B",
+                "text": "We have a monthly plan and a yearly plan. The yearly plan is a better value."
+            },
+            {
+                "speaker": "A",
+                "text": "Okay. Does the membership include fitness classes?"
+            },
+            {
+                "speaker": "B",
+                "text": "Yes, all our group classes like yoga and spinning are included."
+            },
+            {
+                "speaker": "A",
+                "text": "That's great. Could I look around before I decide?"
+            },
+            {
+                "speaker": "B",
+                "text": "Of course. I can give you a quick tour right now."
+            },
+            {
+                "speaker": "A",
+                "text": "Perfect, thank you. What are your opening hours?"
+            },
+            {
+                "speaker": "B",
+                "text": "We're open from 6 AM to 10 PM on weekdays, and 8 AM to 8 PM on weekends."
+            },
+            {
+                "speaker": "A",
+                "text": "That works for me. Is there a one-time joining fee?"
+            },
+            {
+                "speaker": "B",
+                "text": "Yes, there's a small administration fee when you first sign up."
+            }
+        ],
+        "vocabulary": [
+            "membership",
+            "sign up",
+            "monthly plan",
+            "yearly plan",
+            "joining fee",
+            "administration fee",
+            "facilities",
+            "equipment",
+            "personal trainer",
+            "fitness class",
+            "group class",
+            "opening hours",
+            "locker room",
+            "treadmill",
+            "weights",
+            "free trial",
+            "tour",
+            "included",
+            "cancel"
+        ],
+        "fluency_practice_prompt": "Describe the kind of gym you would like to join and explain what features are most important to you."
+    },
+    {
+        "title": "Talking About a Favorite Book",
+        "description": "Practice talking about a book you have enjoyed. Explain what the story is about and why you would recommend it to a friend.",
+        "material": [
+            "Have you read any good books lately?",
+            "My favorite book is called...",
+            "It was written by...",
+            "The story is about a...",
+            "The main character is very interesting.",
+            "I liked the plot because it was full of surprises.",
+            "I couldn't put it down.",
+            "I highly recommend it.",
+            "It's a fantasy novel.",
+            "What kind of books do you usually read?"
+        ],
+        "conversation": [
+            {
+                "speaker": "A",
+                "text": "Do you read a lot in your free time?"
+            },
+            {
+                "speaker": "B",
+                "text": "Yes, I do. I just finished a really great book, actually."
+            },
+            {
+                "speaker": "A",
+                "text": "Oh, really? What's it called?"
+            },
+            {
+                "speaker": "B",
+                "text": "'The Midnight Library' by Matt Haig."
+            },
+            {
+                "speaker": "A",
+                "text": "I haven't heard of that one. What's the story about?"
+            },
+            {
+                "speaker": "B",
+                "text": "It's about a woman who gets a chance to try living different versions of her own life."
+            },
+            {
+                "speaker": "A",
+                "text": "That sounds like a fascinating idea. Did you enjoy it?"
+            },
+            {
+                "speaker": "B",
+                "text": "I loved it. The story was very touching and the main character felt very real."
+            },
+            {
+                "speaker": "A",
+                "text": "It sounds great. I think I'll add it to my reading list."
+            },
+            {
+                "speaker": "B",
+                "text": "You should! I definitely recommend it if you like thoughtful stories."
+            }
+        ],
+        "vocabulary": [
+            "author",
+            "novel",
+            "character",
+            "plot",
+            "story",
+            "genre",
+            "chapter",
+            "recommend",
+            "reading list",
+            "page-turner",
+            "finished a book",
+            "couldn't put it down",
+            "fascinating",
+            "touching",
+            "written by",
+            "main character",
+            "fantasy",
+            "science fiction",
+            "mystery",
+            "biography"
+        ],
+        "fluency_practice_prompt": "Describe a book you have read recently and explain why you would or would not recommend it to a friend."
+    },
+    {
+        "title": "Calling in Sick to Work",
+        "description": "Learn how to call your workplace to tell them you are sick. Practice the key phrases for taking a sick day.",
+        "material": [
+            "I'm calling in sick today.",
+            "I'm not feeling well.",
+            "I've come down with a cold.",
+            "I have a fever and a headache.",
+            "I won't be able to come in today.",
+            "I need to take a sick day.",
+            "I'll check my emails from home later.",
+            "I hope to be back in the office tomorrow.",
+            "Please let the team know I'll be out.",
+            "Is there anything urgent I should know about?"
+        ],
+        "conversation": [
+            {
+                "speaker": "A",
+                "text": "Good morning, this is Alex."
+            },
+            {
+                "speaker": "B",
+                "text": "Hi Alex, it's Sarah. How are you?"
+            },
+            {
+                "speaker": "A",
+                "text": "Actually, I'm not feeling well today. I need to call in sick."
+            },
+            {
+                "speaker": "B",
+                "text": "Oh, I'm sorry to hear that. What's wrong?"
+            },
+            {
+                "speaker": "A",
+                "text": "I think I have the flu. I have a fever and a sore throat."
+            },
+            {
+                "speaker": "B",
+                "text": "That sounds awful. You should definitely rest."
+            },
+            {
+                "speaker": "A",
+                "text": "Yes, I will. I'll keep an eye on my email for anything urgent."
+            },
+            {
+                "speaker": "B",
+                "text": "Don't worry about work. Your health is more important."
+            },
+            {
+                "speaker": "A",
+                "text": "Thank you, I appreciate that. I'll let you know how I'm feeling tomorrow morning."
+            },
+            {
+                "speaker": "B",
+                "text": "Okay, sounds good. I hope you feel better soon!"
+            },
+            {
+                "speaker": "A",
+                "text": "Thanks, Sarah. Bye."
+            }
+        ],
+        "vocabulary": [
+            "call in sick",
+            "not feeling well",
+            "come down with",
+            "fever",
+            "headache",
+            "sore throat",
+            "flu",
+            "cold",
+            "sick day",
+            "take the day off",
+            "get some rest",
+            "feel better soon",
+            "urgent",
+            "symptoms",
+            "office",
+            "manager",
+            "team",
+            "update",
+            "appreciate",
+            "health"
+        ],
+        "fluency_practice_prompt": "Imagine you wake up with a bad cold and need to call your boss to explain you can't come to work today."
+    },
+    {
+        "title": "At the Pharmacy",
+        "description": "Learn how to talk to a pharmacist to get the medicine you need. Practice asking for prescriptions and over-the-counter drugs.",
+        "material": [
+            "I have a prescription to fill.",
+            "I'd like to pick up my prescription.",
+            "My doctor sent it electronically.",
+            "Do you have anything for a headache?",
+            "Can I buy this over the counter?",
+            "How often should I take this?",
+            "Are there any side effects?",
+            "I'm allergic to penicillin.",
+            "Do I need to take this with food?",
+            "How much does it cost?"
+        ],
+        "conversation": [
+            {
+                "speaker": "A",
+                "text": "Hello, I'd like to pick up a prescription."
+            },
+            {
+                "speaker": "B",
+                "text": "Certainly. What's the name, please?"
+            },
+            {
+                "speaker": "A",
+                "text": "It's for Jane Smith."
+            },
+            {
+                "speaker": "B",
+                "text": "Okay, let me check... Yes, I have it right here. It's an antibiotic."
+            },
+            {
+                "speaker": "A",
+                "text": "Great. Can you tell me how I should take it?"
+            },
+            {
+                "speaker": "B",
+                "text": "You need to take one pill twice a day, with food."
+            },
+            {
+                "speaker": "A",
+                "text": "Okay, twice a day with food. Are there any side effects I should know about?"
+            },
+            {
+                "speaker": "B",
+                "text": "It might make you feel a little sleepy. It's best not to drive after taking it."
+            },
+            {
+                "speaker": "A",
+                "text": "I see. I also need something for a cough."
+            },
+            {
+                "speaker": "B",
+                "text": "We have cough syrup or lozenges. Which would you prefer?"
+            },
+            {
+                "speaker": "A",
+                "text": "I'll take the cough syrup, please."
+            },
+            {
+                "speaker": "B",
+                "text": "Alright. Your total comes to $28.50."
+            }
+        ],
+        "vocabulary": [
+            "prescription",
+            "pharmacist",
+            "over-the-counter",
+            "medicine",
+            "side effects",
+            "allergic to",
+            "dose",
+            "take with food",
+            "antibiotic",
+            "pill",
+            "twice a day",
+            "headache",
+            "sore throat",
+            "cough",
+            "syrup",
+            "lozenges",
+            "painkillers",
+            "to pick up",
+            "to fill a prescription"
+        ],
+        "fluency_practice_prompt": "Describe the last time you went to a pharmacy and explain what you needed to buy."
+    },
+    {
+        "title": "Accepting or Declining an Invitation",
+        "description": "Learn how to politely accept or say no to an invitation for an event. Practice useful phrases for different situations.",
+        "material": [
+            "I'd love to come. Thanks for inviting me.",
+            "That sounds great! I'll be there.",
+            "Yes, I'd be happy to join you.",
+            "Count me in!",
+            "I'm sorry, but I can't make it.",
+            "Thanks for the invitation, but I already have plans.",
+            "I wish I could, but I'm busy that day.",
+            "Unfortunately, I won't be able to come.",
+            "What a kind invitation, but I have a prior commitment.",
+            "Maybe next time."
+        ],
+        "conversation": [
+            {
+                "speaker": "A",
+                "text": "Hi! Are you free this Saturday?"
+            },
+            {
+                "speaker": "B",
+                "text": "Hi! I think so. What's up?"
+            },
+            {
+                "speaker": "A",
+                "text": "I'm having a small dinner party at my place. Would you like to come?"
+            },
+            {
+                "speaker": "B",
+                "text": "Oh, that sounds lovely! What time?"
+            },
+            {
+                "speaker": "A",
+                "text": "It starts around 7 PM."
+            },
+            {
+                "speaker": "B",
+                "text": "Let me just check my calendar... Oh, I'm so sorry, I completely forgot I have another commitment that evening."
+            },
+            {
+                "speaker": "A",
+                "text": "Oh, that's too bad. No problem at all."
+            },
+            {
+                "speaker": "B",
+                "text": "Thanks so much for thinking of me, though. I hope you have a great time!"
+            },
+            {
+                "speaker": "A",
+                "text": "Thank you! We'll have to do it again soon."
+            },
+            {
+                "speaker": "B",
+                "text": "Definitely! Let's catch up next week."
+            }
+        ],
+        "vocabulary": [
+            "invitation",
+            "accept",
+            "decline",
+            "dinner party",
+            "I'd love to",
+            "can't make it",
+            "busy",
+            "have plans",
+            "free",
+            "join",
+            "unfortunately",
+            "commitment",
+            "thanks for thinking of me",
+            "count me in",
+            "sounds great",
+            "maybe next time",
+            "that's too bad",
+            "catch up",
+            "schedule",
+            "calendar",
+            "I'll be there"
+        ],
+        "fluency_practice_prompt": "Imagine a friend invites you to a movie this weekend, but you are busy; politely decline the invitation and suggest another time."
+    },
+    {
+        "title": "Discussing Future Goals",
+        "description": "Practice talking about your plans and ambitions for the future. Learn how to ask and answer questions about personal and professional goals.",
+        "material": [
+            "What are your plans for the next few years?",
+            "I'm hoping to...",
+            "My main goal is to...",
+            "I want to improve my...",
+            "In the long term, I'd like to...",
+            "Have you thought about your career path?",
+            "I'm saving money for...",
+            "My dream is to travel the world.",
+            "I'm thinking about going back to school.",
+            "First, I need to focus on..."
+        ],
+        "conversation": [
+            {
+                "speaker": "A",
+                "text": "So, what are your plans after you finish this course?"
+            },
+            {
+                "speaker": "B",
+                "text": "I'm not completely sure yet. I'm thinking about looking for a new job."
+            },
+            {
+                "speaker": "A",
+                "text": "Oh, that's interesting. What kind of job are you hoping to find?"
+            },
+            {
+                "speaker": "B",
+                "text": "My main goal is to work in marketing. I want to use my creative skills more."
+            },
+            {
+                "speaker": "A",
+                "text": "That sounds like a great plan. Do you need any special training for that?"
+            },
+            {
+                "speaker": "B",
+                "text": "Yes, I might need to take a digital marketing course. What about you? What are your future goals?"
+            },
+            {
+                "speaker": "A",
+                "text": "In the short term, I want to improve my English. In the long term, I'd like to start my own small business."
+            },
+            {
+                "speaker": "B",
+                "text": "Wow, that's ambitious! What kind of business?"
+            },
+            {
+                "speaker": "A",
+                "text": "Maybe a small online shop. But first, I need to save some money."
+            },
+            {
+                "speaker": "B",
+                "text": "That makes sense. It's always good to have a clear goal to work towards."
+            }
+        ],
+        "vocabulary": [
+            "future goals",
+            "plans",
+            "ambitions",
+            "career path",
+            "improve",
+            "main goal",
+            "hope to",
+            "long term",
+            "short term",
+            "save money",
+            "focus on",
+            "work towards",
+            "start a business",
+            "go back to school",
+            "training",
+            "skills"
+        ],
+        "fluency_practice_prompt": "Describe one personal goal and one professional goal you have for the next five years."
+    },
+
 ]
