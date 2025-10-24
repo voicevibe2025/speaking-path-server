@@ -1,4 +1,41 @@
-TOPICS = [
+
+BEGINNER_TOPICS = [
+        {
+    "title": "Greetings",
+    "description": "Learn very simple ways to say hello, goodbye, and ask how someone is. Perfect for first-time English learners.",
+    "material": [
+        "Hello.",
+        "Hi.",
+        "Good morning.",
+        "Good afternoon.",
+        "Good evening.",
+        "How are you?",
+        "I'm fine, thank you.",
+        "Goodbye.",
+        "Bye."
+    ],
+    "conversation": [
+        {"speaker": "A", "text": "Hello."},
+        {"speaker": "B", "text": "Hi."},
+        {"speaker": "A", "text": "How are you?"},
+        {"speaker": "B", "text": "I'm fine, thank you. And you?"},
+        {"speaker": "A", "text": "I'm fine too."},
+        {"speaker": "B", "text": "Goodbye."},
+        {"speaker": "A", "text": "Bye."}
+    ],
+    "vocabulary": [
+        "hello", "hi", "good morning", "good afternoon", "good evening",
+        "how are you", "fine", "thank you", "goodbye", "bye"
+    ],
+    "fluency_practice_prompt": "Practice saying hello and goodbye to your friend. Try using 'Hi', 'Hello', 'Good morning', and 'Goodbye'."
+},
+
+    
+]
+
+
+
+INTERMEDIATE_TOPICS = [
     {
         "title": "Greetings and Introductions",
         "description": "Learn common phrases for greeting people and introducing yourself in everyday situations such as meeting new classmates or colleagues.",
@@ -1792,4 +1829,42 @@ TOPICS = [
         "fluency_practice_prompt": "Describe one personal goal and one professional goal you have for the next five years."
     },
 
+]
+
+
+ADVANCED_TOPICS = [
+    {
+    "title": "Making and Responding to Complaints",
+    "description": "Learn how to make complaints and respond to them politely and effectively in formal and informal situations. This lesson helps you sound natural, confident, and respectful when dealing with problems or dissatisfaction.",
+    "material": [
+        "I'm afraid there's been a mistake.",
+        "I'm not very happy with this service.",
+        "I’d like to make a complaint about...",
+        "This isn’t what I expected.",
+        "Could you please look into this?",
+        "I completely understand your concern.",
+        "I’m really sorry about that.",
+        "Let me see what I can do to fix it.",
+        "We’ll make sure it doesn’t happen again."
+    ],
+    "conversation": [
+        {"speaker": "Customer", "text": "Hi, excuse me. I’m afraid there’s been a mistake with my order."},
+        {"speaker": "Staff", "text": "Oh, I’m really sorry to hear that. What seems to be the problem?"},
+        {"speaker": "Customer", "text": "I ordered a vegetarian meal, but this has chicken in it."},
+        {"speaker": "Staff", "text": "I see. I completely understand your concern. Let me fix that right away."},
+        {"speaker": "Customer", "text": "Thanks, I’d really appreciate it."},
+        {"speaker": "Staff", "text": "No problem at all. I’ll bring you a new one in a few minutes. We’ll make sure it doesn’t happen again."},
+        {"speaker": "Customer", "text": "Thank you for your help."},
+        {"speaker": "Staff", "text": "You’re very welcome."}
+    ],
+    "vocabulary": [
+        "complaint", "dissatisfied", "mistake", "concern", "apologize", "resolve",
+        "refund", "replace", "service", "courteous", "tone", "issue", "frustration",
+        "customer service", "professional", "empathy", "fix", "misunderstanding"
+    ],
+    "fluency_practice_prompt": "Imagine you received poor service at a restaurant or hotel. Practice explaining the problem politely and asking for a solution. Then, switch roles and respond as the staff."
+},
+
+
+    
 ]
