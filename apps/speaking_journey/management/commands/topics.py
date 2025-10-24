@@ -29,8 +29,132 @@ BEGINNER_TOPICS = [
     ],
     "fluency_practice_prompt": "Practice saying hello and goodbye to your friend. Try using 'Hi', 'Hello', 'Good morning', and 'Goodbye'."
 },
-
     
+    {
+        "title": "Introducing Yourself",
+        "description": "Learn how to introduce yourself and share basic personal information. Practice asking and answering simple questions about names, jobs, and hometowns.",
+        "material": [
+            "my name is Azam",
+            "Hi, I'm Khaira",
+            "Nice to meet you.",
+            "It's a pleasure to meet you.",
+            "Where are you from?",
+            "I'm from Indonesia.",
+            "What do you do?",
+            "I'm a student.",
+            "What about you?"
+        ],
+        "conversation": [
+            {
+                "speaker": "A",
+                "text": "Hi, I'm Azam. What's your name?"
+            },
+            {
+                "speaker": "B",
+                "text": "Hello, Azam. I'm Khaira. Nice to meet you."
+            },
+            {
+                "speaker": "A",
+                "text": "Nice to meet you too, Khaira. Where are you from?"
+            },
+            {
+                "speaker": "B",
+                "text": "I'm from Indonesia. And you?"
+            },
+            {
+                "speaker": "A",
+                "text": "I'm from Malaysia. What do you do?"
+            },
+            {
+                "speaker": "B",
+                "text": "I'm a student. What about you?"
+            },
+            {
+                "speaker": "A",
+                "text": "I'm a student too."
+            }
+        ],
+        "vocabulary": [
+            "hello",
+            "name",
+            "nice to meet you",
+            "from",
+            "where",
+            "what do you do",
+            "student",
+            "teacher",
+            'pleasure'
+        ],
+        "fluency_practice_prompt": "Introduce yourself to a new person and ask them three questions about themselves."
+    },
+
+    {
+    "title": "Asking About Age",
+    "description": "Learn how to ask and answer questions about age using simple sentences and numbers.",
+    "material": [
+        "How old are you?",
+        "I'm ten years old.",
+        "He's eleven years old.",
+        "She's twelve.",
+        "I'm not very old.",
+        "Really?",
+        "Yes!"
+    ],
+    "conversation": [
+        {"speaker": "A", "text": "Hi, how old are you?"},
+        {"speaker": "B", "text": "I'm ten years old. What about you?"},
+        {"speaker": "A", "text": "I'm eleven."},
+        {"speaker": "B", "text": "Really?"},
+        {"speaker": "A", "text": "Yes!"},
+        {"speaker": "B", "text": "Cool!"}
+    ],
+    "vocabulary": [
+        "how old",
+        "years old",
+        "really",
+        "cool",
+        "ten",
+        "eleven",
+        "twelve"
+    ],
+    "fluency_practice_prompt": "Ask your partner how old they are and answer with your age. Try saying 'I'm ... years old.'"
+},
+
+{
+    "title": "This and That",
+    "description": "Learn how to ask and answer simple questions about objects using 'this' and 'that'. Practice naming things around you.",
+    "material": [
+        "What is this?",
+        "This is a book.",
+        "What is that?",
+        "That is a car.",
+        "This is my phone.",
+        "That is my chair."
+    ],
+    "conversation": [
+        {"speaker": "A", "text": "What is this?"},
+        {"speaker": "B", "text": "This is a book."},
+        {"speaker": "A", "text": "What is that?"},
+        {"speaker": "B", "text": "That is a pen."},
+        {"speaker": "A", "text": "Oh, I see."},
+        {"speaker": "B", "text": "Yes, this is my pen."}
+    ],
+    "vocabulary": [
+        "this",
+        "that",
+        "book",
+        "pen",
+        "bag",
+        "chair",
+        "phone",
+        "car"
+    ],
+    "fluency_practice_prompt": "Look around you and point to things. Ask 'What is this?' or 'What is that?' and answer with the object name."
+}
+
+
+
+
 ]
 
 
@@ -1867,4 +1991,93 @@ ADVANCED_TOPICS = [
 
 
     
+    {
+        "title": "Mediating a Disagreement",
+        "description": "Practice helping two friends resolve a conflict by listening to both sides and finding common ground. This topic focuses on communication skills for de-escalating arguments and fostering understanding.",
+        "material": [
+            "I can see why you feel that way.",
+            "Let's hear your side of the story.",
+            "What do you think their perspective is?",
+            "It sounds like there was a misunderstanding.",
+            "How can we find a middle ground here?",
+            "I'm not taking sides, I just want to help.",
+            "Maybe we should all cool off for a bit.",
+            "What would a fair resolution look like to you?",
+            "Can you tell me more about what happened?",
+            "I value both of your friendships deeply."
+        ],
+        "conversation": [
+            {
+                "speaker": "A",
+                "text": "I can't believe what Leo said. After everything we've been through, I think I'm done."
+            },
+            {
+                "speaker": "B",
+                "text": "I'm really sorry to hear you're so upset. Could you walk me through what happened from your point of view?"
+            },
+            {
+                "speaker": "A",
+                "text": "He accused me of being unreliable, right in front of everyone! He knows I've been completely swamped at work."
+            },
+            {
+                "speaker": "B",
+                "text": "Wow, that sounds incredibly frustrating and embarrassing. I can definitely see why you'd be hurt by that."
+            },
+            {
+                "speaker": "A",
+                "text": "It was. I don't even want to speak to him right now."
+            },
+            {
+                "speaker": "B",
+                "text": "I get that. Do you think it's possible he didn't realize the full extent of the pressure you're under?"
+            },
+            {
+                "speaker": "A",
+                "text": "Maybe, but he should have thought before he spoke. It felt like a low blow."
+            },
+            {
+                "speaker": "B",
+                "text": "I agree the delivery wasn't great. But knowing Leo, do you think he genuinely intended to hurt you, or was he just stressed about the project deadline?"
+            },
+            {
+                "speaker": "A",
+                "text": "He was probably just stressed... we all are. I guess I might have overreacted by storming out."
+            },
+            {
+                "speaker": "B",
+                "text": "It's a high-pressure situation. Perhaps once things have cooled down, you two could talk about it privately? I'm happy to help bridge that conversation if you'd like."
+            },
+            {
+                "speaker": "A",
+                "text": "I'll think about it. Thanks for listening, it really helps to just vent."
+            },
+            {
+                "speaker": "B",
+                "text": "Of course. I'm here for both of you, no matter what."
+            }
+        ],
+        "vocabulary": [
+            "mediate",
+            "disagreement",
+            "conflict resolution",
+            "perspective",
+            "point of view",
+            "misunderstanding",
+            "common ground",
+            "find a middle ground",
+            "take sides",
+            "de-escalate",
+            "validate feelings",
+            "unbiased",
+            "neutral",
+            "reconcile",
+            "low blow",
+            "swamped with work",
+            "overreact",
+            "walk me through",
+            "frustrating",
+            "high-pressure situation"
+        ],
+        "fluency_practice_prompt": "Describe a time you witnessed a disagreement and explain how you would have tried to mediate it using neutral language and empathy."
+    },
 ]

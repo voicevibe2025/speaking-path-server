@@ -2154,10 +2154,11 @@ class SpeakingTopicsView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        # Optional English Level filtering. Applied only when the request explicitly provides englishLevel.
-        # Legacy clients (no query) will see all topics.
+        # Determine effective English Level for topic scoping:
+        # 1) Query param (englishLevel or english_level) if provided and valid
+        # 2) Else user's stored profile.english_level if set
+        # 3) Else default to INTERMEDIATE for legacy clients
         raw_level = (request.query_params.get('englishLevel') or request.query_params.get('english_level') or '').strip().upper()
-        effective_level = raw_level if raw_level in {c for c, _ in EnglishLevel.choices} else None
 
         # Get or create user profile (for welcome personalization and to persist settings elsewhere)
         profile, _ = UserProfile.objects.get_or_create(
@@ -2165,12 +2166,16 @@ class SpeakingTopicsView(APIView):
             defaults={'first_visit': True}
         )
 
-        if effective_level:
-            scoped_qs = Topic.objects.filter(is_active=True, difficulty=effective_level).order_by('sequence')
-            topics_list = list(scoped_qs)
-            topics, completed_sequences, unlocked_sequences = _compute_unlocks_scoped(request.user, topics_list)
+        valid_levels = {c for c, _ in EnglishLevel.choices}
+        if raw_level in valid_levels:
+            effective_level = raw_level
         else:
-            topics, completed_sequences, unlocked_sequences = _compute_unlocks(request.user)
+            prof_level = str(getattr(profile, 'english_level', '') or '').strip().upper()
+            effective_level = prof_level if prof_level in valid_levels else EnglishLevel.INTERMEDIATE
+
+        scoped_qs = Topic.objects.filter(is_active=True, difficulty=effective_level).order_by('sequence')
+        topics_list = list(scoped_qs)
+        topics, completed_sequences, unlocked_sequences = _compute_unlocks_scoped(request.user, topics_list)
         # Test flag: unlock all topics for designated test accounts
         if _unlock_all_for_user(request.user):
             unlocked_sequences = {t.sequence for t in topics}

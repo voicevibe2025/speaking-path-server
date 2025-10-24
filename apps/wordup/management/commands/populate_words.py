@@ -393,6 +393,150 @@ class Command(BaseCommand):
                 'example_sentence': 'The army was forced to capitulate.',
                 'ipa_pronunciation': '/kəˈpɪtʃəleɪt/'
             },
+            {
+                'word': 'fallacy',
+                'definition': 'A mistaken belief, especially one based on unsound argument.',
+                'difficulty': 'intermediate',
+                'part_of_speech': 'noun',
+                'example_sentence': 'The idea that money buys happiness is a fallacy.',
+                'ipa_pronunciation': '/ˈfæləsi/'
+            },
+            {
+                'word': 'facetious',
+                'definition': 'Treating serious issues with deliberately inappropriate humor; flippant.',
+                'difficulty': 'intermediate',
+                'part_of_speech': 'adjective',
+                'example_sentence': 'He made a facetious remark that was not appreciated.',
+                'ipa_pronunciation': '/fəˈsiːʃəs/'
+            },
+            {
+                'word': 'gregarious',
+                'definition': 'Fond of company; sociable.',
+                'difficulty': 'intermediate',
+                'part_of_speech': 'adjective',
+                'example_sentence': 'He was a gregarious and outgoing person.',
+                'ipa_pronunciation': '/ɡrɪˈɡeəriəs/'
+            },
+            {
+                'word': 'harangue',
+                'definition': 'A lengthy and aggressive speech.',
+                'difficulty': 'intermediate',
+                'part_of_speech': 'noun',
+                'example_sentence': 'He delivered a long harangue about the evils of modern society.',
+                'ipa_pronunciation': '/həˈræŋ/'
+            },
+            {
+                'word': 'iconoclast',
+                'definition': 'A person who attacks cherished beliefs or institutions.',
+                'difficulty': 'intermediate',
+                'part_of_speech': 'noun',
+                'example_sentence': 'The artist was an iconoclast who challenged traditional forms of art.',
+                'ipa_pronunciation': '/aɪˈkɒnəklæst/'
+            },
+            {
+                'word': 'juxtaposition',
+                'definition': 'The fact of two things being seen or placed close together with contrasting effect.',
+                'difficulty': 'intermediate',
+                'part_of_speech': 'noun',
+                'example_sentence': 'The juxtaposition of the old and new buildings was striking.',
+                'ipa_pronunciation': '/ˌdʒʌkstəpəˈzɪʃn/'
+            },
+            {
+                'word': 'kudos',
+                'definition': 'Praise and honor received for an achievement.',
+                'difficulty': 'intermediate',
+                'part_of_speech': 'noun',
+                'example_sentence': 'She received kudos for her hard work.',
+                'ipa_pronunciation': '/ˈkjuːdɒs/'
+            },
+            {
+                'word': 'laconic',
+                'definition': 'Using very few words.',
+                'difficulty': 'intermediate',
+                'part_of_speech': 'adjective',
+                'example_sentence': 'His laconic reply suggested a lack of interest in the topic.',
+                'ipa_pronunciation': '/ləˈkɒnɪk/'
+            },
+            {
+                'word': 'magnanimous',
+                'definition': 'Generous or forgiving, especially toward a rival or less powerful person.',
+                'difficulty': 'intermediate',
+                'part_of_speech': 'adjective',
+                'example_sentence': 'The team was magnanimous in victory.',
+                'ipa_pronunciation': '/mæɡˈnænɪməs/'
+            },
+            {
+                'word': 'nefarious',
+                'definition': 'Wicked or criminal.',
+                'difficulty': 'intermediate',
+                'part_of_speech': 'adjective',
+                'example_sentence': 'The nefarious villain plotted to take over the world.',
+                'ipa_pronunciation': '/nɪˈfeəriəs/'
+            },
+            {
+                'word': 'obfuscate',
+                'definition': 'To make something unclear or difficult to understand.',
+                'difficulty': 'intermediate',
+                'part_of_speech': 'verb',
+                'example_sentence': 'The politician tried to obfuscate the issue.',
+                'ipa_pronunciation': '/ˈɒbfʌskeɪt/'
+            },
+            {
+                'word': 'pensive',
+                'definition': 'Engaged in, involving, or reflecting deep or serious thought.',
+                'difficulty': 'intermediate',
+                'part_of_speech': 'adjective',
+                'example_sentence': 'She was in a pensive mood, staring out the window.',
+                'ipa_pronunciation': '/ˈpensɪv/'
+            },
+            {
+                'word': 'querulous',
+                'definition': 'Complaining in a petulant or whining manner.',
+                'difficulty': 'intermediate',
+                'part_of_speech': 'adjective',
+                'example_sentence': 'The querulous child was never satisfied.',
+                'ipa_pronunciation': '/ˈkwerʊləs/'
+            },
+            {
+                'word': 'recalcitrant',
+                'definition': 'Having an obstinately uncooperative attitude toward authority or discipline.',
+                'difficulty': 'intermediate',
+                'part_of_speech': 'adjective',
+                'example_sentence': 'The recalcitrant student refused to do his homework.',
+                'ipa_pronunciation': '/rɪˈkælsɪtrənt/'
+            },
+            {
+                'word': 'soporific',
+                'definition': 'Tending to induce drowsiness or sleep.',
+                'difficulty': 'intermediate',
+                'part_of_speech': 'adjective',
+                'example_sentence': 'The soporific effect of the drug was immediate.',
+                'ipa_pronunciation': '/ˌsɒpəˈrɪfɪk/'
+            },
+            {
+                'word': 'trepidation',
+                'definition': 'A feeling of fear or agitation about something that may happen.',
+                'difficulty': 'intermediate',
+                'part_of_speech': 'noun',
+                'example_sentence': 'He felt a sense of trepidation before the big exam.',
+                'ipa_pronunciation': '/ˌtrepɪˈdeɪʃn/'
+            },
+            {
+                'word': 'venerable',
+                'definition': 'Accorded a great deal of respect, especially because of age, wisdom, or character.',
+                'difficulty': 'intermediate',
+                'part_of_speech': 'adjective',
+                'example_sentence': 'The venerable professor was a leading expert in his field.',
+                'ipa_pronunciation': '/ˈvenərəbl/'
+            },
+            {
+                'word': 'wistful',
+                'definition': 'Having or showing a feeling of vague or regretful longing.',
+                'difficulty': 'intermediate',
+                'part_of_speech': 'adjective',
+                'example_sentence': 'She had a wistful look on her face as she remembered her childhood.',
+                'ipa_pronunciation': '/ˈwɪstfəl/'
+            },
             # Advanced words
             {
                 'word': 'aberration',
@@ -585,6 +729,150 @@ class Command(BaseCommand):
                 'part_of_speech': 'noun',
                 'example_sentence': 'The artist was an iconoclast who challenged traditional notions of beauty.',
                 'ipa_pronunciation': '/aɪˈkɑːnəklæst/'
+            },
+            {
+                'word': 'maverick',
+                'definition': 'An unorthodox or independent-minded person.',
+                'difficulty': 'advanced',
+                'part_of_speech': 'noun',
+                'example_sentence': 'He was a maverick who refused to follow the rules.',
+                'ipa_pronunciation': '/ˈmævərɪk/'
+            },
+            {
+                'word': 'obfuscate',
+                'definition': 'To render obscure, unclear, or unintelligible.',
+                'difficulty': 'advanced',
+                'part_of_speech': 'verb',
+                'example_sentence': 'The politician tried to obfuscate the issue.',
+                'ipa_pronunciation': '/ˈɒbfʌskeɪt/'
+            },
+            {
+                'word': 'palliative',
+                'definition': 'Relieving pain or alleviating a problem without dealing with the underlying cause.',
+                'difficulty': 'advanced',
+                'part_of_speech': 'adjective',
+                'example_sentence': 'The medicine was only a palliative, not a cure.',
+                'ipa_pronunciation': '/ˈpæliətɪv/'
+            },
+            {
+                'word': 'quixotic',
+                'definition': 'Exceedingly idealistic; unrealistic and impractical.',
+                'difficulty': 'advanced',
+                'part_of_speech': 'adjective',
+                'example_sentence': 'He had a quixotic dream of world peace.',
+                'ipa_pronunciation': '/kwɪkˈsɒtɪk/'
+            },
+            {
+                'word': 'rancorous',
+                'definition': 'Characterized by bitterness or resentment.',
+                'difficulty': 'advanced',
+                'part_of_speech': 'adjective',
+                'example_sentence': 'The debate was rancorous and full of personal attacks.',
+                'ipa_pronunciation': '/ˈræŋkərəs/'
+            },
+            {
+                'word': 'sanguine',
+                'definition': 'Optimistic or positive, especially in an apparently bad or difficult situation.',
+                'difficulty': 'advanced',
+                'part_of_speech': 'adjective',
+                'example_sentence': 'She was sanguine about the future.',
+                'ipa_pronunciation': '/ˈsæŋɡwɪn/'
+            },
+            {
+                'word': 'truculent',
+                'definition': 'Eager or quick to argue or fight; aggressively defiant.',
+                'difficulty': 'advanced',
+                'part_of_speech': 'adjective',
+                'example_sentence': 'The truculent child refused to listen to his parents.',
+                'ipa_pronunciation': '/ˈtrʌkjələnt/'
+            },
+            {
+                'word': 'umbrage',
+                'definition': 'Offense or annoyance.',
+                'difficulty': 'advanced',
+                'part_of_speech': 'noun',
+                'example_sentence': 'She took umbrage at his rude comment.',
+                'ipa_pronunciation': '/ˈʌmbrɪdʒ/'
+            },
+            {
+                'word': 'vituperative',
+                'definition': 'Bitter and abusive.',
+                'difficulty': 'advanced',
+                'part_of_speech': 'adjective',
+                'example_sentence': 'The vituperative review of the book was unfair.',
+                'ipa_pronunciation': '/vɪˈtjuːpərətɪv/'
+            },
+            {
+                'word': 'winsome',
+                'definition': 'Attractive or appealing in appearance or character.',
+                'difficulty': 'advanced',
+                'part_of_speech': 'adjective',
+                'example_sentence': 'She had a winsome smile that charmed everyone.',
+                'ipa_pronunciation': '/ˈwɪnsəm/'
+            },
+            {
+                'word': 'xenophobia',
+                'definition': 'Dislike of or prejudice against people from other countries.',
+                'difficulty': 'advanced',
+                'part_of_speech': 'noun',
+                'example_sentence': 'The rise of xenophobia is a worrying trend.',
+                'ipa_pronunciation': '/ˌzenəˈfoʊbiə/'
+            },
+            {
+                'word': 'yoke',
+                'definition': 'A wooden crosspiece that is fastened over the necks of two animals and attached to the plow or cart that they are to pull.',
+                'difficulty': 'advanced',
+                'part_of_speech': 'noun',
+                'example_sentence': 'The farmer placed the yoke on the oxen.',
+                'ipa_pronunciation': '/joʊk/'
+            },
+            {
+                'word': 'zephyr',
+                'definition': 'A soft gentle breeze.',
+                'difficulty': 'advanced',
+                'part_of_speech': 'noun',
+                'example_sentence': 'A gentle zephyr rustled the leaves.',
+                'ipa_pronunciation': '/ˈzefər/'
+            },
+            {
+                'word': 'anachronism',
+                'definition': 'A thing belonging or appropriate to a period other than that in which it exists, especially a thing that is conspicuously old-fashioned.',
+                'difficulty': 'advanced',
+                'part_of_speech': 'noun',
+                'example_sentence': 'The movie was full of anachronisms.',
+                'ipa_pronunciation': '/əˈnækrənɪzəm/'
+            },
+            {
+                'word': 'boondoggle',
+                'definition': 'Work or activity that is wasteful or pointless but gives the appearance of having value.',
+                'difficulty': 'advanced',
+                'part_of_speech': 'noun',
+                'example_sentence': 'The new project was a boondoggle that wasted millions of dollars.',
+                'ipa_pronunciation': '/ˈbuːndɒɡl/'
+            },
+            {
+                'word': 'circumlocution',
+                'definition': 'The use of many words where fewer would do, especially in a deliberate attempt to be vague or evasive.',
+                'difficulty': 'advanced',
+                'part_of_speech': 'noun',
+                'example_sentence': 'The politician\'s speech was full of circumlocution.',
+                'ipa_pronunciation': '/ˌsɜːrkəmləˈkjuːʃn/'
+            },
+            {
+                'word': 'dichotomy',
+                'definition': 'A division or contrast between two things that are or are represented as being opposed or entirely different.',
+                'difficulty': 'advanced',
+                'part_of_speech': 'noun',
+                'example_sentence': 'There is a dichotomy between the rich and the poor.',
+                'ipa_pronunciation': '/daɪˈkɒtəmi/'
+            },
+            {
+                'word': 'epiphany',
+                'definition': 'A moment of sudden revelation or insight.',
+                'difficulty': 'advanced',
+                'part_of_speech': 'noun',
+                'example_sentence': 'She had an epiphany that changed her life.',
+                'ipa_pronunciation': '/ɪˈpɪfəni/'
             },
         ]
 
