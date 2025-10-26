@@ -2008,6 +2008,90 @@ INTERMEDIATE_TOPICS = [
         ],
         "fluency_practice_prompt": "Describe a special gift you received as a child and explain why it was so important to you."
     },
+    {
+        "title": "Household Chores",
+        "description": "This topic is about the tasks we do to keep our homes clean and organized. We will discuss which chores we like, dislike, and how we share them.",
+        "material": [
+            "I need to do the laundry.",
+            "Can you please take out the trash?",
+            "I'll wash the dishes if you dry them.",
+            "It's your turn to vacuum the living room.",
+            "We need to mop the kitchen floor.",
+            "Let's dust the furniture this afternoon.",
+            "I don't mind ironing clothes.",
+            "Could you wipe down the counters?",
+            "We should tidy up before our guests arrive."
+        ],
+        "conversation": [
+            {
+                "speaker": "A",
+                "text": "The house is getting a bit messy. I think we need a cleaning day."
+            },
+            {
+                "speaker": "B",
+                "text": "You're right. Where should we start?"
+            },
+            {
+                "speaker": "A",
+                "text": "I can take care of the kitchen. I'll wash the dishes and wipe down all the counters."
+            },
+            {
+                "speaker": "B",
+                "text": "Okay, sounds good. While you do that, I'll vacuum the carpets in the living room and bedrooms."
+            },
+            {
+                "speaker": "A",
+                "text": "Thanks! What about the laundry? There's a big pile waiting."
+            },
+            {
+                "speaker": "B",
+                "text": "I can put a load in the washing machine now. We can hang it up to dry later."
+            },
+            {
+                "speaker": "A",
+                "text": "Perfect. The only thing left is the bathroom. It needs a good scrub."
+            },
+            {
+                "speaker": "B",
+                "text": "I can handle the bathroom. It's not my favorite chore, but someone has to do it."
+            },
+            {
+                "speaker": "A",
+                "text": "Great! Teamwork makes everything so much faster."
+            },
+            {
+                "speaker": "B",
+                "text": "Definitely. Just don't forget to take out the trash when the bag is full."
+            },
+            {
+                "speaker": "A",
+                "text": "I won't. It's a deal."
+            }
+        ],
+        "vocabulary": [
+            "do the laundry",
+            "wash the dishes",
+            "take out the trash",
+            "vacuum the carpet",
+            "mop the floor",
+            "dust the furniture",
+            "wipe down the counters",
+            "tidy up",
+            "make the bed",
+            "scrub the bathroom",
+            "household chores",
+            "cleaning supplies",
+            "messy",
+            "organized",
+            "share the tasks",
+            "routine",
+            "put away",
+            "clean up",
+            "hang up clothes",
+            "ironing"
+        ],
+        "fluency_practice_prompt": "Describe your weekly cleaning routine and explain which household chore you dislike the most and why."
+    },
 ]
 
 

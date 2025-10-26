@@ -238,17 +238,18 @@ def _check_and_create_proficiency_event(user):
 DEF_STYLE_VERSION = "fun_v1"
 _DEF_CACHE: dict[str, str] = {}
 
-def _cache_get(word: str) -> Optional[str]:
+def _cache_get(word: str, variant: str = 'en') -> Optional[str]:
     try:
         w = (word or '').strip()
         if not w:
             return None
-        key = f"{DEF_STYLE_VERSION}|{w}"
+        v = (variant or 'en').strip().lower()
+        key = f"{DEF_STYLE_VERSION}|{v}|{w}"
         return _DEF_CACHE.get(key)
     except Exception:
         return None
 
-def _cache_set(word: str, definition: str):
+def _cache_set(word: str, definition: str, variant: str = 'en'):
     try:
         w = (word or '').strip()
         if not w:
@@ -256,7 +257,8 @@ def _cache_set(word: str, definition: str):
         # Basic size guard to avoid unbounded growth
         if len(_DEF_CACHE) > 1000:
             _DEF_CACHE.clear()
-        key = f"{DEF_STYLE_VERSION}|{w}"
+        v = (variant or 'en').strip().lower()
+        key = f"{DEF_STYLE_VERSION}|{v}|{w}"
         _DEF_CACHE[key] = (definition or '').strip()
     except Exception:
         pass
@@ -696,7 +698,7 @@ def _get_gemini_feedback(expected_phrase: str, transcribed_text: str, accuracy: 
         return base + "\n- " + "\n- ".join(tips[:3])
 
 
-def _get_gemini_definition(word: str) -> str:
+def _get_gemini_definition(word: str, lang: str = 'en') -> str:
     """Generate a concise learner-friendly definition for a word using Gemini.
 
     The definition should avoid repeating the word itself and be 5â€“18 words.
@@ -704,7 +706,7 @@ def _get_gemini_definition(word: str) -> str:
     """
     safe_word = (word or '').strip()
     # Cache first
-    cached = _cache_get(safe_word)
+    cached = _cache_get(safe_word, variant=lang)
     if cached:
         return cached
 
@@ -713,8 +715,11 @@ def _get_gemini_definition(word: str) -> str:
     )
     if not api_key or not safe_word:
         # Heuristic fallback
-        out = f"A definition describing '{safe_word}' in everyday English."
-        _cache_set(safe_word, out)
+        if (lang or 'en').lower() == 'id':
+            out = f"Penjelasan sederhana tentang '{safe_word}' dalam bahasa Indonesia."
+        else:
+            out = f"A definition describing '{safe_word}' in everyday English."
+        _cache_set(safe_word, out, variant=lang)
         return out
 
     candidates = [
@@ -724,20 +729,32 @@ def _get_gemini_definition(word: str) -> str:
         'gemini-1.5-pro',
         'gemini-pro',
     ]
-    prompt = (
-        "You are an English tutor writing a playful single-line clue for a TARGET word.\n"
-        "Use styles like: situational, personification, exaggeration/humor, or action/sound.\n"
-        "Rules:\n"
-        "- Exactly one sentence, 12-24 words.\n"
-        "- Do NOT include or hint the word itself.\n"
-        "- No quotes, no markdown, no lists, no colons.\n"
-        "- Use only very simple English (CEFR A2â€“B1 level words).\n"
-        f"TARGET: {safe_word}"
-    )
+    if (lang or 'en').lower() == 'id':
+        prompt = (
+            "Anda adalah tutor bahasa Inggris yang menulis petunjuk satu kalimat untuk kata TARGET dalam Bahasa Indonesia.\n"
+            "Gaya: situasi sederhana, personifikasi, humor ringan, atau aksi/suara.\n"
+            "Aturan:\n"
+            "- Tepat satu kalimat, 8-16 kata.\n"
+            "- Jangan menyebut atau mengisyaratkan kata TARGET.\n"
+            "- Tanpa tanda kutip, tanpa markdown, tanpa daftar, tanpa titik dua.\n"
+            "- Gunakan Bahasa Indonesia yang sangat sederhana (pemula).\n"
+            f"TARGET: {safe_word}"
+        )
+    else:
+        prompt = (
+            "You are an English tutor writing a playful single-line clue for a TARGET word.\n"
+            "Use styles like: situational, personification, exaggeration/humor, or action/sound.\n"
+            "Rules:\n"
+            "- Exactly one sentence, 12-24 words.\n"
+            "- Do NOT include or hint the word itself.\n"
+            "- No quotes, no markdown, no lists, no colons.\n"
+            "- Use only very simple English (CEFR A2-B1 level words).\n"
+            f"TARGET: {safe_word}"
+        )
     try:
         genai.configure(api_key=api_key)
     except Exception:
-        return "A playful, single-line clue in plain English."
+        return "Petunjuk satu kalimat yang sangat sederhana." if (lang or 'en').lower() == 'id' else "A playful, single-line clue in plain English."
     for name in candidates:
         try:
             model = genai.GenerativeModel(name)
@@ -748,20 +765,20 @@ def _get_gemini_definition(word: str) -> str:
                 # Guard: avoid echoing the word
                 if safe_word.lower() in out.lower():
                     # try to mask
-                    out = out.replace(safe_word, 'â–¢â–¢â–¢')
+                    out = out.replace(safe_word, '***')
                 # Trim to a single sentence and length
                 out = out.split('\n')[0].strip()
-                _cache_set(safe_word, out)
+                _cache_set(safe_word, out, variant=lang)
                 return out
         except Exception as e:
             logger.warning('Gemini definition via %s failed: %s', name, e)
             continue
-    out = "A short learner-friendly definition."
-    _cache_set(safe_word, out)
+    out = ("Kalimat petunjuk yang sangat sederhana." if (lang or 'en').lower() == 'id' else "A short learner-friendly definition.")
+    _cache_set(safe_word, out, variant=lang)
     return out
 
 
-def _get_gemini_definitions_batch(words: list[str]) -> dict:
+def _get_gemini_definitions_batch(words: list[str], lang: str = 'en') -> dict:
     """Generate concise definitions for a list of words in a single Gemini call.
 
     Returns a mapping {word: definition}. Falls back to empty dict on failure.
@@ -774,9 +791,12 @@ def _get_gemini_definitions_batch(words: list[str]) -> dict:
     )
     if not api_key:
         # Fallback: no API key
-        d = {w: f"A playful clue about '{w}' in plain English." for w in words}
+        if (lang or 'en').lower() == 'id':
+            d = {w: f"Petunjuk sederhana tentang '{w}' dalam Bahasa Indonesia." for w in words}
+        else:
+            d = {w: f"A playful clue about '{w}' in plain English." for w in words}
         for w, v in d.items():
-            _cache_set(w, v)
+            _cache_set(w, v, variant=lang)
         return d
 
     # Prefer fast model first
@@ -788,20 +808,29 @@ def _get_gemini_definitions_batch(words: list[str]) -> dict:
         'gemini-pro',
     ]
     # Build a strict JSON-only instruction for fun clues
-    prompt = (
-        "You are an English tutor. For each TARGET word, return a JSON object mapping the word\n"
-        "to exactly one playful clue sentence.\n"
-        "Styles: situational/roleplay, personification, exaggeration/humor, action/sound.\n"
-        "Rules: one sentence only; 12-24 words; avoid the word itself; no quotes; no markdown. Use only very simple English (CEFR A2â€“B1 level words)\n"
-        "Output JSON only, keys must be the input words, values are the clue sentences.\n"
-        "WORDS: " + json.dumps(words, ensure_ascii=False)
-    )
+    if (lang or 'en').lower() == 'id':
+        prompt = (
+            "Anda adalah tutor bahasa Inggris. Untuk setiap kata TARGET, kembalikan satu kalimat petunjuk dalam Bahasa Indonesia, sebagai objek JSON yang memetakan kata ke kalimat.\n"
+            "Gaya: situasi sederhana/berperan, personifikasi, humor ringan, aksi/suara.\n"
+            "Aturan: hanya satu kalimat; 8-16 kata; jangan sebut atau isyaratkan kata TARGET; tanpa kutip; tanpa markdown. Gunakan bahasa Indonesia yang sangat sederhana (pemula).\n"
+            "Keluarkan hanya JSON, kunci adalah kata input, nilai adalah kalimat petunjuk.\n"
+            "WORDS: " + json.dumps(words, ensure_ascii=False)
+        )
+    else:
+        prompt = (
+            "You are an English tutor. For each TARGET word, return a JSON object mapping the word\n"
+            "to exactly one playful clue sentence.\n"
+            "Styles: situational/roleplay, personification, exaggeration/humor, action/sound.\n"
+            "Rules: one sentence only; 12-24 words; avoid the word itself; no quotes; no markdown. Use only very simple English (CEFR A2-B1 level words)\n"
+            "Output JSON only, keys must be the input words, values are the clue sentences.\n"
+            "WORDS: " + json.dumps(words, ensure_ascii=False)
+        )
     try:
         genai.configure(api_key=api_key)
     except Exception:
-        d = {w: "A playful, single-line clue in plain English." for w in words}
+        d = {w: ("Petunjuk satu kalimat yang sangat sederhana." if (lang or 'en').lower() == 'id' else "A playful, single-line clue in plain English.") for w in words}
         for w, v in d.items():
-            _cache_set(w, v)
+            _cache_set(w, v, variant=lang)
         return d
 
     for name in candidates:
@@ -833,7 +862,7 @@ def _get_gemini_definitions_batch(words: list[str]) -> dict:
                         continue
                     # avoid echoing word
                     if w.lower() in val.lower():
-                        val = val.replace(w, 'â–¢â–¢â–¢')
+                        val = val.replace(w, '***')
                     # strip wrapping quotes if present
                     if (val.startswith('"') and val.endswith('"')) or (val.startswith("'") and val.endswith("'")):
                         val = val[1:-1].strip()
@@ -842,7 +871,7 @@ def _get_gemini_definitions_batch(words: list[str]) -> dict:
                     out[w] = val
                 if out:
                     for ww, dd in out.items():
-                        _cache_set(ww, dd)
+                        _cache_set(ww, dd, variant=lang)
                     return out
             except Exception as e:
                 logger.warning('Gemini batch JSON parse failed: %s', e)
@@ -1405,7 +1434,7 @@ class CompleteGrammarPracticeView(APIView):
         return Response(out.data, status=status.HTTP_200_OK)
 
 
-def _sample_vocabulary_questions(topic: Topic, n: int) -> list[dict]:
+def _sample_vocabulary_questions(topic: Topic, n: int, lang: str = 'en') -> list[dict]:
     """Build n questions from topic.vocabulary with AI definitions and 3 distractors each.
     Returns a list of dict questions with id, word, definition, options, answered, correct.
     """
@@ -1418,12 +1447,12 @@ def _sample_vocabulary_questions(topic: Topic, n: int) -> list[dict]:
     pick = words[: max(1, min(n, len(words)))]
     remaining_pool = [w for w in words if w not in pick]
     # Try to fetch definitions in a single batch to reduce latency
-    # Resolve from cache first to minimize API calls
-    cached_defs = {w: (_cache_get(w) or '') for w in pick}
+    # Resolve from cache first to minimize API calls (language-aware)
+    cached_defs = {w: (_cache_get(w, variant=lang) or '') for w in pick}
     missing = [w for w in pick if not cached_defs.get(w)]
     defs_map = {}
     if missing:
-        defs_map = _get_gemini_definitions_batch(missing)
+        defs_map = _get_gemini_definitions_batch(missing, lang=lang)
     # merge cached + fetched
     defs_map = {**{w: v for w, v in cached_defs.items() if v}, **defs_map}
     qs: list[dict] = []
@@ -1436,7 +1465,7 @@ def _sample_vocabulary_questions(topic: Topic, n: int) -> list[dict]:
             distractors.append(random.choice(words))
         options = distractors + [w]
         random.shuffle(options)
-        definition = defs_map.get(w) or _get_gemini_definition(w)
+        definition = defs_map.get(w) or _get_gemini_definition(w, lang=lang)
         q = {
             'id': str(uuid.uuid4()),
             'word': w,
@@ -3789,7 +3818,18 @@ class StartVocabularyPracticeView(APIView):
         q_count = max(1, int(round(0.6 * total)))
 
         # Create session and generate questions
-        questions = _sample_vocabulary_questions(topic, q_count)
+        # Determine beginner mode from USER english level first, then topic difficulty
+        try:
+            user_level = str(getattr(getattr(request.user, 'speaking_journey_profile', None), 'english_level', '') or '').strip().upper()
+        except Exception:
+            user_level = ''
+        if not user_level:
+            try:
+                user_level = str(getattr(topic, 'difficulty', '') or '').strip().upper()
+            except Exception:
+                user_level = ''
+        lang = 'id' if user_level == 'BEGINNER' else 'en'
+        questions = _sample_vocabulary_questions(topic, q_count, lang=lang)
         session = VocabularyPracticeSession.objects.create(
             user=request.user,
             topic=topic,
