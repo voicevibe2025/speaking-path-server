@@ -882,7 +882,7 @@ def _get_gemini_definitions_batch(words: list[str], lang: str = 'en') -> dict:
     return {}
 
 
-def _build_listening_questions(topic: Topic) -> list[dict]:
+def _build_listening_questions(topic: Topic, lang: str = 'en') -> list[dict]:
     """Generate listening comprehension MCQs based on the topic's conversation_example using Gemini.
 
     Returns a list of dicts:
@@ -909,14 +909,24 @@ def _build_listening_questions(topic: Topic) -> list[dict]:
                 'gemini-1.5-pro',
                 'gemini-pro',
             ]
-            prompt = (
-                "You are an English tutor. Read the DIALOGUE below and create 3 to 8 multiple-choice LISTENING questions.\n"
-                "Rules: very short, CEFR A2â€“B1 vocabulary; each question must have exactly 4 distinct options;\n"
-                "Return STRICT JSON array, no prose, in the shape:\n"
-                "[ {\"question\": <string>, \"options\": [<opt1>,<opt2>,<opt3>,<opt4>], \"answer\": <one of options> }, ... ]\n"
-                "Avoid quoting the speaker letter. Use natural questions like who/what/where/when/why or paraphrases.\n\n"
-                f"DIALOGUE:\n{transcript}\n"
-            )
+            if (lang or 'en').lower() == 'id':
+                prompt = (
+                    "Anda adalah tutor Bahasa Inggris. Baca DIALOG di bawah ini dan buat 3 sampai 8 pertanyaan pilihan ganda LISTENING dalam Bahasa Indonesia yang sangat sederhana (pemula).\n"
+                    "Aturan: setiap pertanyaan sangat pendek; gunakan kosakata dasar; setiap pertanyaan punya tepat 4 opsi berbeda;\n"
+                    "Kembalikan HANYA array JSON (tanpa teks lain) dengan bentuk:\n"
+                    "[ {\"question\": <string>, \"options\": [<opsi1>,<opsi2>,<opsi3>,<opsi4>], \"answer\": <salah satu opsi> }, ... ]\n"
+                    "Hindari mengutip huruf pembicara. Gunakan siapa/apa/di mana/kapan/mengapa atau parafrase sederhana.\n\n"
+                    f"DIALOG:\n{transcript}\n"
+                )
+            else:
+                prompt = (
+                    "You are an English tutor. Read the DIALOGUE below and create 3 to 8 multiple-choice LISTENING questions.\n"
+                    "Rules: very short, CEFR A2-B1 vocabulary; each question must have exactly 4 distinct options;\n"
+                    "Return STRICT JSON array, no prose, in the shape:\n"
+                    "[ {\"question\": <string>, \"options\": [<opt1>,<opt2>,<opt3>,<opt4>], \"answer\": <one of options> }, ... ]\n"
+                    "Avoid quoting the speaker letter. Use natural questions like who/what/where/when/why or paraphrases.\n\n"
+                    f"DIALOGUE:\n{transcript}\n"
+                )
             for name in candidates:
                 try:
                     model = genai.GenerativeModel(name)
@@ -964,9 +974,14 @@ def _build_listening_questions(topic: Topic) -> list[dict]:
             txt = str(turn.get('text', '')).strip()
             if not txt:
                 continue
-            q = f"Who said: \"{txt}\"?"
-            options = ["Speaker A", "Speaker B", "Both", "Neither"]
-            ans = "Speaker A" if spk == 'A' else "Speaker B"
+            if (lang or 'en').lower() == 'id':
+                q = f"Siapa yang mengatakan: \"{txt}\"?"
+                options = ["Pembicara A", "Pembicara B", "Keduanya", "Tidak ada"]
+                ans = "Pembicara A" if spk == 'A' else "Pembicara B"
+            else:
+                q = f"Who said: \"{txt}\"?"
+                options = ["Speaker A", "Speaker B", "Both", "Neither"]
+                ans = "Speaker A" if spk == 'A' else "Speaker B"
             qs.append({
                 'id': str(uuid.uuid4()),
                 'question': q,
@@ -990,7 +1005,19 @@ class StartListeningPracticeView(APIView):
         if not conv:
             return Response({'detail': 'No conversation available for this topic'}, status=status.HTTP_400_BAD_REQUEST)
 
-        questions = _build_listening_questions(topic)
+        # Determine language for beginners (Indonesian for BEGINNER)
+        try:
+            user_level = str(getattr(getattr(request.user, 'speaking_journey_profile', None), 'english_level', '') or '').strip().upper()
+        except Exception:
+            user_level = ''
+        if not user_level:
+            try:
+                user_level = str(getattr(topic, 'difficulty', '') or '').strip().upper()
+            except Exception:
+                user_level = ''
+        lang = 'id' if user_level == 'BEGINNER' else 'en'
+
+        questions = _build_listening_questions(topic, lang=lang)
         if not questions:
             return Response({'detail': 'Unable to generate listening questions'}, status=status.HTTP_400_BAD_REQUEST)
 
