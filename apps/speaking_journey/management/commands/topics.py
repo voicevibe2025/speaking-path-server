@@ -35,14 +35,11 @@ BEGINNER_TOPICS = [
         "description": "Learn how to introduce yourself and share basic personal information. Practice asking and answering simple questions about names, jobs, and hometowns.",
         "material": [
             "my name is Azam",
+            "what's your name?",
             "Hi, I'm Khaira",
             "Nice to meet you.",
             "It's a pleasure to meet you.",
-            "Where are you from?",
-            "I'm from Indonesia.",
-            "What do you do?",
-            "I'm a student.",
-            "What about you?"
+            "Nice to meet you too"
         ],
         "conversation": [
             {
@@ -55,38 +52,53 @@ BEGINNER_TOPICS = [
             },
             {
                 "speaker": "A",
-                "text": "Nice to meet you too, Khaira. Where are you from?"
-            },
-            {
-                "speaker": "B",
-                "text": "I'm from Indonesia. And you?"
-            },
-            {
-                "speaker": "A",
-                "text": "I'm from Malaysia. What do you do?"
-            },
-            {
-                "speaker": "B",
-                "text": "I'm a student. What about you?"
-            },
-            {
-                "speaker": "A",
-                "text": "I'm a student too."
+                "text": "Nice to meet you too, Khaira."
             }
         ],
         "vocabulary": [
             "hello",
             "name",
-            "nice to meet you",
-            "from",
-            "where",
-            "what do you do",
-            "student",
-            "teacher",
+            "nice",
             'pleasure'
         ],
         "fluency_practice_prompt": "Introduce yourself to a new person and ask them three questions about themselves."
     },
+
+    {
+    "title": "Where Are You From?",
+    "description": "Learn how to ask and answer questions about where someone is from. Practice talking about your country, city, or hometown.",
+    "material": [
+        "Where are you from?",
+        "I'm from Indonesia.",
+        "I'm from Japan.",
+        "I'm from the United States.",
+        "Oh, really?",
+        "That's nice!"
+    ],
+    "conversation": [
+        {
+            "speaker": "A",
+            "text": "Hi, where are you from?"
+        },
+        {
+            "speaker": "B",
+            "text": "I'm from Indonesia. And you?"
+        },
+        {
+            "speaker": "A",
+            "text": "I'm from Japan."
+        }
+
+    ],
+    "vocabulary": [
+        "from",
+        "country",
+        "city",
+        "nice"
+    ],
+    "fluency_practice_prompt": "Ask your partner where they are from. Then, say where you are from and one thing you like about your country."
+},
+
 
     {
     "title": "Asking About Age",
@@ -119,41 +131,6 @@ BEGINNER_TOPICS = [
     ],
     "fluency_practice_prompt": "Ask your partner how old they are and answer with your age. Try saying 'I'm ... years old.'"
 },
-
-{
-    "title": "This and That",
-    "description": "Learn how to ask and answer simple questions about objects using 'this' and 'that'. Practice naming things around you.",
-    "material": [
-        "What is this?",
-        "This is a book.",
-        "What is that?",
-        "That is a car.",
-        "This is my phone.",
-        "That is my chair."
-    ],
-    "conversation": [
-        {"speaker": "A", "text": "What is this?"},
-        {"speaker": "B", "text": "This is a book."},
-        {"speaker": "A", "text": "What is that?"},
-        {"speaker": "B", "text": "That is a pen."},
-        {"speaker": "A", "text": "Oh, I see."},
-        {"speaker": "B", "text": "Yes, this is my pen."}
-    ],
-    "vocabulary": [
-        "this",
-        "that",
-        "book",
-        "pen",
-        "bag",
-        "chair",
-        "phone",
-        "car"
-    ],
-    "fluency_practice_prompt": "Look around you and point to things. Ask 'What is this?' or 'What is that?' and answer with the object name."
-}
-
-
-
 
 ]
 
@@ -1953,6 +1930,84 @@ INTERMEDIATE_TOPICS = [
         "fluency_practice_prompt": "Describe one personal goal and one professional goal you have for the next five years."
     },
 
+    {
+        "title": "A Favorite Childhood Memory",
+        "description": "Let's talk about a happy memory from your childhood. Think about a special event, a favorite place, or a person you remember.",
+        "material": [
+            "One of my favorite memories is...",
+            "I remember when I was about seven years old...",
+            "We used to go to the beach every summer.",
+            "My grandparents had a big garden.",
+            "I can still remember the smell of my grandmother's baking.",
+            "It was a really special time for me.",
+            "I felt so happy and carefree.",
+            "Looking back, it seems like a simpler time.",
+            "That memory always makes me smile."
+        ],
+        "conversation": [
+            {
+                "speaker": "A",
+                "text": "Hi! Today let's talk about our favorite childhood memories. Do you have one that stands out?"
+            },
+            {
+                "speaker": "B",
+                "text": "Yes, I do. I often think about the summer holidays I spent at my grandparents' house in the countryside."
+            },
+            {
+                "speaker": "A",
+                "text": "That sounds lovely. What did you usually do there?"
+            },
+            {
+                "speaker": "B",
+                "text": "My grandfather taught me how to fish in a small river near their house. We would wake up very early in the morning."
+            },
+            {
+                "speaker": "A",
+                "text": "Wow, that's a special skill to learn. Did you catch many fish?"
+            },
+            {
+                "speaker": "B",
+                "text": "Not really! But it wasn't about catching fish. It was about spending time together and listening to his stories."
+            },
+            {
+                "speaker": "A",
+                "text": "I understand. Those moments are precious. What about your grandmother?"
+            },
+            {
+                "speaker": "B",
+                "text": "She used to bake the most delicious apple pies. I can almost smell them when I think about it."
+            },
+            {
+                "speaker": "A",
+                "text": "It sounds like a wonderful memory. Thanks for sharing that."
+            },
+            {
+                "speaker": "B",
+                "text": "You're welcome. What about you? Do you have a favorite memory?"
+            }
+        ],
+        "vocabulary": [
+            "childhood",
+            "memory",
+            "remember",
+            "grandparents",
+            "countryside",
+            "summer holiday",
+            "special",
+            "to stand out",
+            "precious",
+            "delicious",
+            "to spend time with",
+            "looking back",
+            "carefree",
+            "nostalgic",
+            "vivid memory",
+            "unforgettable",
+            "long time ago",
+            "to look forward to"
+        ],
+        "fluency_practice_prompt": "Describe a special gift you received as a child and explain why it was so important to you."
+    },
 ]
 
 
@@ -2079,5 +2134,98 @@ ADVANCED_TOPICS = [
             "high-pressure situation"
         ],
         "fluency_practice_prompt": "Describe a time you witnessed a disagreement and explain how you would have tried to mediate it using neutral language and empathy."
+    },
+    {
+        "title": "Negotiating a Job Offer",
+        "description": "This topic helps you practice the language needed to discuss and negotiate the terms of a job offer. You will learn how to express your expectations and make a counter-offer professionally.",
+        "material": [
+            "Thank you so much for the offer; I'm very excited about this opportunity.",
+            "I'd like to take a moment to discuss the compensation package.",
+            "Based on my research and experience, I was expecting a salary in the range of...",
+            "Is there any flexibility on the base salary?",
+            "I'd be more comfortable accepting if we could land on a figure closer to...",
+            "Could you tell me more about the performance bonus structure?",
+            "What does the typical benefits package include?",
+            "I'm wondering if a sign-on bonus might be possible.",
+            "Would you be open to considering a higher starting salary?",
+            "Let me review the revised offer and I'll get back to you by tomorrow.",
+            "I appreciate you looking into this for me.",
+            "I'm happy to accept the offer under these new terms."
+        ],
+        "conversation": [
+            {
+                "speaker": "A",
+                "text": "Hi, thank you so much for sending over the formal offer. I'm thrilled about the possibility of joining the team."
+            },
+            {
+                "speaker": "B",
+                "text": "We're very happy to extend it to you. We think you'll be a great fit."
+            },
+            {
+                "speaker": "A",
+                "text": "I appreciate that. I've reviewed the details, and I was hoping we could briefly discuss the compensation package."
+            },
+            {
+                "speaker": "B",
+                "text": "Certainly. What's on your mind?"
+            },
+            {
+                "speaker": "A",
+                "text": "Well, based on my research for similar roles and my level of experience, the proposed base salary is a little lower than my expectations."
+            },
+            {
+                "speaker": "B",
+                "text": "I see. Our offer is competitive for the market, but I'm open to hearing what you were anticipating."
+            },
+            {
+                "speaker": "A",
+                "text": "Given the scope of the responsibilities, I was targeting a figure closer to $85,000. Is there any room for negotiation on that?"
+            },
+            {
+                "speaker": "B",
+                "text": "That's at the very top of our range for this position. Let me discuss it with HR. I can't promise anything, but I can see if we can get closer to that number."
+            },
+            {
+                "speaker": "A",
+                "text": "I would really appreciate that. Could you also tell me a bit more about the annual performance bonus?"
+            },
+            {
+                "speaker": "B",
+                "text": "Of course. It's tied to both company and individual performance, and typically ranges from 10 to 15% of your base salary."
+            },
+            {
+                "speaker": "A",
+                "text": "That's great to hear. Thank you for your flexibility and for providing that information."
+            },
+            {
+                "speaker": "B",
+                "text": "No problem at all. Let me get back to you about the salary tomorrow. In the meantime, feel free to ask if anything else comes up."
+            }
+        ],
+        "vocabulary": [
+            "compensation package",
+            "base salary",
+            "counter-offer",
+            "negotiable",
+            "flexibility",
+            "sign-on bonus",
+            "benefits",
+            "performance bonus",
+            "room for negotiation",
+            "extend an offer",
+            "formal offer",
+            "expectations",
+            "competitive",
+            "market rate",
+            "scope of responsibilities",
+            "revised offer",
+            "professional development",
+            "industry standard",
+            "equity",
+            "stock options",
+            "retirement plan",
+            "health insurance"
+        ],
+        "fluency_practice_prompt": "Prepare a short monologue where you express gratitude for a job offer, state that the salary is below your expectations, and propose a counter-offer using market research as justification."
     },
 ]

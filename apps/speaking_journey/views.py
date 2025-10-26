@@ -457,10 +457,34 @@ def _meets_completion_criteria(topic_progress):
             except Exception:
                 pass
 
-    if require_attempts and not (has_pron and has_flu and has_vocab and has_gram):
-        return False
+    # Determine effective level from topic difficulty (BEGINNER/INTERMEDIATE/ADVANCED)
+    effective_level = str(getattr(topic, 'difficulty', '') or '').strip().upper()
 
-    # Thresholds
+    # For BEGINNER: only Pronunciation + Vocabulary are required
+    if effective_level == 'BEGINNER':
+        if require_attempts and not (has_pron and has_vocab):
+            return False
+        # Thresholds
+        try:
+            pass_avg = float(getattr(settings, 'TOPIC_PASS_AVG_PERCENT', os.environ.get('TOPIC_PASS_AVG_PERCENT', 75)))
+        except Exception:
+            pass_avg = 75.0
+        try:
+            floor_pct = float(getattr(settings, 'TOPIC_PASS_FLOOR_PERCENT', os.environ.get('TOPIC_PASS_FLOOR_PERCENT', 60)))
+        except Exception:
+            floor_pct = 60.0
+
+        # Combined over two skills (Pron + Vocab)
+        total_max = float(pron_max + vocab_max)
+        total_score = float(pron_total + vocab_total)
+        combined_percent = (total_score / total_max) * 100.0 if total_max > 0 else 0.0
+        floor_ok = all([
+            pron_total >= floor_pct,
+            vocab_total >= floor_pct,
+        ])
+        return bool(combined_percent >= pass_avg and floor_ok)
+
+    # Thresholds (default path)
     try:
         pass_avg = float(getattr(settings, 'TOPIC_PASS_AVG_PERCENT', os.environ.get('TOPIC_PASS_AVG_PERCENT', 75)))
     except Exception:
@@ -2288,18 +2312,28 @@ class SpeakingTopicsView(APIView):
             except Exception:
                 floor_pct = 60.0
 
-            # Combined progress (now includes grammar as 4th required practice)
-            total_max = int(pron_max + flu_max + vocab_max + grammar_max)
-            total_score = int(eff_pron + eff_flu + eff_vocab + eff_grammar)
-            combined_percent = round((total_score / total_max) * 100.0, 1) if total_max > 0 else 0.0
-
-            # Hybrid pass: average >= pass_avg AND no skill below floor
-            floor_ok = all([
-                eff_pron >= floor_pct,
-                eff_flu >= floor_pct,
-                eff_vocab >= floor_pct,
-                eff_grammar >= floor_pct,
-            ])
+            # Combined progress: BEGINNER uses Pronunciation + Vocabulary only; others use 4 practices
+            level_str = str(getattr(t, 'difficulty', '') or '').strip().upper()
+            if level_str == 'BEGINNER':
+                total_max = int(pron_max + vocab_max)
+                total_score = int(eff_pron + eff_vocab)
+                combined_percent = round((total_score / total_max) * 100.0, 1) if total_max > 0 else 0.0
+                # Beginner floor checks apply only to Pron + Vocab
+                floor_ok = all([
+                    eff_pron >= floor_pct,
+                    eff_vocab >= floor_pct,
+                ])
+            else:
+                total_max = int(pron_max + flu_max + vocab_max + grammar_max)
+                total_score = int(eff_pron + eff_flu + eff_vocab + eff_grammar)
+                combined_percent = round((total_score / total_max) * 100.0, 1) if total_max > 0 else 0.0
+                # Hybrid pass: average >= pass_avg AND no skill below floor
+                floor_ok = all([
+                    eff_pron >= floor_pct,
+                    eff_flu >= floor_pct,
+                    eff_vocab >= floor_pct,
+                    eff_grammar >= floor_pct,
+                ])
             meets_requirement = bool(combined_percent >= pass_avg and floor_ok)
 
             combined_threshold_score = int(math.ceil((pass_avg / 100.0) * total_max)) if total_max > 0 else 0
