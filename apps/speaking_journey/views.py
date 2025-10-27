@@ -992,6 +992,68 @@ def _build_listening_questions(topic: Topic, lang: str = 'en') -> list[dict]:
             continue
     return qs
 
+
+def _fallback_grammar_questions_advanced(topic: Topic, n: int) -> list[dict]:
+    """Generate advanced fallback grammar questions when Gemini is unavailable (C1–C2 style)."""
+    import random
+    templates = [
+        {
+            'sentence': 'Hardly ____ the lecture begin when the projector failed.',
+            'options': ['had', 'did', 'has', 'was'],
+            'answer': 'had'
+        },
+        {
+            'sentence': 'It is crucial that every participant ____ the code of conduct.',
+            'options': ['observe', 'observes', 'to observe', 'has observed'],
+            'answer': 'observe'
+        },
+        {
+            'sentence': 'Not only ____ the results inconclusive, but they also contradicted prior studies.',
+            'options': ['were', 'was', 'had', 'did'],
+            'answer': 'were'
+        },
+        {
+            'sentence': 'If she ____ earlier, we might have avoided the delay.',
+            'options': ['had left', 'left', 'would leave', 'would have left'],
+            'answer': 'had left'
+        },
+        {
+            'sentence': 'Students ____ late must wait outside until the break.',
+            'options': ['arriving', 'who arriving', 'arrived', 'which arrive'],
+            'answer': 'arriving'
+        },
+        {
+            'sentence': 'He insisted ____ the clause despite strong objections.',
+            'options': ['on including', 'to include', 'in including', 'including'],
+            'answer': 'on including'
+        },
+        {
+            'sentence': 'Rarely ____ such a compelling argument presented so succinctly.',
+            'options': ['is', 'we see', 'has', 'do we see'],
+            'answer': 'is'
+        },
+        {
+            'sentence': 'The committee recommended that the contract ____ immediately.',
+            'options': ['be terminated', 'is terminated', 'to be terminated', 'was terminated'],
+            'answer': 'be terminated'
+        },
+    ]
+    selected = random.sample(templates, min(n, len(templates)))
+    qs = []
+    for tmpl in selected:
+        options = tmpl['options'][:]
+        random.shuffle(options)
+        q = {
+            'id': str(uuid.uuid4()),
+            'sentence': tmpl['sentence'],
+            'options': options,
+            'answer': tmpl['answer'],
+            'answered': False,
+            'correct': None,
+        }
+        qs.append(q)
+    return qs
+
 class StartListeningPracticeView(APIView):
     """Start a listening practice session for a topic using its conversation example.
 
@@ -1228,7 +1290,19 @@ class StartGrammarPracticeView(APIView):
         
         # Generate 8 questions (can adjust based on topic complexity)
         q_count = 8
-        questions = _generate_grammar_questions(topic, q_count)
+        # Determine level (ADVANCED uses C1-C2 with TOEFL-like tricky options)
+        try:
+            user_level = str(getattr(getattr(request.user, 'speaking_journey_profile', None), 'english_level', '') or '').strip().upper()
+        except Exception:
+            user_level = ''
+        if not user_level:
+            try:
+                user_level = str(getattr(topic, 'difficulty', '') or '').strip().upper()
+            except Exception:
+                user_level = ''
+        level = user_level if user_level in {'BEGINNER', 'INTERMEDIATE', 'ADVANCED'} else 'INTERMEDIATE'
+
+        questions = _generate_grammar_questions(topic, q_count, level=level)
         
         if not questions:
             return Response({'detail': 'Could not generate grammar questions'}, status=status.HTTP_400_BAD_REQUEST)
@@ -1505,14 +1579,18 @@ def _sample_vocabulary_questions(topic: Topic, n: int, lang: str = 'en') -> list
     return qs
 
 
-def _generate_grammar_questions(topic: Topic, n: int) -> list[dict]:
-    """Generate n B1-B2 level grammar fill-in-the-blank questions using Gemini AI.
-    
-    Questions are based on the topic context but do NOT use actual conversation examples.
-    Each question has a sentence with a blank (____) and 4 options, one correct.
+def _generate_grammar_questions(topic: Topic, n: int, level: str = 'INTERMEDIATE') -> list[dict]:
+    """Generate n grammar fill-in-the-blank questions using Gemini AI.
+
+    - INTERMEDIATE -> B1-B2 as before.
+    - ADVANCED -> C1-C2 with TOEFL-like tricky options.
+
+    Each question has a sentence with exactly one blank (____) and 4 options, one correct.
     Returns a list of dict questions with id, sentence, options, answer, answered, correct.
     """
     import random
+    lvl = str(level or 'INTERMEDIATE').strip().upper()
+    is_advanced = (lvl == 'ADVANCED')
     
     api_key = (
         getattr(settings, 'GEMINI_API_KEY', '') or 
@@ -1521,9 +1599,9 @@ def _generate_grammar_questions(topic: Topic, n: int) -> list[dict]:
     )
     
     if not api_key:
-        # Fallback: generate simple dummy questions
+        # Fallback: generate dummy questions
         logger.warning('No Gemini API key; returning fallback grammar questions')
-        return _fallback_grammar_questions(topic, n)
+        return _fallback_grammar_questions_advanced(topic, n) if is_advanced else _fallback_grammar_questions(topic, n)
     
     # Build context-aware prompt
     topic_title = topic.title or 'General English'
@@ -1531,7 +1609,53 @@ def _generate_grammar_questions(topic: Topic, n: int) -> list[dict]:
     conversation_examples = [turn.get('text', '') for turn in (topic.conversation_example or []) if isinstance(turn, dict)]
     conversation_text = ' '.join(conversation_examples[:3]) if conversation_examples else ''
     
-    prompt = f"""You are an expert English grammar tutor creating B1-B2 intermediate level multiple-choice fill-in-the-blank questions.
+    if is_advanced:
+        prompt = f"""You are an expert English grammar tutor creating C1–C2 ADVANCED multiple-choice fill-in-the-blank questions (TOEFL-like difficulty).
+
+Topic: {topic_title}
+Description: {topic_desc}
+
+Generate {n} DIVERSE advanced grammar questions related to this topic context.
+
+IMPORTANT: VARY the grammar focus across questions. Include a MIX of these ADVANCED areas:
+- Inversion and negative adverbials (Hardly/No sooner/Not only …)
+- Subjunctive and mandative that-clauses (It is vital that he ____)
+- Reduced relative and participle clauses (Students ____ late …)
+- Complex conditionals/mixed conditionals (If he ____ earlier, …)
+- Ellipsis and parallelism; correlative conjunctions (not only … but also …)
+- Advanced prepositions/collocations (insist ____ doing, pride ____ something)
+- Modifier placement; dangling/misplaced modifiers detection
+- Cleft/it-cleft/wh-cleft sentences; emphasis with do-support
+- Reported speech tense consistency; sequence of tenses
+
+Each question MUST:
+1) Have EXACTLY one blank: ____
+2) Provide EXACTLY 4 options with ONE correct answer and 3 TRICKY distractors.
+   Distractors should be plausible minimal pairs: subtle preposition changes, tense/aspect shifts,
+   article/determiner differences, collocation/register mismatches, or punctuation/word-order differences.
+3) Use natural, formal-academic register typical of TOEFL contexts. Do NOT be ambiguous.
+4) NOT copy or closely paraphrase any provided conversation lines.
+
+IMPORTANT: Do NOT copy or closely paraphrase these conversation examples:
+{conversation_text}
+
+Return VALID JSON array ONLY (no markdown, no code blocks), e.g.:
+[
+  {{
+    "sentence": "Hardly ____ the committee convene when objections were raised.",
+    "options": ["had", "did", "has", "was"],
+    "answer": "had"
+  }},
+  {{
+    "sentence": "It is essential that the proposal ____ before Friday.",
+    "options": ["be submitted", "is submitted", "to be submitted", "was submitted"],
+    "answer": "be submitted"
+  }}
+]
+
+Generate {n} ADVANCED questions now."""
+    else:
+        prompt = f"""You are an expert English grammar tutor creating B1-B2 intermediate level multiple-choice fill-in-the-blank questions.
 
 Topic: {topic_title}
 Description: {topic_desc}
@@ -1577,7 +1701,7 @@ Format your response as valid JSON array ONLY (no markdown, no code blocks):
   }}
 ]
 
-Generate {n} VARIED questions now:"""
+Generate {n} VARIED questions now."""
     
     candidates = [
         'gemini-2.5-flash',
@@ -1664,7 +1788,7 @@ Generate {n} VARIED questions now:"""
     
     # All models failed, use fallback
     logger.warning('All Gemini models failed; using fallback grammar questions')
-    return _fallback_grammar_questions(topic, n)
+    return _fallback_grammar_questions_advanced(topic, n) if is_advanced else _fallback_grammar_questions(topic, n)
 
 
 def _fallback_grammar_questions(topic: Topic, n: int) -> list[dict]:

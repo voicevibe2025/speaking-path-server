@@ -132,6 +132,79 @@ BEGINNER_TOPICS = [
     "fluency_practice_prompt": "Ask your partner how old they are and answer with your age. Try saying 'I'm ... years old.'"
 },
 
+{
+    "title": "What Do You Do?",
+    "description": "Learn how to ask and answer questions about jobs or what people do every day. Perfect for simple introductions.",
+    "material": [
+        "What do you do?",
+        "I'm a student.",
+        "I'm a teacher.",
+        "I'm a doctor.",
+        "That's great!",
+        "Really?"
+    ],
+    "conversation": [
+        {
+            "speaker": "A",
+            "text": "What do you do?"
+        },
+        {
+            "speaker": "B",
+            "text": "I'm a student. What about you?"
+        },
+        {
+            "speaker": "A",
+            "text": "I'm a teacher."
+        }
+
+    ],
+    "vocabulary": [
+        "student",
+        "teacher",
+        "doctor",
+        "job"
+    ],
+    "fluency_practice_prompt": "Ask your partner what they do. Then, say your job or what you do every day."
+},
+
+{
+    "title": "Where Do You Live?",
+    "description": "Learn how to ask and answer questions about where someone lives. Practice talking about your city or neighborhood.",
+    "material": [
+        "Where do you live?",
+        "I live in Jakarta.",
+        "I live in Tokyo.",
+        "That's a big city!"
+    ],
+    "conversation": [
+        {
+            "speaker": "A",
+            "text": "Where do you live?"
+        },
+        {
+            "speaker": "B",
+            "text": "I live in Jakarta. How about you?"
+        },
+        {
+            "speaker": "A",
+            "text": "I live in Tokyo."
+        },
+        {
+            "speaker": "B",
+            "text": "That's a big city!"
+        }
+    ],
+    "vocabulary": [
+        "live",
+        "city",
+        "big",
+        "small"
+    ],
+    "fluency_practice_prompt": "Ask your partner where they live. Then, say your city and describe it with one word."
+}
+
+
+
 ]
 
 
@@ -2092,6 +2165,43 @@ INTERMEDIATE_TOPICS = [
         ],
         "fluency_practice_prompt": "Describe your weekly cleaning routine and explain which household chore you dislike the most and why."
     },
+    {
+    "title": "A Bad Day",
+    "description": "Learn how to talk about an unpleasant or stressful day, describe what went wrong, and express emotions such as frustration, disappointment, or relief. Practice using time order and past tense to tell a short story.",
+    "material": [
+        "I woke up late this morning.",
+        "I missed the bus to work.",
+        "I spilled coffee on my shirt.",
+        "My phone battery died.",
+        "I forgot my homework at home.",
+        "It just wasn’t my day.",
+        "Things kept going wrong.",
+        "I tried to stay positive.",
+        "At least everything is fine now.",
+        "Tomorrow will be better."
+    ],
+    "conversation": [
+        {"speaker": "Anna", "text": "You look tired. What happened?"},
+        {"speaker": "Ben", "text": "Ugh, it was such a bad day."},
+        {"speaker": "Anna", "text": "Oh no, what went wrong?"},
+        {"speaker": "Ben", "text": "First, I woke up late because my alarm didn’t ring."},
+        {"speaker": "Anna", "text": "That’s not a good start."},
+        {"speaker": "Ben", "text": "Then I missed the bus and had to walk to work in the rain."},
+        {"speaker": "Anna", "text": "Oh, that sounds awful."},
+        {"speaker": "Ben", "text": "And when I finally got to the office, I realized I forgot my presentation at home."},
+        {"speaker": "Anna", "text": "Oh no! What did you do?"},
+        {"speaker": "Ben", "text": "I just apologized to my boss and tried to explain. Luckily, she understood."},
+        {"speaker": "Anna", "text": "Well, at least it ended okay."},
+        {"speaker": "Ben", "text": "Yeah, I guess tomorrow can only get better!"}
+    ],
+    "vocabulary": [
+        "alarm", "late", "missed the bus", "spill", "battery", "forget", "presentation",
+        "boss", "rain", "frustrated", "tired", "apologize", "understand", "relieved",
+        "unlucky", "accident", "problem", "stressful", "embarrassed", "better"
+    ],
+    "fluency_practice_prompt": "Talk about a bad day you had recently. Describe what went wrong, how you felt, and what you did to handle the situation. End your story with something positive or what you learned from that experience."
+}
+
 ]
 
 
@@ -2311,5 +2421,275 @@ ADVANCED_TOPICS = [
             "health insurance"
         ],
         "fluency_practice_prompt": "Prepare a short monologue where you express gratitude for a job offer, state that the salary is below your expectations, and propose a counter-offer using market research as justification."
+    },
+    {
+        "title": "Debate on a Community Project",
+        "description": "Discuss the advantages and disadvantages of a proposed community project. Argue for or against its implementation, considering factors like budget, impact, and community needs.",
+        "material": [
+            "I'm in favor of this proposal.",
+            "While I see the merit, I have some reservations.",
+            "Have we considered the financial implications?",
+            "From my perspective, the benefits outweigh the costs.",
+            "That's a valid point, however, let's look at the alternative.",
+            "The primary objective should be to serve the entire community.",
+            "What data are we basing this decision on?",
+            "We need to conduct a proper feasibility study first.",
+            "This project could significantly enhance our public spaces.",
+            "My main concern is the ongoing maintenance cost.",
+            "I believe this is a misuse of public funds.",
+            "Let's not overlook the potential environmental impact.",
+            "How will we measure the success of this project?",
+            "I propose we form a committee to explore this further."
+        ],
+        "conversation": [
+            {
+                "speaker": "A",
+                "text": "I firmly believe that building a new community garden in the vacant lot on Elm Street is an excellent idea for our town."
+            },
+            {
+                "speaker": "B",
+                "text": "I understand the appeal, but I'm concerned about the ongoing costs. Who will be responsible for the maintenance and water bills?"
+            },
+            {
+                "speaker": "A",
+                "text": "That's a fair question. We could establish a volunteer-led committee and seek local business sponsorships to cover those expenses."
+            },
+            {
+                "speaker": "B",
+                "text": "That relies heavily on goodwill. What if volunteer interest wanes or sponsorships dry up? The lot could become an eyesore."
+            },
+            {
+                "speaker": "A",
+                "text": "Perhaps, but the potential for community engagement and providing fresh produce for residents is a significant upside. It fosters a sense of ownership."
+            },
+            {
+                "speaker": "B",
+                "text": "I'm not convinced it's the best use of that space. A small playground or even additional parking might serve more residents on a daily basis."
+            },
+            {
+                "speaker": "A",
+                "text": "A playground is a viable alternative, but a garden offers educational opportunities for all ages and promotes healthier lifestyles."
+            },
+            {
+                "speaker": "B",
+                "text": "What about accessibility? We need to ensure the design is inclusive for residents with mobility issues if we proceed."
+            },
+            {
+                "speaker": "A",
+                "text": "Absolutely. Raised garden beds and paved pathways would be a core part of the design to ensure full accessibility."
+            },
+            {
+                "speaker": "B",
+                "text": "That adds to the initial construction cost, which is already a concern. The budget for this seems purely speculative at this point."
+            },
+            {
+                "speaker": "A",
+                "text": "We can apply for grants specifically for urban greening projects. I've already identified a few potential sources of funding."
+            },
+            {
+                "speaker": "B",
+                "text": "Okay, that's a constructive step. I think we need a detailed cost-benefit analysis before we can gain broader public consensus."
+            }
+        ],
+        "vocabulary": [
+            "proposal",
+            "implementation",
+            "feasibility study",
+            "budget constraints",
+            "allocate resources",
+            "stakeholder",
+            "long-term implications",
+            "community engagement",
+            "cost-benefit analysis",
+            "viable alternative",
+            "public consensus",
+            "address concerns",
+            "proponent",
+            "drawback",
+            "foster",
+            "ongoing maintenance",
+            "sponsorship",
+            "accessibility"
+        ],
+        "fluency_practice_prompt": "Argue for or against building a new public swimming pool in your community, considering the costs, benefits, and potential alternatives."
+    },
+    {
+        "title": "Persuading a Reluctant Friend",
+        "description": "Practice using persuasive language to convince a friend who is hesitant about trying something new. Focus on encouragement and addressing their concerns.",
+        "material": [
+            "What's the worst that could happen?",
+            "You'd be a natural at it.",
+            "Think of it as a great opportunity.",
+            "I'll be right there with you every step of the way.",
+            "You'll never know unless you try.",
+            "I have a feeling you'll regret it if you don't.",
+            "Just give it a shot.",
+            "Consider the potential upside.",
+            "Let me help you prepare for it.",
+            "Don't sell yourself short."
+        ],
+        "conversation": [
+            {
+                "speaker": "A",
+                "text": "Hey, did you see the flyer for the new coding bootcamp? You should totally sign up."
+            },
+            {
+                "speaker": "B",
+                "text": "Me? I don't think so. I'm not a 'tech person' and I'd probably fall behind immediately."
+            },
+            {
+                "speaker": "A",
+                "text": "I completely disagree. You're a logical thinker and a quick learner. You have the perfect mindset for it."
+            },
+            {
+                "speaker": "B",
+                "text": "That's kind of you to say, but I'm not sure I have the nerve. It seems really intimidating."
+            },
+            {
+                "speaker": "A",
+                "text": "I understand it looks that way, but think of the opportunity! It could open up so many new career paths."
+            },
+            {
+                "speaker": "B",
+                "text": "I'm still on the fence. The time commitment is huge, and what if I just can't get it?"
+            },
+            {
+                "speaker": "A",
+                "text": "Look, just give it a shot. The first week is a trial period anyway. What's the worst that could happen?"
+            },
+            {
+                "speaker": "B",
+                "text": "I suppose I'd only lose a bit of time..."
+            },
+            {
+                "speaker": "A",
+                "text": "Exactly! And I'll help you out if you get stuck. You won't be in it alone."
+            },
+            {
+                "speaker": "B",
+                "text": "You really think I can do it?"
+            },
+            {
+                "speaker": "A",
+                "text": "Without a doubt. I have a feeling you'll regret it if you pass this up. Don't sell yourself short."
+            },
+            {
+                "speaker": "B",
+                "text": "Okay, okay, you've twisted my arm. I'll sign up for the trial week."
+            }
+        ],
+        "vocabulary": [
+            "reluctant",
+            "hesitant",
+            "persuade",
+            "convince",
+            "fall behind",
+            "mindset",
+            "have the nerve",
+            "intimidating",
+            "opportunity",
+            "on the fence",
+            "time commitment",
+            "give it a shot",
+            "pass this up",
+            "sell yourself short",
+            "without a doubt",
+            "twist my arm",
+            "logical thinker",
+            "bootcamp",
+            "trial period"
+        ],
+        "fluency_practice_prompt": "Describe a time you successfully persuaded a reluctant friend to do something, explaining the techniques you used and the final outcome."
+    },
+    {
+        "title": "Client Damage Control",
+        "description": "Practice handling a situation where a mistake has affected a client. Learn how to apologize professionally, take responsibility, and offer effective solutions.",
+        "material": [
+            "I understand your frustration completely.",
+            "Please accept our sincerest apologies for this oversight.",
+            "Let me assure you, this is not our usual standard of service.",
+            "We take full responsibility for the error.",
+            "I'm here to find a solution that works for you.",
+            "What can we do to make this right?",
+            "As a gesture of goodwill, we'd like to offer...",
+            "We are launching an internal review to prevent this from recurring.",
+            "Your partnership is extremely valuable to us.",
+            "I've escalated this issue to our senior management.",
+            "We've identified the root cause of the problem.",
+            "Can we schedule a follow-up call to discuss the resolution?",
+            "Thank you for your patience and understanding in this matter.",
+            "We are committed to rectifying this situation immediately."
+        ],
+        "conversation": [
+            {
+                "speaker": "A",
+                "text": "Hello, I'm calling from TechCorp regarding the recent system outage. I want to personally apologize for the disruption it caused your business."
+            },
+            {
+                "speaker": "B",
+                "text": "Apology accepted, but the outage was a major problem. We lost several hours of productivity. This is unacceptable."
+            },
+            {
+                "speaker": "A",
+                "text": "I completely understand your position. We take full responsibility, and I want to assure you we're taking immediate steps to address this."
+            },
+            {
+                "speaker": "B",
+                "text": "What kind of steps? We need to know this won't happen again."
+            },
+            {
+                "speaker": "A",
+                "text": "We've identified the root cause, which was a faulty server update. We are now implementing a new protocol to prevent a recurrence."
+            },
+            {
+                "speaker": "B",
+                "text": "And what about the business we lost during the downtime?"
+            },
+            {
+                "speaker": "A",
+                "text": "Of course. As a gesture of goodwill, we would like to offer you a credit equivalent to one month of service."
+            },
+            {
+                "speaker": "B",
+                "text": "One month free? That's a fair offer. I appreciate you taking this seriously."
+            },
+            {
+                "speaker": "A",
+                "text": "Your partnership is very important to us. We're committed to providing the reliable service you expect."
+            },
+            {
+                "speaker": "B",
+                "text": "Alright. I'm willing to move past this, provided the service remains stable."
+            },
+            {
+                "speaker": "A",
+                "text": "I will personally monitor your account and will follow up next week to ensure everything is running smoothly. Is that acceptable?"
+            },
+            {
+                "speaker": "B",
+                "text": "Yes, that would be great. Thank you for being so proactive."
+            }
+        ],
+        "vocabulary": [
+            "damage control",
+            "oversight",
+            "sincerest apologies",
+            "take responsibility",
+            "make this right",
+            "gesture of goodwill",
+            "internal review",
+            "rectify",
+            "escalate an issue",
+            "root cause",
+            "unacceptable",
+            "disruption",
+            "compensate",
+            "inconvenience",
+            "oversee",
+            "assure",
+            "value your partnership",
+            "standard of service"
+        ],
+        "fluency_practice_prompt": "Describe a time you had to apologize for a professional mistake and explain the steps you took to resolve the issue with the client or colleague."
     },
 ]
